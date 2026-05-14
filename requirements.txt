@@ -1,0 +1,15 @@
+# Core
+psycopg2-binary
+python-dotenv
+
+# NLP
+spacy
+sentence-transformers
+
+# Translation
+requests
+
+# Utils
+tqdm
+loguru
+pgvector
