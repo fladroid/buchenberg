@@ -67,6 +67,19 @@ Procitaj balsam@foxuno.dynu.net:/home/balsam/buchenberg/README.md
 
 ---
 
+### Usvojen radni protokol za sve buduće sesije
+
+Redosljed je uvijek sljedeći:
+
+1. Flavio kaže koji dokument i u kom formatu da se generiše (default: MD)
+2. Claude generiše dokument i stavlja ga na raspolaganje za čitanje (artifact u chatu)
+3. Flavio čita i daje primjedbe ili OK
+4. Kada su svi zadovoljni — Claude piše dokument na server i GitHub
+
+**Ovaj protokol važi za sve dokumente: SESSION_LOG, README, PROJECT dokumentaciju — sve.**
+
+---
+
 ### Šta je pročitano
 
 Nakon ispravne komande `Procitaj balsam@foxuno.dynu.net:/home/balsam/buchenberg/README.md`, Claude je uspješno pročitao dokumentaciju projekta. Ključne informacije:
@@ -80,7 +93,7 @@ Nakon ispravne komande `Procitaj balsam@foxuno.dynu.net:/home/balsam/buchenberg/
 
 ### Zaključak sesije
 
-Ova sesija nije bila izgubljena — naučili smo kako pravilno početi svaku narednu sesiju. README protokol je od sada **obavezan prvi korak** i mora biti eksplicitna putanja, nikad samo "procitaj README".
+Ova sesija nije bila izgubljena — naučili smo kako pravilno početi svaku narednu sesiju i uspostavili smo radni protokol koji važi za sve buduće sesije.
 
 ---
 
