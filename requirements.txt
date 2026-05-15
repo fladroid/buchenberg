@@ -4,6 +4,7 @@ python-dotenv
 
 # NLP
 spacy
+nltk
 sentence-transformers
 
 # Translation
