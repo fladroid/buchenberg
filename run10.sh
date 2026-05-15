@@ -10,18 +10,17 @@ mkdir -p logs
 
 VENV=./venv/bin/python
 LOG=logs/run10.log
-SQL_RUNNER="docker -H ssh://balsam exec -i pgdb psql -U pgu -d buchenberg"
 
 echo "======================================" | tee -a $LOG
 echo "run10.sh START: $(date)"               | tee -a $LOG
 echo "======================================" | tee -a $LOG
 
 echo "[$(date)] step1_create_tables START" | tee -a $LOG
-$SQL_RUNNER < src/step1_create_tables.sql >> $LOG 2>&1
+$VENV src/step1_create_tables.py >> $LOG 2>&1
 echo "[$(date)] step1_create_tables DONE"  | tee -a $LOG
 
 echo "[$(date)] step2_truncate START" | tee -a $LOG
-$SQL_RUNNER < src/step2_truncate.sql >> $LOG 2>&1
+$VENV src/step2_truncate.py >> $LOG 2>&1
 echo "[$(date)] step2_truncate DONE"  | tee -a $LOG
 
 echo "[$(date)] step3_insert_book START" | tee -a $LOG
