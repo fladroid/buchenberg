@@ -356,10 +356,14 @@ Bez izuzetaka.
 1. ~~**Download knjiga**~~ ✅ — 3 knjige, HTML format, Gutenberg
 2. ~~**Shema baze**~~ ✅ — books, sentences, translations, embeddings, named_entities
 3. ~~**Punjenje baze (run10)**~~ ✅ — 12.093 rečenica u bazi
-4. **buch_env.sh** — environment varijable (BUCH_HOME, BUCH_SRC, BUCH_LOG...)
-5. **run15.sh** — sentiment analiza + NER (spaCy), punjenje sentences i named_entities
-6. ~~**NLLB instalacija**~~ ✅ — sentencepiece + sacremoses, model facebook/nllb-200-distilled-600M
-7. **run20.sh** — translation modul (Ollama Cloud + NLLB)
+4. ~~**buch_env.sh**~~ ✅ — kreiran, sourcuje se na početku svakog run skripte
+5. ~~**run15.sh**~~ ✅ — 12.093 rečenica, 6.364 NER entiteta, ~6 min
+6. ~~**NLLB instalacija**~~ ✅ — sentencepiece + sacremoses, facebook/nllb-200-distilled-600M
+7. ~~**Test ciklus sistem**~~ ✅ — test_registry.yaml, test_results tabela, run_test.py, run20.sh
+8. **Zapadnogermanski jezici** — de, nl, af
+9. **Romanski jezici** — fr, it, es, pt, ro
+10. **Analiza rezultata** — vizualizacija scores po jeziku i metodi
+11. **Pipeline orchestrator** — spaja sve zajedno
 8. **Evaluation modul** — embedding + cosine similarity
 9. **Pipeline orchestrator** — spaja sve zajedno
 
