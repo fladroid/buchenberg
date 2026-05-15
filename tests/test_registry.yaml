@@ -1,0 +1,17 @@
+# Buchenberg · test_registry.yaml
+# Definicija svih testova.
+# Ponovni run istog test_id briše samo njegove rezultate.
+#
+# Parametri:
+#   book      : hound_of_the_baskervilles | frankenstein | poirot_investigates
+#   sent_from : sentence.id od (uključivo)
+#   sent_to   : sentence.id do (uključivo)
+#   langs     : lista ISO 639-1 kodova (uvijek lista, čak i za jedan jezik)
+#   methods   : [nllb, gemma] ili samo jedan
+
+test_001:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 20
+  langs: [sr]
+  methods: [nllb, gemma]
