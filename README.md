@@ -179,7 +179,9 @@ Dostupni modeli na nalogu (relevantni):
 │       └── out/          # finalni prevod
 └── docs/
     ├── buchenberg_V1.md  # ovaj dokument
-    └── SESSION_LOG.md    # dnevnik sesija
+    ├── SESSION_LOG.md    # historija do sesije 02
+    └── sessions/         # session logovi od sesije 03
+        └── session_NN.md
 ```
 
 ### .env fajl (struktura)
@@ -294,13 +296,14 @@ venv/bin/python script.py
 
 ## 9. Sledeći koraci
 
-1. **Shema baze** — dizajn tabela (books, sentences, translations, scores, embeddings)
-2. **NLLB instalacija** u venv
-3. **Sentence splitter** — spaCy pipeline za deljenje teksta na rečenice
-4. **Translation modul** — Ollama Cloud + NLLB wrapper
-5. **Evaluation modul** — embedding + cosine similarity
-6. **Pipeline orchestrator** — spaja sve zajedno
-7. **Prva knjiga** — test run
+1. **Download knjiga** — HTML format sa Project Gutenberg (3 testne knjige)
+2. **Shema baze** — dizajn tabela (books, sentences, translations, scores, embeddings)
+3. **NLLB instalacija** u venv
+4. **Sentence splitter** — spaCy pipeline za deljenje teksta na rečenice (HTML blokovi → rečenice, ID sistem `<blok>.<rečenica>`)
+5. **Translation modul** — Ollama Cloud + NLLB wrapper
+6. **Evaluation modul** — embedding + cosine similarity
+7. **Pipeline orchestrator** — spaja sve zajedno
+8. **Prva knjiga** — test run
 
 ---
 
