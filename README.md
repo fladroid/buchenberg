@@ -111,11 +111,14 @@ Vlastita imena i nazivi institucija se obrađuju posebno koristeći **spaCy NER*
 
 ### Embeddings i evaluacija
 - **sentence-transformers** — generisanje embedding vektora
+- **sentencepiece** — tokenizer za NLLB (obavezan)
+- **sacremoses** — tokenizer utilities za NLLB
 - **pgvector** — čuvanje vektora u PostgreSQL
 - **cosine similarity** — merenje kvaliteta prevoda
 
 ### NLP
 - **spaCy** + `en_core_web_sm` — sentence splitting i NER
+- **NLTK** + VADER lexicon — sentiment analiza
 
 ### Baza podataka
 - **PostgreSQL 17.9** + **pgvector 0.8.2**
@@ -223,6 +226,9 @@ tqdm                  # progress bars
 loguru                # logging
 pgvector              # pgvector Python adapter
 beautifulsoup4        # parsiranje HTML
+sentencepiece         # tokenizer za NLLB
+sacremoses            # tokenizer utilities za NLLB
+nltk                  # sentiment analiza (VADER)
 ```
 
 ---
@@ -352,7 +358,7 @@ Bez izuzetaka.
 3. ~~**Punjenje baze (run10)**~~ ✅ — 12.093 rečenica u bazi
 4. **buch_env.sh** — environment varijable (BUCH_HOME, BUCH_SRC, BUCH_LOG...)
 5. **run15.sh** — sentiment analiza + NER (spaCy), punjenje sentences i named_entities
-6. **NLLB instalacija** u venv
+6. ~~**NLLB instalacija**~~ ✅ — sentencepiece + sacremoses, model facebook/nllb-200-distilled-600M
 7. **run20.sh** — translation modul (Ollama Cloud + NLLB)
 8. **Evaluation modul** — embedding + cosine similarity
 9. **Pipeline orchestrator** — spaja sve zajedno

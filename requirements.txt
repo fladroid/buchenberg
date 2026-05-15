@@ -4,6 +4,8 @@ python-dotenv
 
 # NLP
 spacy
+sentencepiece
+sacremoses
 nltk
 sentence-transformers
 
