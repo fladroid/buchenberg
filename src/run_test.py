@@ -220,13 +220,13 @@ def compute_score(original, back_translation, embedder):
 
 # ── DB operacije ──────────────────────────────────────────────────────────────
 
-def clear_test(conn, test_id):
+def clear_test(conn, test_id, langs):
     cur = conn.cursor()
-    cur.execute("DELETE FROM test_results WHERE test_id = %s", (test_id,))
+    cur.execute("DELETE FROM test_results WHERE test_id = %s AND target_lang = ANY(%s)", (test_id, langs))
     deleted = cur.rowcount
     conn.commit()
     cur.close()
-    logger.info(f"Obrisano {deleted} starih rezultata za {test_id}")
+    logger.info(f"Obrisano {deleted} starih rezultata za {test_id} langs={langs}")
 
 
 def insert_result(conn, test_id, sentence_id, target_lang, method,
@@ -312,7 +312,7 @@ def main():
 
     # DB
     conn = get_conn()
-    clear_test(conn, args.test_id)
+    clear_test(conn, args.test_id, langs)
     sentences = load_sentences(conn, book, sent_from, sent_to)
     logger.info(f"Rečenica učitano: {len(sentences)}")
 

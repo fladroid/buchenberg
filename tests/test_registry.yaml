@@ -1,6 +1,6 @@
 # Buchenberg · test_registry.yaml
 # Definicija svih testova.
-# Ponovni run istog test_id briše samo njegove rezultate.
+# Ponovni run istog test_id briše samo njegove rezultate za navedene jezike.
 #
 # Parametri:
 #   book      : hound_of_the_baskervilles | frankenstein | poirot_investigates
@@ -13,5 +13,5 @@ test_001:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 20
-  langs: [sr]
+  langs: [bs, bg]
   methods: [nllb, gemma]
