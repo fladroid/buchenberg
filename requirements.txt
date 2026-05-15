@@ -13,3 +13,4 @@ requests
 tqdm
 loguru
 pgvector
+beautifulsoup4
