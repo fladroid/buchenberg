@@ -1,8 +1,9 @@
 # Buchenberg — Project Documentation V1
 
-**Datum kreiranja:** 14. maj 2026  
-**Autor:** fladroid  
-**Status:** Setup završen, shema baze sledeći korak
+**Datum kreiranja:** 14. maj 2026.
+**Poslednje ažuriranje:** 15. maj 2026. (sesija 04)
+**Autor:** fladroid
+**Status:** run10 završen — 12.093 rečenica u bazi
 
 ---
 
@@ -124,6 +125,7 @@ Vlastita imena i nazivi institucija se obrađuju posebno koristeći **spaCy NER*
 - **loguru** — logging
 - **tqdm** — progress bars
 - **python-dotenv** — konfiguracija
+- **beautifulsoup4** — parsiranje HTML
 
 ---
 
@@ -137,6 +139,8 @@ Vlastita imena i nazivi institucija se obrađuju posebno koristeći **spaCy NER*
 | **balsam** | `balsam.dynu.net` | Docker host — PostgreSQL kontejner |
 
 > ⚠️ **Kritična napomena za buduće sesije:** Sav razvoj je na **foxuno**. Skripte, venv, knjige — sve je na `/home/balsam/buchenberg/` na foxuno serveru. User se zove `balsam` ali to je user na foxuno serveru, ne balsam server!
+
+> ⚠️ **Kritična napomena — SQL izvršavanje:** `docker exec pgdb psql` komande se izvršavaju **ručno na balsam serveru**. Skripte na foxuno koriste **isključivo psycopg2** za konekciju na bazu (`host=balsam.dynu.net`). Na foxuno nema docker-a niti psql klijenta.
 
 ### Docker kontejneri (na balsam serveru)
 
@@ -168,19 +172,26 @@ Dostupni modeli na nalogu (relevantni):
 ├── .gitignore
 ├── requirements.txt
 ├── README.md             # uvek = poslednja verzija docs
+├── run10.sh              # punjenje baze (tabele + knjige + rečenice)
 ├── venv/                 # Python virtualenv — nije u git!
 ├── src/                  # sav Python kod
+│   ├── step1_create_tables.py
+│   ├── step1_create_tables.sql   # referentni SQL — ne izvršava se direktno
+│   ├── step2_truncate.py
+│   ├── step2_truncate.sql        # referentni SQL — ne izvršava se direktno
+│   ├── step3_insert_book.py
+│   └── step4_parse_sentences.py
 ├── config/               # konfiguracioni fajlovi
 ├── logs/                 # logovi — nisu u git!
 ├── books/                # knjige — nisu u git!
-│   └── <naziv_knjige>/
-│       ├── raw/          # originalni download
-│       ├── work/         # međufazni fajlovi
-│       └── out/          # finalni prevod
+│   ├── hound_of_the_baskervilles/raw/hound.html
+│   ├── frankenstein/raw/frankenstein.html
+│   └── poirot_investigates/raw/poirot_investigates.html
 └── docs/
-    ├── buchenberg_V1.md  # ovaj dokument
-    ├── SESSION_LOG.md    # historija do sesije 02
-    └── sessions/         # session logovi od sesije 03
+    ├── SESSION_LOG.md        # historija do sesije 02
+    ├── db_schema.md          # shema baze podataka
+    ├── parser_plan.md        # plan parsiranja HTML → sentences
+    └── sessions/
         └── session_NN.md
 ```
 
@@ -211,11 +222,25 @@ requests              # HTTP pozivi (Ollama Cloud)
 tqdm                  # progress bars
 loguru                # logging
 pgvector              # pgvector Python adapter
+beautifulsoup4        # parsiranje HTML
 ```
 
 ---
 
-## 7. GitHub
+## 7. Knjige (testni korpus)
+
+| Knjiga | Autor | Gutenberg ID | Rečenica | Lokacija |
+|--------|-------|-------------|----------|----------|
+| The Hound of the Baskervilles | Arthur Conan Doyle | 3070 | 3.852 | `books/hound_of_the_baskervilles/raw/hound.html` |
+| Frankenstein | Mary Wollstonecraft Shelley | 84 | 3.384 | `books/frankenstein/raw/frankenstein.html` |
+| Poirot Investigates | Agatha Christie | 61262 | 4.857 | `books/poirot_investigates/raw/poirot_investigates.html` |
+| **Ukupno** | | | **12.093** | |
+
+Knjige su odabrane namjerno — pokrivaju cijeli spektar: kratke rečenice i brzi dijalozi (Poirot), dugi složeni blokovi (Frankenstein), sredina (Hound).
+
+---
+
+## 8. GitHub
 
 | Parametar | Vrednost |
 |-----------|---------|
@@ -240,9 +265,9 @@ git push origin main
 
 ---
 
-## 8. Korisne komande
+## 9. Korisne komande
 
-### PostgreSQL (izvršava se na balsam serveru)
+### PostgreSQL — ručno na balsam serveru
 
 ```bash
 # Lista baza
@@ -277,33 +302,60 @@ conn = psycopg2.connect(
 )
 ```
 
+### Pokretanje runova
+
+```bash
+cd /home/balsam/buchenberg
+
+# run10 — punjenje baze (tabele + knjige + rečenice)
+nohup time bash run10.sh > logs/run10.log 2>&1 &
+
+# Praćenje loga
+tail -f logs/run10.log
+```
+
 ### Ollama Cloud test
 
 ```bash
 curl -s -H "Authorization: Bearer <api_key>" https://api.ollama.com/api/tags
 ```
 
-### venv aktivacija
+### venv
 
 ```bash
+# Direktno pokretanje skripte
 cd /home/balsam/buchenberg
-source venv/bin/activate
-# ili direktno:
-venv/bin/python script.py
+venv/bin/python src/script.py
+
+# Provjera instaliranih paketa
+venv/bin/pip list
 ```
 
 ---
 
-## 9. Sledeći koraci
+## 10. Protokol dokumentacije
 
-1. **Download knjiga** — HTML format sa Project Gutenberg (3 testne knjige)
-2. **Shema baze** — dizajn tabela (books, sentences, translations, scores, embeddings)
-3. **NLLB instalacija** u venv
-4. **Sentence splitter** — spaCy pipeline za deljenje teksta na rečenice (HTML blokovi → rečenice, ID sistem `<blok>.<rečenica>`)
-5. **Translation modul** — Ollama Cloud + NLLB wrapper
-6. **Evaluation modul** — embedding + cosine similarity
-7. **Pipeline orchestrator** — spaja sve zajedno
-8. **Prva knjiga** — test run
+Svaki dokument (README, session log, plan, shema) prolazi kroz:
+
+1. **Generisanje** — Claude generiše artifakt
+2. **Pregled** — Flavio pregleda i kaže OK ili daje primjedbe
+3. **Server + GitHub** — tek nakon OK ide na server i git push
+
+Bez izuzetaka.
+
+---
+
+## 11. Sledeći koraci
+
+1. ~~**Download knjiga**~~ ✅ — 3 knjige, HTML format, Gutenberg
+2. ~~**Shema baze**~~ ✅ — books, sentences, translations, embeddings, named_entities
+3. ~~**Punjenje baze (run10)**~~ ✅ — 12.093 rečenica u bazi
+4. **buch_env.sh** — environment varijable (BUCH_HOME, BUCH_SRC, BUCH_LOG...)
+5. **run15.sh** — sentiment analiza + NER (spaCy), punjenje sentences i named_entities
+6. **NLLB instalacija** u venv
+7. **run20.sh** — translation modul (Ollama Cloud + NLLB)
+8. **Evaluation modul** — embedding + cosine similarity
+9. **Pipeline orchestrator** — spaja sve zajedno
 
 ---
 
