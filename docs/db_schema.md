@@ -33,6 +33,7 @@
 | sentence_no | INTEGER | NOT NULL | Redni broj rečenice unutar bloka |
 | text | TEXT | NOT NULL | Originalni engleski tekst rečenice |
 | word_count | SMALLINT | NOT NULL | Broj riječi (`len(text.split())`) |
+| sentence_type | VARCHAR(10) | NOT NULL DEFAULT 'text' | text \| heading \| caption |
 | sentiment_label | VARCHAR(10) | | positive \| negative \| neutral |
 | sentiment_score | REAL | | Float 0.0–1.0, pouzdanost labele |
 
@@ -53,7 +54,7 @@ UNIQUE (book_id, block_no, sentence_no)
 | sentence_id | INTEGER | FK → sentences.id NOT NULL | Originalna rečenica |
 | target_lang | CHAR(2) | NOT NULL | ISO 639-1 kod ciljnog jezika |
 | method | VARCHAR(10) | NOT NULL | nllb \| gemma |
-| translated_text | TEXT NOT NULL | | Prevod na ciljni jezik |
+| translated_text | TEXT | NOT NULL | Prevod na ciljni jezik |
 | back_translation | TEXT | | Prevod nazad na engleski |
 | score | REAL | | Cosine similarity (original vs. back-translation) |
 | winner | BOOLEAN | DEFAULT FALSE | Pobjednička metoda za ovu rečenicu |
@@ -131,6 +132,7 @@ CREATE TABLE sentences (
     sentence_no     INTEGER NOT NULL,
     text            TEXT NOT NULL,
     word_count      SMALLINT NOT NULL,
+    sentence_type   VARCHAR(10) NOT NULL DEFAULT 'text',
     sentiment_label VARCHAR(10),
     sentiment_score REAL,
     UNIQUE (book_id, block_no, sentence_no)
@@ -170,4 +172,4 @@ CREATE TABLE named_entities (
 
 ---
 
-*Buchenberg · db_schema v1 · 15. maj 2026.*
+*Buchenberg · db_schema v1.1 · 15. maj 2026.*
