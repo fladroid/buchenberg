@@ -336,3 +336,67 @@ Testirano na 6 žutih IT rečenica:
 6. README ažuriranje — LaBSE, translation_score, GA, novi standard
 
 ---
+
+---
+
+## Korak 9 — Batch processing i optimizacije
+
+### Motivacija
+
+Single mode: jedan LLM/NLLB poziv po rečenici — sporo i rate-limit neprijateljski.
+Batch mode: N rečenica u jednom pozivu — drastično ubrzanje.
+
+### Nove batch funkcije (`run_test.py`)
+
+| Funkcija | Opis |
+|----------|------|
+| `translate_nllb_batch(texts, ...)` | NLLB batch — `tokenizer(texts, padding=True)` + `batch_decode` |
+| `translate_gemma_batch(texts, ...)` | Gemma batch — numerisana lista u promptu, JSON array odgovor |
+| `back_translate_gemma_batch(texts, ...)` | Gemma back-translation batch |
+| `parse_gemma_batch_response(raw, n)` | Robusni parser — 4 strategije |
+
+### Novi parametar
+
+```bash
+bash run20.sh --test_id test_001 --batch_size 20
+```
+
+Default: `--batch_size 20`
+
+### Robusni JSON parser — 4 strategije
+
+Gemma ponekad ne vrati čist JSON (pogrešan zarez, prelom linije, markdown blok). Parser pokušava redom:
+
+1. **Direktni `json.loads`** nakon čišćenja markdown blokova
+2. **Regex ekstrakcija** `[...]` bloka iz teksta
+3. **Regex quoted strings** — svi `"..."` u odgovoru
+4. **Numbered list** — `1. tekst`, `2. tekst`...
+
+Tek ako sve strategije ne uspiju → fallback na single mode.
+
+### Benchmark rezultati
+
+| batch_size | Trajanje (40 rec, 2 metode) | Fallbacki | Prevoda/min |
+|-----------|----------------------------|-----------|-------------|
+| single (stari) | ~20 min | 0 | ~8 |
+| 20 | ~1 min 43 sec | 2* | ~47 |
+| 50 (stari parser) | ~2 min 48 sec | 3 | ~29 |
+| 50 (novi parser) | ~1 min 51 sec | **0** | **~43** |
+
+*Eliminisano novim parserom
+
+**Zaključak:** batch=20 i batch=50 su podjednako brzi (~43-47 prevoda/min). **~6x ubrzanje** u odnosu na single mode.
+
+### LaBSE `local_files_only`
+
+```python
+# Prije — upozorenje o HF Hub pri svakom startu:
+SentenceTransformer(EMBED_MODEL)
+
+# Poslije — čisto, bez mrežnog poziva:
+SentenceTransformer(EMBED_MODEL, local_files_only=True)
+```
+
+Primijenjeno u `run_test.py` i `run_ga.py`.
+
+---
