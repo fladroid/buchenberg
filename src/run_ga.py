@@ -536,7 +536,7 @@ def main():
                 continue
 
             tier = "crvena" if (best_tr or 0) < 0.80 else "žuta"
-            logger.info(f"s{sid} {lang} {tier} ({best_tr:.4f if best_tr else 'N/A'}) — pokrećem GA")
+            logger.info(f"s{sid} {lang} {tier} ({best_tr if best_tr is None else f'{best_tr:.4f}'}) — pokrećem GA")
 
             pobjednik = ga_optimizacija(
                 sid, original, lang, dostupni_jezici,
