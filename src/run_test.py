@@ -48,7 +48,7 @@ LOG_DIR       = os.getenv("BUCH_LOG", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 NLLB_MODEL   = "facebook/nllb-200-distilled-600M"
-EMBED_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
+EMBED_MODEL  = "sentence-transformers/LaBSE"
 OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
@@ -293,21 +293,22 @@ def clear_test(conn, test_id, langs, methods):
 
 
 def insert_result(conn, test_id, sentence_id, target_lang, method,
-                  translated, back_trans, score_val):
+                  translated, back_trans, score_val, translation_score_val):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO test_results
             (test_id, sentence_id, target_lang, method,
-             translated_text, back_translation, score)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+             translated_text, back_translation, score, translation_score)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (test_id, sentence_id, target_lang, method)
         DO UPDATE SET
-            translated_text  = EXCLUDED.translated_text,
-            back_translation = EXCLUDED.back_translation,
-            score            = EXCLUDED.score,
-            created_at       = NOW()
+            translated_text   = EXCLUDED.translated_text,
+            back_translation  = EXCLUDED.back_translation,
+            score             = EXCLUDED.score,
+            translation_score = EXCLUDED.translation_score,
+            created_at        = NOW()
     """, (test_id, sentence_id, target_lang, method,
-          translated, back_trans, score_val))
+          translated, back_trans, score_val, translation_score_val))
     conn.commit()
     cur.close()
 
@@ -440,11 +441,13 @@ def main():
                         method, translated, lang, nllb_lang, nllb_tok, nllb_mod
                     )
 
-                    # Score
+                    # Score — back-translation vs original
                     sc = compute_score(text, back, embedder)
+                    # Score — translation vs original (direktni)
+                    tr_sc = compute_score(text, translated, embedder)
 
                     insert_result(conn, args.test_id, sid, lang,
-                                  method, translated, back, sc)
+                                  method, translated, back, sc, tr_sc)
 
                     done += 1
                     logger.info(f"[{done}/{total}] s{sid} {lang} {method} "
