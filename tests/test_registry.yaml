@@ -1,14 +1,11 @@
 # Buchenberg · test_registry.yaml
-# Definicija svih testova.
 #
-# Validne metode:
-#   nllb, nllb_t05, gemma, gemma_t05
-#
+# Validne metode: nllb, nllb_t05, gemma, gemma_t05
 # Standard: svaki jezik uvijek ima sve 4 metode.
 
 test_001:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [hr, sr, de, nl, fr, it]
-  methods: [nllb, nllb_t05, gemma, gemma_t05]
+  langs: [it]
+  methods: [nllb, gemma]

@@ -269,6 +269,69 @@ def back_translate_gemma(translated_text, src_lang_code, temperature=None):
 
 
 
+
+# ── Robusno parsiranje Gemma batch odgovora ───────────────────────────────────
+
+def parse_gemma_batch_response(raw, n, context="batch"):
+    """
+    Robusno parsiranje JSON array-a iz Gemma odgovora.
+    Pokušava više strategija prije nego odustane.
+
+    Strategije:
+    1. Direktni json.loads nakon čišćenja markdown
+    2. Regex ekstrakcija JSON array-a iz teksta
+    3. Ekstrakcija po linijama (numbered list fallback)
+    """
+    import json, re
+
+    # Strategija 1 — direktni json.loads
+    try:
+        clean = raw.replace("```json", "").replace("```", "").strip()
+        result = json.loads(clean)
+        if isinstance(result, list) and len(result) == n:
+            return [str(r).strip() for r in result]
+        # Pogrešan broj — ne odustajemo odmah, probamo dalje
+    except Exception:
+        pass
+
+    # Strategija 2 — regex: uzmi sve između [ i zadnjeg ]
+    try:
+        match = re.search(r'\[(.+?)\]', raw, re.DOTALL)
+        if match:
+            candidate = "[" + match.group(1) + "]"
+            result = json.loads(candidate)
+            if isinstance(result, list) and len(result) == n:
+                return [str(r).strip() for r in result]
+    except Exception:
+        pass
+
+    # Strategija 3 — regex: uzmi sve quoted stringove
+    try:
+        # Traži sve "..." ili '...' u odgovoru
+        matches = re.findall(r'(?:"([^"\\]*(?:\\.[^"\\]*)*)"|\'([^\'\\]*(?:\\.[^\'\\]*)*)\')', raw)
+        strings = [m[0] or m[1] for m in matches]
+        if len(strings) == n:
+            return [s.strip() for s in strings]
+    except Exception:
+        pass
+
+    # Strategija 4 — numbered list: "1. tekst" ili "1) tekst"
+    try:
+        lines = []
+        for line in raw.split("\n"):
+            line = line.strip()
+            m = re.match(r'^\d+[.):]\s*(.+)$', line)
+            if m:
+                lines.append(m.group(1).strip().strip('"\' '))
+        if len(lines) == n:
+            return lines
+    except Exception:
+        pass
+
+    # Sve strategije neuspješne
+    logger.warning(f"Gemma {context}: sve strategije parsiranja neuspješne, raw={raw[:200]}")
+    return None  # Signal za fallback
+
 # ── Batch prevod — NLLB ───────────────────────────────────────────────────────
 
 def translate_nllb_batch(texts, tokenizer, model, src_lang="eng_Latn",
@@ -344,20 +407,13 @@ def translate_gemma_batch(texts, tgt_lang_code, temperature=None):
     response.raise_for_status()
     raw = response.json()["message"]["content"].strip()
 
-    # Parsiranje JSON array-a
-    try:
-        # Ukloni eventualne markdown ```json blokove
-        clean = raw.replace("```json", "").replace("```", "").strip()
-        result = json.loads(clean)
-        if isinstance(result, list) and len(result) == n:
-            return [str(r).strip() for r in result]
-        else:
-            logger.warning(f"Gemma batch: očekivano {n} prevoda, dobijeno {len(result)}")
-            raise ValueError("Pogrešan broj prevoda")
-    except Exception as e:
-        logger.warning(f"Gemma batch JSON parsiranje neuspješno ({e}) — fallback na single")
-        # Fallback: prevedi jednu po jednu
-        return [translate_gemma(t, tgt_lang_code, temperature) for t in texts]
+    # Robusno parsiranje JSON array-a
+    result = parse_gemma_batch_response(raw, n, context=f"translate→{tgt_lang_code}")
+    if result:
+        return result
+    # Fallback: prevedi jednu po jednu
+    logger.warning(f"Gemma batch translate→{tgt_lang_code}: fallback na single ({n} rečenica)")
+    return [translate_gemma(t, tgt_lang_code, temperature) for t in texts]
 
 
 def back_translate_gemma_batch(texts, src_lang_code, temperature=None):
@@ -394,23 +450,19 @@ def back_translate_gemma_batch(texts, src_lang_code, temperature=None):
     response.raise_for_status()
     raw = response.json()["message"]["content"].strip()
 
-    try:
-        clean = raw.replace("```json", "").replace("```", "").strip()
-        result = json.loads(clean)
-        if isinstance(result, list) and len(result) == n:
-            return [str(r).strip() for r in result]
-        else:
-            logger.warning(f"Gemma back-batch: očekivano {n}, dobijeno {len(result)}")
-            raise ValueError("Pogrešan broj prevoda")
-    except Exception as e:
-        logger.warning(f"Gemma back-batch JSON parsiranje neuspješno ({e}) — fallback na single")
-        return [back_translate_gemma(t, src_lang_code, temperature) for t in texts]
+    # Robusno parsiranje JSON array-a
+    result = parse_gemma_batch_response(raw, n, context=f"back→{src_lang_code}")
+    if result:
+        return result
+    # Fallback: prevedi jednu po jednu
+    logger.warning(f"Gemma back-batch→{src_lang_code}: fallback na single ({n} rečenica)")
+    return [back_translate_gemma(t, src_lang_code, temperature) for t in texts]
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
 def load_embedder():
     logger.info(f"Učitavanje embedding modela: {EMBED_MODEL}")
-    return SentenceTransformer(EMBED_MODEL)
+    return SentenceTransformer(EMBED_MODEL, local_files_only=True)
 
 
 def compute_score(original, back_translation, embedder):

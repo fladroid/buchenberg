@@ -149,7 +149,7 @@ def load_nllb():
 
 def load_embedder():
     logger.info(f"Učitavanje embeddera: {EMBED_MODEL}")
-    return SentenceTransformer(EMBED_MODEL)
+    return SentenceTransformer(EMBED_MODEL, local_files_only=True)
 
 
 # ── Prevod ───────────────────────────────────────────────────────────────────
