@@ -14,6 +14,9 @@ Registracija (prvi put):
     --book hound_of_the_baskervilles --sent_from 1 --sent_to 20 \
     --langs sr --methods nllb gemma nllb_t05 gemma_t05
 
+Batch processing (default batch_size=20):
+  venv/bin/python src/run_test.py --test_id test_001 --batch_size 20
+
 Ponovni run (samo ID, koristi parametre iz registry):
   venv/bin/python src/run_test.py --test_id test_001
 
@@ -265,6 +268,144 @@ def back_translate_gemma(translated_text, src_lang_code, temperature=None):
     return response.json()["message"]["content"].strip()
 
 
+
+# ── Batch prevod — NLLB ───────────────────────────────────────────────────────
+
+def translate_nllb_batch(texts, tokenizer, model, src_lang="eng_Latn",
+                         tgt_lang="srp_Cyrl", temperature=None):
+    """
+    Batch prevod koristeći NLLB-200.
+    Prima listu tekstova, vraća listu prevoda istog reda.
+
+    temperature=None  → beam search (deterministički)
+    temperature=float → sampling (do_sample=True)
+    """
+    tokenizer.src_lang = src_lang
+    inputs = tokenizer(
+        texts,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=512,
+    )
+
+    gen_kwargs = dict(
+        forced_bos_token_id=tokenizer.convert_tokens_to_ids(tgt_lang),
+        max_length=512,
+        repetition_penalty=1.3,
+    )
+    if temperature is not None:
+        gen_kwargs["do_sample"]   = True
+        gen_kwargs["temperature"] = temperature
+    else:
+        gen_kwargs["do_sample"] = False
+
+    translated = model.generate(**inputs, **gen_kwargs)
+    return tokenizer.batch_decode(translated, skip_special_tokens=True)
+
+
+# ── Batch prevod — Gemma (Ollama Cloud) ───────────────────────────────────────
+
+def translate_gemma_batch(texts, tgt_lang_code, temperature=None):
+    """
+    Batch prevod koristeći Gemma 3 12b via Ollama Cloud.
+    Prima listu tekstova, vraća listu prevoda istog reda.
+    Jedan API poziv za cijeli batch.
+
+    Prompt traži JSON array kao odgovor — parsira se i vraća kao lista.
+    Fallback: ako JSON parsiranje ne uspije, vraća single prevode.
+    """
+    import json
+    lang_name = LANG_NAMES.get(tgt_lang_code, tgt_lang_code)
+    n = len(texts)
+
+    numbered = "\n".join(f'{i+1}. "{t}"' for i, t in enumerate(texts))
+    prompt = (
+        f"Translate these {n} sentences to {lang_name}.\n"
+        f"Return ONLY a JSON array of exactly {n} translations in the same order.\n"
+        f"No explanations, no markdown, just the JSON array.\n\n"
+        f"{numbered}"
+    )
+
+    payload = {
+        "model":    OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream":   False,
+    }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
+
+    response = requests.post(
+        f"{OLLAMA_URL}/api/chat",
+        headers={"Authorization": f"Bearer {OLLAMA_KEY}"},
+        json=payload,
+        timeout=120,  # batch treba više vremena
+    )
+    response.raise_for_status()
+    raw = response.json()["message"]["content"].strip()
+
+    # Parsiranje JSON array-a
+    try:
+        # Ukloni eventualne markdown ```json blokove
+        clean = raw.replace("```json", "").replace("```", "").strip()
+        result = json.loads(clean)
+        if isinstance(result, list) and len(result) == n:
+            return [str(r).strip() for r in result]
+        else:
+            logger.warning(f"Gemma batch: očekivano {n} prevoda, dobijeno {len(result)}")
+            raise ValueError("Pogrešan broj prevoda")
+    except Exception as e:
+        logger.warning(f"Gemma batch JSON parsiranje neuspješno ({e}) — fallback na single")
+        # Fallback: prevedi jednu po jednu
+        return [translate_gemma(t, tgt_lang_code, temperature) for t in texts]
+
+
+def back_translate_gemma_batch(texts, src_lang_code, temperature=None):
+    """
+    Batch back-translation koristeći Gemma 3 12b via Ollama Cloud.
+    Prima listu tekstova na src_lang_code, vraća listu engleskih prevoda.
+    """
+    import json
+    lang_name = LANG_NAMES_BACK.get(src_lang_code, src_lang_code)
+    n = len(texts)
+
+    numbered = "\n".join(f'{i+1}. "{t}"' for i, t in enumerate(texts))
+    prompt = (
+        f"Translate these {n} {lang_name} sentences to English.\n"
+        f"Return ONLY a JSON array of exactly {n} translations in the same order.\n"
+        f"No explanations, no markdown, just the JSON array.\n\n"
+        f"{numbered}"
+    )
+
+    payload = {
+        "model":    OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream":   False,
+    }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
+
+    response = requests.post(
+        f"{OLLAMA_URL}/api/chat",
+        headers={"Authorization": f"Bearer {OLLAMA_KEY}"},
+        json=payload,
+        timeout=120,
+    )
+    response.raise_for_status()
+    raw = response.json()["message"]["content"].strip()
+
+    try:
+        clean = raw.replace("```json", "").replace("```", "").strip()
+        result = json.loads(clean)
+        if isinstance(result, list) and len(result) == n:
+            return [str(r).strip() for r in result]
+        else:
+            logger.warning(f"Gemma back-batch: očekivano {n}, dobijeno {len(result)}")
+            raise ValueError("Pogrešan broj prevoda")
+    except Exception as e:
+        logger.warning(f"Gemma back-batch JSON parsiranje neuspješno ({e}) — fallback na single")
+        return [back_translate_gemma(t, src_lang_code, temperature) for t in texts]
+
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
 def load_embedder():
@@ -369,12 +510,14 @@ def dispatch_back_translate(method, translated, lang, nllb_lang, nllb_tok, nllb_
 
 def main():
     parser = argparse.ArgumentParser(description="Buchenberg test runner")
-    parser.add_argument("--test_id",   required=True)
-    parser.add_argument("--book",      default=None)
-    parser.add_argument("--sent_from", type=int, default=None)
-    parser.add_argument("--sent_to",   type=int, default=None)
-    parser.add_argument("--langs",     nargs="+", default=None)
-    parser.add_argument("--methods",   nargs="+", default=None)
+    parser.add_argument("--test_id",    required=True)
+    parser.add_argument("--book",       default=None)
+    parser.add_argument("--sent_from",  type=int, default=None)
+    parser.add_argument("--sent_to",    type=int, default=None)
+    parser.add_argument("--langs",      nargs="+", default=None)
+    parser.add_argument("--methods",    nargs="+", default=None)
+    parser.add_argument("--batch_size", type=int, default=20,
+                        help="Broj rečenica po batchu (default: 20)")
     args = parser.parse_args()
 
     log_file = os.path.join(LOG_DIR, f"{args.test_id}.log")
@@ -421,40 +564,84 @@ def main():
 
     total = len(sentences) * len(langs) * len(methods)
     done  = 0
+    batch_size = args.batch_size
 
-    for sid, text in sentences:
-        for lang in langs:
-            nllb_lang = LANG_MAP.get(lang)
-            if not nllb_lang:
-                logger.warning(f"Nepoznat jezik: {lang} — preskačem")
-                continue
+    # Batch loop — za svaki lang+method procesiramo rečenice u grupama
+    for lang in langs:
+        nllb_lang = LANG_MAP.get(lang)
+        if not nllb_lang:
+            logger.warning(f"Nepoznat jezik: {lang} — preskačem")
+            continue
 
-            for method in methods:
+        for method in methods:
+            logger.info(f"--- {lang} {method} | batch_size={batch_size} ---")
+
+            # Podijeli rečenice u batcheve
+            for batch_start in range(0, len(sentences), batch_size):
+                batch = sentences[batch_start:batch_start + batch_size]
+                sids  = [s[0] for s in batch]
+                texts = [s[1] for s in batch]
+
                 try:
-                    # Prevod EN → lang
-                    translated = dispatch_translate(
-                        method, text, lang, nllb_lang, nllb_tok, nllb_mod
-                    )
+                    # ── Batch prevod EN → lang ────────────────────────────
+                    if method in ("nllb", "nllb_t05"):
+                        temp = 0.5 if method == "nllb_t05" else None
+                        translateds = translate_nllb_batch(
+                            texts, nllb_tok, nllb_mod,
+                            tgt_lang=nllb_lang, temperature=temp
+                        )
+                    elif method in ("gemma", "gemma_t05"):
+                        temp = 0.5 if method == "gemma_t05" else None
+                        translateds = translate_gemma_batch(texts, lang, temperature=temp)
 
-                    # Back-translation lang → EN
-                    back = dispatch_back_translate(
-                        method, translated, lang, nllb_lang, nllb_tok, nllb_mod
-                    )
+                    # ── Batch back-translation lang → EN ──────────────────
+                    if method in ("nllb", "nllb_t05"):
+                        temp = 0.5 if method == "nllb_t05" else None
+                        backs = translate_nllb_batch(
+                            translateds, nllb_tok, nllb_mod,
+                            src_lang=nllb_lang, tgt_lang="eng_Latn",
+                            temperature=temp
+                        )
+                    elif method in ("gemma", "gemma_t05"):
+                        temp = 0.5 if method == "gemma_t05" else None
+                        backs = back_translate_gemma_batch(translateds, lang, temperature=temp)
 
-                    # Score — back-translation vs original
-                    sc = compute_score(text, back, embedder)
-                    # Score — translation vs original (direktni)
-                    tr_sc = compute_score(text, translated, embedder)
+                    # ── Score i insert za svaku rečenicu u batchu ─────────
+                    for i, (sid, text) in enumerate(zip(sids, texts)):
+                        translated = translateds[i]
+                        back       = backs[i]
 
-                    insert_result(conn, args.test_id, sid, lang,
-                                  method, translated, back, sc, tr_sc)
+                        sc    = compute_score(text, back, embedder)
+                        tr_sc = compute_score(text, translated, embedder)
 
-                    done += 1
-                    logger.info(f"[{done}/{total}] s{sid} {lang} {method} "
-                                f"score={sc:.3f} | {translated[:50]}...")
+                        insert_result(conn, args.test_id, sid, lang,
+                                      method, translated, back, sc, tr_sc)
+                        done += 1
+                        logger.info(f"[{done}/{total}] s{sid} {lang} {method} "
+                                    f"score={sc:.3f} | {translated[:50]}...")
 
                 except Exception as e:
-                    logger.error(f"Greška s{sid} {lang} {method}: {e}")
+                    logger.error(f"Greška batch {lang} {method} "
+                                 f"s{sids[0]}-s{sids[-1]}: {e}")
+                    # Fallback — probaj rečenicu po rečenicu
+                    logger.info("Fallback na single mode...")
+                    for sid, text in zip(sids, texts):
+                        try:
+                            translated = dispatch_translate(
+                                method, text, lang, nllb_lang, nllb_tok, nllb_mod
+                            )
+                            back = dispatch_back_translate(
+                                method, translated, lang, nllb_lang, nllb_tok, nllb_mod
+                            )
+                            sc    = compute_score(text, back, embedder)
+                            tr_sc = compute_score(text, translated, embedder)
+                            insert_result(conn, args.test_id, sid, lang,
+                                          method, translated, back, sc, tr_sc)
+                            done += 1
+                            logger.info(f"[{done}/{total}] s{sid} {lang} {method} "
+                                        f"score={sc:.3f} | {translated[:50]}...")
+                        except Exception as e2:
+                            logger.error(f"Greška single s{sid} {lang} {method}: {e2}")
 
     update_winners(conn, args.test_id)
     conn.close()
