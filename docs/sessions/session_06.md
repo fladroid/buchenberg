@@ -239,3 +239,100 @@ cd /home/balsam/buchenberg && nohup bash run20.sh --test_id test_001 > logs/run2
 ---
 
 *Flavio & Claude · Session 06 · 16. maj 2026.*
+
+---
+
+## Korak 8 — GA implementacija i testiranje
+
+### Nove skripte
+
+| Fajl | Opis |
+|------|------|
+| `src/step7_create_ga_table.py` | Kreira `ga_results` tabelu |
+| `src/run_ga.py` | GA runner (528 linija) |
+| `src/ga_snapshot.py` | Snapshot stanja prije GA |
+| `src/ram_monitor.sh` | Monitor RAM/swap tokom runa |
+| `run30.sh` | Orchestrator (sa `time`) |
+
+### Nova tabela `ga_results`
+
+```sql
+CREATE TABLE ga_results (
+    id, sentence_id, target_lang, generation, individua_id,
+    tekst, fitness, pivot_lang, metoda,
+    je_elita, je_pobjednik, created_at
+);
+```
+
+### GA parametri
+
+| Parametar | Default | Opis |
+|-----------|---------|------|
+| `--pop_size` | 8 | Maksimalna veličina populacije |
+| `--elite_n` | 2 | Uvijek preživljava N najboljih |
+| `--max_gen` | 20 | Maksimalan broj generacija |
+| `--conv_thresh` | 0.005 | Prag konvergencije |
+| `--conv_gens` | 3 | Generacija bez poboljšanja → stop |
+| `--quality_stop` | 0.95 | Fitness > ovo → stop |
+| `--mutate_rate` | 0.15 | Stopa mutacije |
+| `--dup_thresh` | 0.99 | Cosine > ovo → duplikat |
+| `--green_thresh` | 0.90 | Zelene rečenice → preskači GA |
+
+### Filter zelene/žute/crvene
+
+GA se pokreće samo za žute i crvene rečenice:
+- 🟢 **Zelene** (tr_score ≥ 0.90) → preskačemo
+- 🟡 **Žute** (0.80–0.89) → GA
+- 🔴 **Crvene** (< 0.80) → GA
+
+Za IT, 40 rečenica: **34 zelene (85%), 6 žutih (15%), 0 crvenih**.
+
+### Benchmark rezultati — paralelizam
+
+Testirano na 6 žutih IT rečenica:
+
+| Run | Konfiguracija | Trajanje | RAM peak |
+|-----|--------------|----------|----------|
+| Run 1 | 1×40 serijski | ~5 min | ~738 MB |
+| Run 2 | 2×20 paralelno | ~7 min | ~738 MB |
+| Run 3 | 4×10 paralelno | ~3 min | ~1.7 GB |
+
+**Zaključci:**
+- OS dijeli model stranice — 4 procesa troše samo 1.7 GB, ne 4×4.5 GB
+- CPU contention smanjuje korist paralelizma za NLLB (CPU-bound)
+- Pravi benchmark zahtijeva više žutih/crvenih rečenica
+
+### GA rezultati — IT, 6 žutih rečenica
+
+| s | prije GA | nakon GA | delta | pivot |
+|---|---------|---------|-------|-------|
+| s1 | 0.8525 | 0.8525 | 0.000 | — |
+| s6 | 0.9000 | 0.9000 | 0.000 | — |
+| s9 | 0.8698 | **0.8724** | **+0.0026** ↑ | af |
+| s17 | 0.8336 | 0.8336 | 0.000 | — |
+| s24 | 0.8616 | 0.8616 | 0.000 | — |
+| s38 | 0.8299 | 0.8299 | 0.000 | — |
+
+**1/6 poboljšano** — s9 kroz Afrikaans pivot + gemma+gemma.
+
+### Otvorene stavke za GA tuning
+
+1. Povećati `conv_gens` na 5-7
+2. Smanjiti `conv_thresh` na 0.002
+3. Dodati `--crossover_rate` parametar (tipično 0.85)
+4. Dodati `--max_children` (do 3 djece po crossoveru)
+5. Batch processing za Gemma i NLLB
+6. Retry logika za Ollama timeouts
+
+---
+
+## Ažurirana lista otvorenog za sljedeću sesiju
+
+1. GA tuning — conv_gens, conv_thresh, crossover_rate, max_children
+2. Batch processing — Gemma i NLLB
+3. Retry logika — exponential backoff za Ollama timeouts
+4. Logging standardizacija — timestamp u imenu loga, ukloniti dupli logging
+5. Protokol prikazivanja komandi — uvijek prikazati komandu prije izvršavanja ✅ (usvojeno)
+6. README ažuriranje — LaBSE, translation_score, GA, novi standard
+
+---
