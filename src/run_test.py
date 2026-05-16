@@ -3,13 +3,28 @@
 Buchenberg · run_test.py
 Glavni test runner — prevod + back-translation + scoring.
 
+Podržane metode:
+  nllb       — NLLB-200 beam search (deterministički, repetition_penalty=1.3)
+  nllb_t05   — NLLB-200 sampling, temperature=0.5 (kreativniji, stohastičan)
+  gemma      — Gemma 3 12b (Ollama Cloud), default temperatura
+  gemma_t05  — Gemma 3 12b (Ollama Cloud), temperature=0.5 (konzervativniji)
+
 Registracija (prvi put):
   venv/bin/python src/run_test.py --test_id test_001 \
     --book hound_of_the_baskervilles --sent_from 1 --sent_to 20 \
-    --langs sr --methods nllb gemma
+    --langs sr --methods nllb gemma nllb_t05 gemma_t05
 
-Ponovni run (samo ID):
+Ponovni run (samo ID, koristi parametre iz registry):
   venv/bin/python src/run_test.py --test_id test_001
+
+Napomena o NLLB metodama:
+  nllb     koristi beam search (do_sample=False) — deterministički output.
+  nllb_t05 koristi do_sample=True + temperature=0.5 — stohastičan, ali
+           konzervativniji od temperature=1.0. Oba dijele isti učitani model.
+
+Napomena o Gemma metodama:
+  gemma     ne šalje temperature parametar (Ollama koristi default).
+  gemma_t05 šalje temperature=0.5 u API poziv.
 """
 
 import os
@@ -38,7 +53,10 @@ OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
 
-# NLLB jezik kodovi (ISO 639-1 → NLLB BCP-47)
+# Validne metode — jedini izvor istine
+VALID_METHODS = {"nllb", "nllb_t05", "gemma", "gemma_t05"}
+
+# NLLB jezik kodovi (ISO 639-1 → NLLB BCP-47 / FLORES-200)
 LANG_MAP = {
     "sr": "srp_Cyrl",
     "hr": "hrv_Latn",
@@ -48,12 +66,31 @@ LANG_MAP = {
     "bg": "bul_Cyrl",
     "de": "deu_Latn",
     "nl": "nld_Latn",
+    "af": "afr_Latn",
     "fr": "fra_Latn",
     "it": "ita_Latn",
     "es": "spa_Latn",
     "pt": "por_Latn",
     "ro": "ron_Latn",
     "en": "eng_Latn",
+}
+
+# Gemma jezik nazivi (ISO 639-1 → puni naziv za prompt)
+LANG_NAMES = {
+    "sr": "Serbian (Cyrillic)", "hr": "Croatian",  "bs": "Bosnian",
+    "sl": "Slovenian",          "mk": "Macedonian", "bg": "Bulgarian",
+    "de": "German",             "nl": "Dutch",      "af": "Afrikaans",
+    "fr": "French",             "it": "Italian",    "es": "Spanish",
+    "pt": "Portuguese",         "ro": "Romanian",
+}
+
+# Gemma back-translation jezik nazivi
+LANG_NAMES_BACK = {
+    "sr": "Serbian", "hr": "Croatian",  "bs": "Bosnian",
+    "sl": "Slovenian", "mk": "Macedonian", "bg": "Bulgarian",
+    "de": "German",  "nl": "Dutch",      "af": "Afrikaans",
+    "fr": "French",  "it": "Italian",    "es": "Spanish",
+    "pt": "Portuguese", "ro": "Romanian",
 }
 
 
@@ -136,41 +173,59 @@ def load_nllb():
     return tokenizer, model
 
 
-def translate_nllb(text, tokenizer, model, src_lang="eng_Latn", tgt_lang="srp_Cyrl"):
+def translate_nllb(text, tokenizer, model, src_lang="eng_Latn", tgt_lang="srp_Cyrl",
+                   temperature=None):
+    """
+    Prevod koristeći NLLB-200.
+
+    temperature=None  → beam search (deterministički) — metoda 'nllb'
+    temperature=float → sampling (do_sample=True)     — metoda 'nllb_t05'
+    """
     tokenizer.src_lang = src_lang
     inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-    translated = model.generate(
-        **inputs,
+
+    gen_kwargs = dict(
         forced_bos_token_id=tokenizer.convert_tokens_to_ids(tgt_lang),
         max_length=512,
         repetition_penalty=1.3,
     )
+    if temperature is not None:
+        gen_kwargs["do_sample"]   = True
+        gen_kwargs["temperature"] = temperature
+    else:
+        gen_kwargs["do_sample"] = False  # beam search (default, eksplicitno)
+
+    translated = model.generate(**inputs, **gen_kwargs)
     return tokenizer.decode(translated[0], skip_special_tokens=True)
 
 
 # ── Prevod — Gemma (Ollama Cloud) ─────────────────────────────────────────────
 
-def translate_gemma(text, tgt_lang_code):
-    lang_names = {
-        "sr": "Serbian (Cyrillic)", "hr": "Croatian", "bs": "Bosnian",
-        "sl": "Slovenian", "mk": "Macedonian", "bg": "Bulgarian",
-        "de": "German", "nl": "Dutch", "fr": "French",
-        "it": "Italian", "es": "Spanish", "pt": "Portuguese", "ro": "Romanian",
-    }
-    lang_name = lang_names.get(tgt_lang_code, tgt_lang_code)
+def translate_gemma(text, tgt_lang_code, temperature=None):
+    """
+    Prevod koristeći Gemma 3 12b via Ollama Cloud.
+
+    temperature=None  → API poziv bez temperature parametra (Ollama default)
+    temperature=float → eksplicitna temperatura u API pozivu
+    """
+    lang_name = LANG_NAMES.get(tgt_lang_code, tgt_lang_code)
     prompt = (
         f"Translate the following English text to {lang_name}. "
         f"Return only the translation, no explanation.\n\n"
         f"Text: {text}"
     )
+    payload = {
+        "model":    OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream":   False,
+    }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
+
     response = requests.post(
         f"{OLLAMA_URL}/api/chat",
         headers={"Authorization": f"Bearer {OLLAMA_KEY}"},
-        json={
-            "model": OLLAMA_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-        },
+        json=payload,
         timeout=60,
     )
     response.raise_for_status()
@@ -179,27 +234,31 @@ def translate_gemma(text, tgt_lang_code):
 
 # ── Back-translation — Gemma ──────────────────────────────────────────────────
 
-def back_translate_gemma(translated_text, src_lang_code):
-    lang_names = {
-        "sr": "Serbian", "hr": "Croatian", "bs": "Bosnian",
-        "sl": "Slovenian", "mk": "Macedonian", "bg": "Bulgarian",
-        "de": "German", "nl": "Dutch", "fr": "French",
-        "it": "Italian", "es": "Spanish", "pt": "Portuguese", "ro": "Romanian",
-    }
-    lang_name = lang_names.get(src_lang_code, src_lang_code)
+def back_translate_gemma(translated_text, src_lang_code, temperature=None):
+    """
+    Back-translation koristeći Gemma 3 12b via Ollama Cloud.
+
+    temperature=None  → API poziv bez temperature parametra (Ollama default)
+    temperature=float → eksplicitna temperatura u API pozivu
+    """
+    lang_name = LANG_NAMES_BACK.get(src_lang_code, src_lang_code)
     prompt = (
         f"Translate the following {lang_name} text to English. "
         f"Return only the translation, no explanation.\n\n"
         f"Text: {translated_text}"
     )
+    payload = {
+        "model":    OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream":   False,
+    }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
+
     response = requests.post(
         f"{OLLAMA_URL}/api/chat",
         headers={"Authorization": f"Bearer {OLLAMA_KEY}"},
-        json={
-            "model": OLLAMA_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-        },
+        json=payload,
         timeout=60,
     )
     response.raise_for_status()
@@ -220,13 +279,17 @@ def compute_score(original, back_translation, embedder):
 
 # ── DB operacije ──────────────────────────────────────────────────────────────
 
-def clear_test(conn, test_id, langs):
+def clear_test(conn, test_id, langs, methods):
+    """Briše rezultate samo za kombinaciju test_id + langs + methods."""
     cur = conn.cursor()
-    cur.execute("DELETE FROM test_results WHERE test_id = %s AND target_lang = ANY(%s)", (test_id, langs))
+    cur.execute(
+        "DELETE FROM test_results WHERE test_id = %s AND target_lang = ANY(%s) AND method = ANY(%s)",
+        (test_id, langs, methods)
+    )
     deleted = cur.rowcount
     conn.commit()
     cur.close()
-    logger.info(f"Obrisano {deleted} starih rezultata za {test_id} langs={langs}")
+    logger.info(f"Obrisano {deleted} starih rezultata za {test_id} langs={langs} methods={methods}")
 
 
 def insert_result(conn, test_id, sentence_id, target_lang, method,
@@ -270,6 +333,37 @@ def update_winners(conn, test_id):
     logger.info(f"Winners ažurirani za {test_id}")
 
 
+# ── Method dispatch ───────────────────────────────────────────────────────────
+
+def dispatch_translate(method, text, lang, nllb_lang, nllb_tok, nllb_mod):
+    """Prevod EN → lang za datu metodu. Vraća translated string."""
+    if method == "nllb":
+        return translate_nllb(text, nllb_tok, nllb_mod,
+                              tgt_lang=nllb_lang, temperature=None)
+    elif method == "nllb_t05":
+        return translate_nllb(text, nllb_tok, nllb_mod,
+                              tgt_lang=nllb_lang, temperature=0.5)
+    elif method == "gemma":
+        return translate_gemma(text, lang, temperature=None)
+    elif method == "gemma_t05":
+        return translate_gemma(text, lang, temperature=0.5)
+    else:
+        raise ValueError(f"Nepoznata metoda: {method}")
+
+
+def dispatch_back_translate(method, translated, lang, nllb_lang, nllb_tok, nllb_mod):
+    """Back-translation lang → EN za datu metodu. Vraća back string."""
+    if method in ("nllb", "nllb_t05"):
+        return translate_nllb(translated, nllb_tok, nllb_mod,
+                              src_lang=nllb_lang, tgt_lang="eng_Latn",
+                              temperature=None if method == "nllb" else 0.5)
+    elif method in ("gemma", "gemma_t05"):
+        temp = None if method == "gemma" else 0.5
+        return back_translate_gemma(translated, lang, temperature=temp)
+    else:
+        raise ValueError(f"Nepoznata metoda: {method}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -301,18 +395,26 @@ def main():
     langs     = params["langs"]
     methods   = params["methods"]
 
+    # Validacija metoda
+    unknown = set(methods) - VALID_METHODS
+    if unknown:
+        logger.error(f"Nepoznate metode: {unknown}. Validne: {VALID_METHODS}")
+        sys.exit(1)
+
     logger.info(f"Parametri: book={book}, sent={sent_from}-{sent_to}, "
                 f"langs={langs}, methods={methods}")
 
     # Učitaj alate
     embedder = load_embedder()
+
+    # NLLB — učitaj jednom, koriste ga i nllb i nllb_t05
     nllb_tok, nllb_mod = (None, None)
-    if "nllb" in methods:
+    if any(m in methods for m in ("nllb", "nllb_t05")):
         nllb_tok, nllb_mod = load_nllb()
 
     # DB
     conn = get_conn()
-    clear_test(conn, args.test_id, langs)
+    clear_test(conn, args.test_id, langs, methods)
     sentences = load_sentences(conn, book, sent_from, sent_to)
     logger.info(f"Rečenica učitano: {len(sentences)}")
 
@@ -323,28 +425,20 @@ def main():
         for lang in langs:
             nllb_lang = LANG_MAP.get(lang)
             if not nllb_lang:
-                logger.warning(f"Nepoznat jezik: {lang}, preskačem")
+                logger.warning(f"Nepoznat jezik: {lang} — preskačem")
                 continue
 
             for method in methods:
                 try:
                     # Prevod EN → lang
-                    if method == "nllb":
-                        translated = translate_nllb(text, nllb_tok, nllb_mod,
-                                                    tgt_lang=nllb_lang)
-                    elif method == "gemma":
-                        translated = translate_gemma(text, lang)
-                    else:
-                        logger.warning(f"Nepoznata metoda: {method}")
-                        continue
+                    translated = dispatch_translate(
+                        method, text, lang, nllb_lang, nllb_tok, nllb_mod
+                    )
 
                     # Back-translation lang → EN
-                    if method == "nllb":
-                        back = translate_nllb(translated, nllb_tok, nllb_mod,
-                                              src_lang=nllb_lang,
-                                              tgt_lang="eng_Latn")
-                    elif method == "gemma":
-                        back = back_translate_gemma(translated, lang)
+                    back = dispatch_back_translate(
+                        method, translated, lang, nllb_lang, nllb_tok, nllb_mod
+                    )
 
                     # Score
                     sc = compute_score(text, back, embedder)
@@ -354,7 +448,7 @@ def main():
 
                     done += 1
                     logger.info(f"[{done}/{total}] s{sid} {lang} {method} "
-                                f"score={sc:.3f} | {text[:50]}...")
+                                f"score={sc:.3f} | {translated[:50]}...")
 
                 except Exception as e:
                     logger.error(f"Greška s{sid} {lang} {method}: {e}")
