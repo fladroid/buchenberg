@@ -1,9 +1,9 @@
-# Buchenberg — Project Documentation V1
+# Buchenberg — Project Documentation V2
 
-**Datum kreiranja:** 14. maj 2026.
-**Poslednje ažuriranje:** 15. maj 2026. (sesija 04)
-**Autor:** fladroid
-**Status:** run10 završen — 12.093 rečenica u bazi
+**Datum kreiranja:** 14. maj 2026.  
+**Poslednje ažuriranje:** 16. maj 2026. (sesija 06)  
+**Autor:** fladroid  
+**Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### Poreklo ideje
 
-Projekat je nastao iz eksperimentisanja sa **embeddingima i vektorskom aritmetikom**. Centralna spoznaja bila je da se semantičko značenje rečenica može predstaviti kao vektori u višedimenzionalnom prostoru i da se između tih vektora može meriti sličnost (cosine similarity).
+Projekat je nastao iz eksperimentisanja sa **embeddingima i vektorskom aritmetikom**. Centralna spoznaja: semantičko značenje rečenica može se predstaviti kao vektori u višedimenzionalnom prostoru i između tih vektora može se meriti sličnost (cosine similarity).
 
 ### Problem koji rešavamo
 
@@ -19,31 +19,41 @@ Kako proveriti kvalitet mašinskog prevoda kada ne govoriš ni izvorni ni ciljni
 
 **Rešenje — back-translation pipeline:**
 
-1. Uzmi rečenicu na jeziku **A** (original)
-2. Prevedi je na jezik **B** → dobijamo prevod **B**
-3. Prevedi **B** nazad na **A** → dobijamo **Ab** (back-translation)
-4. Izračunaj cosine similarity između vektora **A** i **Ab**
-5. Visok score = prevod je semantički ispravan
+```
+RE (EN original) → metoda prevoda → RF (ciljni jezik)
+RF → ista metoda → RFE (back-translation na EN)
+score = cosine_similarity(RE, RFE)   ← back_score
+score = cosine_similarity(RE, RF)    ← translation_score (direktni)
+```
+
+### Dvije metrike kvaliteta
+
+| Metrika | Formula | Opis |
+|---------|---------|------|
+| `score` | cosine(RE, RFE) | Kvalitet back-translationa |
+| `translation_score` | cosine(RE, RF) | Direktna semantička sličnost |
+
+`translation_score` je pouzdaniji pokazatelj jer ne ovisi o back-translation procesu.
 
 ### Višestruko takmičenje metoda
 
-Isti postupak se radi sa **najmanje 2 metode prevoda** (npr. NLLB i Gemma). Metoda sa višim cosine score-om **pobeđuje** za tu rečenicu. Krajnji rezultat je hibridni prevod koji kombinuje najbolje od svake metode.
+Isti postupak se radi sa **4 metode prevoda**. Metoda sa višim score-om **pobeđuje** za tu rečenicu. Krajnji rezultat je hibridni prevod koji kombinuje najbolje od svake metode.
 
-### Engleski kao pivot jezik
+### Genetski algoritam za optimizaciju
 
-Engleski je **centralni meta-jezik** sistema. Direktni prevodi između npr. srpskog i holandskog prolaze kroz engleski:
+Za žute i crvene rečenice (translation_score < 0.90) pokreće se **Genetski algoritam (GA)** koji evoluira populaciju prevoda koristeći pivot jezike kao crossover operator:
 
 ```
-SR ← (EN) → NL
+EN → pivot jezik (npr. HR) → ciljni jezik (IT)
 ```
 
-EN se ne prikazuje u finalnom outputu, ali služi kao most između jezika.
+Svaki jezik vidi originalnu misao kroz drugačiju prizmu — crossover generiše semantički raznolike kandidate.
 
 ### Cilj projekta
 
-Prevod knjiga sa isteklom licencom sa **Project Gutenberg** (gutenberg.org) na više jezika, koristeći isključivo **open source i besplatne alate** — dostupno svima, ne samo onima koji si mogu priuštiti komercijalne servise.
+Prevod knjiga sa isteklom licencom sa **Project Gutenberg** na više jezika, koristeći isključivo open source i besplatne alate.
 
-**Važna napomena filozofije projekta:** *Važniji je put od cilja.* Pipeline koji gradimo je generički i primenljiv daleko šire od samog prevoda knjiga.
+**Važna napomena:** *Važniji je put od cilja.* Pipeline koji gradimo je generički i primenljiv daleko šire od samog prevoda knjiga.
 
 ---
 
@@ -58,63 +68,138 @@ Prevod knjiga sa isteklom licencom sa **Project Gutenberg** (gutenberg.org) na v
 ### Grupa 3 — Romanski/Latinski
 `fr` (francuski), `it` (italijanski), `es` (španski), `pt` (portugalski), `ro` (rumunski)
 
+### Egzotični (identificirani, odgođeni)
+- Jidiš `yi` (`ydd_Hebr`) — NLLB podržava, Gemma slaba
+- Frizijski `fy` (`fry_Latn`) — ~470k govornika, ograničena NLLB podrška
+- Luksemburški `lb` (`ltz_Latn`) — NLLB podržava, ~400k govornika
+
 ---
 
-## 3. Arhitektura pipeline-a
+## 3. Metode prevoda
 
-### Osnovna jedinica obrade: rečenica
+| Method string | Engine | Parametri | Napomena |
+|---------------|--------|-----------|---------|
+| `nllb` | NLLB-200 lokalno | beam search, deterministički | Najprecizniji za direktni prevod |
+| `nllb_t05` | NLLB-200 lokalno | do_sample=True, temp=0.5 | Stohastičan, raznolikiji |
+| `gemma` | Gemma 3 12b cloud | default temperatura | Brz, dobar za kompleksne rečenice |
+| `gemma_t05` | Gemma 3 12b cloud | temperature=0.5 | Konzervativniji od default |
 
-Tekst knjige se **uvek deli na pojedinačne rečenice** pre prevoda. Razlog: blokovi rečenica su davali probleme sa poravnanjem. Rečenica-po-rečenica je jedina pouzdana jedinica.
+**Standard:** svaki jezik u svakom testu uvijek ima sve 4 metode.
 
-### Poboljšanja za kratke rečenice
+### Kako dodati novu metodu
 
-Kratke rečenice (naslovi, kratki dijalozi) dobijaju **kontekst** — u prompt ulazi i prethodna i sledeća rečenica. Ovo drastično poboljšava kvalitet prevoda kratkih fragmenta.
+Samo 3 mjesta u `run_test.py`:
+1. `VALID_METHODS` — dodati string
+2. `dispatch_translate()` — dodati `elif`
+3. `dispatch_back_translate()` — dodati `elif`
+
+Baza ne treba migraciju — `method` je `VARCHAR`.
+
+---
+
+## 4. Arhitektura pipeline-a
+
+### Faze
+
+```
+Faza 1 (run20.sh) — Prevod:
+  EN rečenice → sve metode → RF + RFE + score + translation_score → test_results
+
+Faza 2 (ga_snapshot.py) — Snapshot:
+  Klasifikacija: zelene (≥0.90) / žute (0.80-0.89) / crvene (<0.80)
+
+Faza 3 (run30.sh) — GA optimizacija:
+  Žute + crvene → GA evoluira populaciju → pobjednik → ga_results
+```
+
+### Paralelni pipeline
+
+Gemma (cloud) i NLLB (lokalni CPU) ne dijele resurse:
+
+```bash
+# Paralelno — 2x ubrzanje
+nohup venv/bin/python src/run_test.py --test_id test_001 \
+  --batch_size 20 --methods gemma gemma_t05 > logs/par_gemma.log 2>&1 &
+
+nohup venv/bin/python src/run_test.py --test_id test_001 \
+  --batch_size 20 --methods nllb nllb_t05 > logs/par_nllb.log 2>&1 &
+```
+
+### Batch processing
+
+```bash
+# Default batch_size=20, može se povećati na 50
+bash run20.sh --test_id test_001 --batch_size 20
+```
+
+Gemma batch: numerisana lista → jedan API poziv → JSON array
+NLLB batch: `tokenizer(texts, padding=True)` → `batch_decode`
+
+**Ubrzanje vs single mode: ~6x**
 
 ### Grupiranje rečenica
 
-Rečenice se grupišu u **3 kategorije** po težini:
-- 🟢 **Zelene** (score ≥ 0.90) — visok kvalitet
-- 🟡 **Žute** (score 0.80–0.89) — srednji kvalitet
-- 🔴 **Crvene** (score < 0.80) — nizak kvalitet, potrebna intervencija
-
-### Mini-RAG poboljšanje
-
-Za svaku rečenicu koja se prevodi, u prompt se ubacuju **3 primera uspešnih "zelenih" prevoda** iz iste knjige. Ovo je mini Retrieval-Augmented Generation koji modelu daje stil i kontekst.
-
-### NER i Knowledge Graph
-
-Vlastita imena i nazivi institucija se obrađuju posebno koristeći **spaCy NER** (Named Entity Recognition). Cilj je sprečiti pogrešan prevod npr. "Baker Street" ili "Scotland Yard".
+- 🟢 **Zelene** (translation_score ≥ 0.90) — preskačemo GA
+- 🟡 **Žute** (0.80–0.89) — GA optimizacija
+- 🔴 **Crvene** (< 0.80) — GA optimizacija (prioritet)
 
 ---
 
-## 4. Poznati problemi i planirana rešenja
+## 5. Genetski algoritam (GA)
 
-| Problem | Uzrok | Planirano rešenje |
-|---------|-------|-------------------|
-| Kratke rečenice — vraća original | NLLB slab ispod ~5 tokena | Kontekst (prev+sledeća rečenica) |
-| Naslovi — loši prevodi | Bez glagola, bez konteksta | HTML verzija knjige + posebna obrada |
-| Mešana pisma (ćirilica/latinica) | Encoding problem | Eksplicitni language tag u promptu |
-| Bukvalni prevod idioma visoko rangiran | Back-translation trap | Kalibracija metrike za idiome |
-| NLLB truncation | `max_length` parametar | Eksplicitno postavljanje `max_length` |
-| NLLB loop (prevod se ponavlja) | `repetition_penalty` | Podešavanje `repetition_penalty` |
-| "Very truly yours" → "Imaš ga" | Idiom bez doslovnog prevoda | Posebna lista idioma + NER |
+### Konceptualni okvir
+
+**Populacija:** 4 inicijalna prevoda (po jedan za svaku metodu)
+**Fitness:** `translation_score` = cosine(RE, RF) — MiniLM-L12
+**Crossover:** EN → nasumični pivot jezik → ciljni jezik
+**Mutacija:** individua.tekst → nasumični pivot → ciljni jezik
+**Selekcija:** elitizam (top 2) + raznolikost (odbaci duplikate cosine > 0.99)
+
+### Parametri
+
+| Parametar | Default | Opis |
+|-----------|---------|------|
+| `--pop_size` | 8 | Maksimalna veličina populacije |
+| `--elite_n` | 2 | Uvijek preživljava N najboljih |
+| `--max_gen` | 20 | Maksimalan broj generacija |
+| `--conv_thresh` | 0.005 | Prag konvergencije |
+| `--conv_gens` | 3 | Generacija bez poboljšanja → stop |
+| `--quality_stop` | 0.95 | Fitness > ovo → stop |
+| `--mutate_rate` | 0.15 | Stopa mutacije (15%) |
+| `--green_thresh` | 0.90 | Zelene → preskači GA |
+
+### Pokretanje GA
+
+```bash
+# Snapshot prije GA
+venv/bin/python src/ga_snapshot.py --lang it
+
+# GA za žute/crvene rečenice
+bash run30.sh --sent_from 1 --sent_to 40 --lang it
+
+# Sa custom parametrima
+bash run30.sh --sent_from 1 --sent_to 40 --lang it --max_gen 10 --conv_gens 5
+```
 
 ---
 
-## 5. Tehnički stack
+## 6. Tehnički stack
 
-### Translation engines (VAŽNO)
-- **NLLB** (No Language Left Behind — Meta) — Neural Machine Translation, instaliran u venv na foxuno
-- **Gemma 3 12b** (`gemma3:12b`) — LLM via Ollama Cloud
+### Translation engines
 
-> ⚠️ **Kritična napomena:** LLM modeli se **ne nalaze** na foxuno niti balsam serverima. Koristi se **Ollama Cloud** (`api.ollama.com`). Lokalni llama.cpp na foxuno je 10x sporiji i **ne koristi se** za prevod.
+| Engine | Lokacija | Napomena |
+|--------|----------|---------|
+| **NLLB-200-distilled-600M** | Lokalno na foxuno (~2.5GB keš) | CPU-bound, ~22-30 rec/min |
+| **Gemma 3 12b** | Ollama Cloud (`api.ollama.com`) | GPU cloud, ~53-55 rec/min |
 
-### Embeddings i evaluacija
-- **sentence-transformers** — generisanje embedding vektora
-- **sentencepiece** — tokenizer za NLLB (obavezan)
-- **sacremoses** — tokenizer utilities za NLLB
-- **pgvector** — čuvanje vektora u PostgreSQL
-- **cosine similarity** — merenje kvaliteta prevoda
+> ⚠️ LLM modeli se **ne nalaze** na foxuno niti balsam. Koristi se Ollama Cloud.
+
+### Embeddings
+
+| Model | Dim | Jezici | Brzina | Napomena |
+|-------|-----|--------|--------|---------|
+| `paraphrase-multilingual-MiniLM-L12-v2` | 384 | 50+ | **41 rec/sec** | **Trenutni — optimalan balans** |
+| `LaBSE` | 768 | 109 | 12 rec/sec | Testiran, sporiji |
 
 ### NLP
 - **spaCy** + `en_core_web_sm` — sentence splitting i NER
@@ -126,247 +211,213 @@ Vlastita imena i nazivi institucija se obrađuju posebno koristeći **spaCy NER*
 ### Ostalo
 - **Python 3.12.3** u virtualenv-u
 - **loguru** — logging
-- **tqdm** — progress bars
 - **python-dotenv** — konfiguracija
 - **beautifulsoup4** — parsiranje HTML
 
 ---
 
-## 6. Environment i infrastruktura
+## 7. Shema baze podataka
+
+### Tabele
+
+| Tabela | Opis |
+|--------|------|
+| `books` | Knjige (naslov, autor, gutenberg_id) |
+| `sentences` | Rečenice (text, book_id, position) |
+| `test_results` | Prevodi + scores |
+| `ga_results` | GA historija generacija |
+
+### `test_results` (ključna tabela)
+
+```sql
+CREATE TABLE test_results (
+    id                SERIAL PRIMARY KEY,
+    test_id           VARCHAR(20) NOT NULL,
+    sentence_id       INTEGER REFERENCES sentences(id),
+    target_lang       CHAR(2) NOT NULL,
+    method            VARCHAR(20) NOT NULL,
+    translated_text   TEXT,
+    back_translation  TEXT,
+    score             REAL,           -- cosine(RE, RFE)
+    translation_score REAL,           -- cosine(RE, RF) direktni
+    winner            BOOLEAN DEFAULT FALSE,
+    created_at        TIMESTAMP DEFAULT NOW(),
+    UNIQUE (test_id, sentence_id, target_lang, method)
+);
+```
+
+### `ga_results`
+
+```sql
+CREATE TABLE ga_results (
+    id            SERIAL PRIMARY KEY,
+    sentence_id   INTEGER REFERENCES sentences(id),
+    target_lang   CHAR(2) NOT NULL,
+    generation    INTEGER NOT NULL,
+    individua_id  INTEGER NOT NULL,
+    tekst         TEXT NOT NULL,
+    fitness       REAL NOT NULL,
+    pivot_lang    CHAR(2),
+    metoda        VARCHAR(20),
+    je_elita      BOOLEAN DEFAULT FALSE,
+    je_pobjednik  BOOLEAN DEFAULT FALSE,
+    created_at    TIMESTAMP DEFAULT NOW()
+);
+```
+
+---
+
+## 8. Skripte
+
+### Run skripte
+
+| Skripta | Opis | Komanda |
+|---------|------|---------|
+| `run10.sh` | Punjenje baze | `bash run10.sh` |
+| `run15.sh` | Sentiment + NER | `bash run15.sh` |
+| `run20.sh` | Prevod — test runner | `bash run20.sh --test_id test_001 --batch_size 20` |
+| `run30.sh` | GA optimizer | `bash run30.sh --sent_from 1 --sent_to 40 --lang it` |
+
+### Python skripte (`src/`)
+
+| Skripta | Opis |
+|---------|------|
+| `step1_create_tables.py` | Kreira tabele |
+| `step2_truncate.py` | Reset podataka |
+| `step3_insert_book.py` | Ubacuje knjige |
+| `step4_parse_sentences.py` | Parsira HTML → rečenice |
+| `step5_sentiment_ner.py` | VADER sentiment + spaCy NER |
+| `step6_create_test_table.py` | Kreira `test_results` tabelu |
+| `step7_create_ga_table.py` | Kreira `ga_results` tabelu |
+| `run_test.py` | Glavni test runner (batch, scoring) |
+| `run_ga.py` | GA runner (528 linija) |
+| `ga_snapshot.py` | Snapshot zelene/žute/crvene |
+| `ram_monitor.sh` | Monitor RAM/swap tokom runa |
+
+---
+
+## 9. Environment i infrastruktura
 
 ### Serveri
 
 | Server | Adresa | Uloga |
 |--------|--------|-------|
-| **foxuno** | `foxuno.dynu.net` | Jedini razvojni server — sav kod, venv, pipeline |
-| **balsam** | `balsam.dynu.net` | Docker host — PostgreSQL kontejner |
+| **foxuno** | `foxuno.dynu.net` | Jedini razvojni server |
+| **balsam** | `balsam.dynu.net` | Docker host — PostgreSQL |
 
-> ⚠️ **Kritična napomena za buduće sesije:** Sav razvoj je na **foxuno**. Skripte, venv, knjige — sve je na `/home/balsam/buchenberg/` na foxuno serveru. User se zove `balsam` ali to je user na foxuno serveru, ne balsam server!
+> ⚠️ Sav razvoj je na **foxuno**. User se zove `balsam` ali to je user na foxuno serveru!
+> ⚠️ `docker exec pgdb psql` komande se izvršavaju **ručno na balsam serveru**.
 
-> ⚠️ **Kritična napomena — SQL izvršavanje:** `docker exec pgdb psql` komande se izvršavaju **ručno na balsam serveru**. Skripte na foxuno koriste **isključivo psycopg2** za konekciju na bazu (`host=balsam.dynu.net`). Na foxuno nema docker-a niti psql klijenta.
-
-### Docker kontejneri (na balsam serveru)
-
-| Kontejner | Servis | Detalji |
-|-----------|--------|---------|
-| `pgdb` | PostgreSQL 17.9 | user: `pgu`, baza: `buchenberg` |
-| `pgad` | PostgreSQL (drugi) | ne koristi se za buchenberg |
-| `ollama` | — | ne koristi se — Ollama je Cloud |
-| `ntfy` | Notifikacije | ne koristi se za buchenberg |
-
-### Ollama Cloud
-
-| Parametar | Vrednost |
-|-----------|---------|
-| Base URL | `https://api.ollama.com` |
-| Model | `gemma3:12b` |
-| API Key | u `.env` fajlu |
-
-Dostupni modeli na nalogu (relevantni):
-- `gemma3:4b`, `gemma3:12b`, `gemma3:27b`
-- `gemma4:31b`
-- `mistral-large-3:675b`
-
-### Struktura direktorijuma na foxuno
+### Struktura direktorijuma
 
 ```
 /home/balsam/buchenberg/
-├── .env                  # secrets — nije u git!
-├── .gitignore
-├── requirements.txt
-├── README.md             # uvek = poslednja verzija docs
-├── run10.sh              # punjenje baze (tabele + knjige + rečenice)
-├── venv/                 # Python virtualenv — nije u git!
-├── src/                  # sav Python kod
-│   ├── step1_create_tables.py
-│   ├── step1_create_tables.sql   # referentni SQL — ne izvršava se direktno
-│   ├── step2_truncate.py
-│   ├── step2_truncate.sql        # referentni SQL — ne izvršava se direktno
-│   ├── step3_insert_book.py
-│   └── step4_parse_sentences.py
-├── config/               # konfiguracioni fajlovi
-├── logs/                 # logovi — nisu u git!
-├── books/                # knjige — nisu u git!
-│   ├── hound_of_the_baskervilles/raw/hound.html
-│   ├── frankenstein/raw/frankenstein.html
-│   └── poirot_investigates/raw/poirot_investigates.html
-└── docs/
-    ├── SESSION_LOG.md        # historija do sesije 02
-    ├── db_schema.md          # shema baze podataka
-    ├── parser_plan.md        # plan parsiranja HTML → sentences
-    └── sessions/
-        └── session_NN.md
+├── .env                     # secrets — nije u git!
+├── README.md
+├── run10.sh / run15.sh / run20.sh / run30.sh
+├── buch_env.sh
+├── venv/                    # nije u git!
+├── src/
+├── tests/
+│   └── test_registry.yaml   # jedini izvor istine za testove
+├── docs/
+│   ├── ga_readme.md
+│   └── sessions/
+├── logs/                    # nije u git!
+└── books/                   # nije u git!
 ```
 
-### .env fajl (struktura)
+### `test_registry.yaml` format
 
-```env
-# Ollama Cloud
-OLLAMA_API_KEY=<api_key>
-OLLAMA_BASE_URL=https://api.ollama.com
-OLLAMA_MODEL=gemma3:12b
-
-# PostgreSQL
-DB_HOST=balsam.dynu.net
-DB_PORT=5432
-DB_NAME=buchenberg
-DB_USER=pgu
-DB_PASSWORD=<password>
-```
-
-### Python paketi (requirements.txt)
-
-```
-psycopg2-binary       # PostgreSQL konekcija
-python-dotenv         # .env učitavanje
-spacy                 # sentence splitting, NER
-sentence-transformers # embeddings
-requests              # HTTP pozivi (Ollama Cloud)
-tqdm                  # progress bars
-loguru                # logging
-pgvector              # pgvector Python adapter
-beautifulsoup4        # parsiranje HTML
-sentencepiece         # tokenizer za NLLB
-sacremoses            # tokenizer utilities za NLLB
-nltk                  # sentiment analiza (VADER)
+```yaml
+test_001:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [hr, sr, de, nl, fr, it]
+  methods: [nllb, nllb_t05, gemma, gemma_t05]
 ```
 
 ---
 
-## 7. Knjige (testni korpus)
+## 10. Knjige (testni korpus)
 
-| Knjiga | Autor | Gutenberg ID | Rečenica | Lokacija |
-|--------|-------|-------------|----------|----------|
-| The Hound of the Baskervilles | Arthur Conan Doyle | 3070 | 3.852 | `books/hound_of_the_baskervilles/raw/hound.html` |
-| Frankenstein | Mary Wollstonecraft Shelley | 84 | 3.384 | `books/frankenstein/raw/frankenstein.html` |
-| Poirot Investigates | Agatha Christie | 61262 | 4.857 | `books/poirot_investigates/raw/poirot_investigates.html` |
-| **Ukupno** | | | **12.093** | |
-
-Knjige su odabrane namjerno — pokrivaju cijeli spektar: kratke rečenice i brzi dijalozi (Poirot), dugi složeni blokovi (Frankenstein), sredina (Hound).
+| Knjiga | Autor | Rečenica |
+|--------|-------|----------|
+| The Hound of the Baskervilles | Arthur Conan Doyle | 3.852 |
+| Frankenstein | Mary Wollstonecraft Shelley | 3.384 |
+| Poirot Investigates | Agatha Christie | 4.857 |
+| **Ukupno** | | **12.093** |
 
 ---
 
-## 8. GitHub
+## 11. Korisne komande
 
-| Parametar | Vrednost |
-|-----------|---------|
-| User | `fladroid` |
-| Email | `fladroid@gmail.com` |
-| Repo | `fladroid/buchenberg` |
-| Branch | `main` |
-| SSH key | `~/.ssh/id_ed25519` na foxuno |
-
-### Korisne komande
+### PostgreSQL (na balsam serveru)
 
 ```bash
-# Provera SSH autentifikacije
-ssh -T git@github.com
-
-# Standardni commit i push
-cd /home/balsam/buchenberg
-git add .
-git commit -m "opis izmena"
-git push origin main
-```
-
----
-
-## 9. Korisne komande
-
-### PostgreSQL — ručno na balsam serveru
-
-```bash
-# Lista baza
-docker exec pgdb psql -U pgu -c "\l"
-
-# Konekcija na buchenberg bazu
 docker exec pgdb psql -U pgu -d buchenberg
-
-# Prekid svih konekcija na bazu
-docker exec pgdb psql -U pgu -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'buchenberg' AND pid <> pg_backend_pid();"
-
-# Brisanje baze
-docker exec pgdb psql -U pgu -c "DROP DATABASE buchenberg;"
-
-# Kreiranje baze
-docker exec pgdb psql -U pgu -c "CREATE DATABASE buchenberg OWNER pgu ENCODING 'UTF8' LC_COLLATE 'en_US.utf8' LC_CTYPE 'en_US.utf8';"
-
-# Aktivacija pgvector ekstenzije
-docker exec pgdb psql -U pgu -d buchenberg -c "CREATE EXTENSION vector;"
+docker exec pgdb psql -U pgu -d buchenberg -c "TRUNCATE test_results RESTART IDENTITY;"
 ```
 
-### PostgreSQL konekcija iz Pythona (izvršava se na foxuno)
-
-```python
-import psycopg2
-conn = psycopg2.connect(
-    host='balsam.dynu.net',
-    port=5432,
-    dbname='buchenberg',
-    user='pgu',
-    password='<password>'
-)
-```
-
-### Pokretanje runova
+### Paralelni prevod
 
 ```bash
 cd /home/balsam/buchenberg
-
-# run10 — punjenje baze (tabele + knjige + rečenice)
-nohup time bash run10.sh > logs/run10.log 2>&1 &
-
-# Praćenje loga
-tail -f logs/run10.log
+nohup venv/bin/python src/run_test.py --test_id test_001 \
+  --batch_size 20 --methods gemma gemma_t05 > logs/par_gemma.log 2>&1 &
+nohup venv/bin/python src/run_test.py --test_id test_001 \
+  --batch_size 20 --methods nllb nllb_t05 > logs/par_nllb.log 2>&1 &
 ```
 
-### Ollama Cloud test
+### GA workflow
 
 ```bash
-curl -s -H "Authorization: Bearer <api_key>" https://api.ollama.com/api/tags
-```
-
-### venv
-
-```bash
-# Direktno pokretanje skripte
-cd /home/balsam/buchenberg
-venv/bin/python src/script.py
-
-# Provjera instaliranih paketa
-venv/bin/pip list
+venv/bin/python src/ga_snapshot.py --lang it
+bash run30.sh --sent_from 1 --sent_to 40 --lang it
 ```
 
 ---
 
-## 10. Protokol dokumentacije
+## 12. Performanse (referentne vrijednosti)
 
-Svaki dokument (README, session log, plan, shema) prolazi kroz:
-
-1. **Generisanje** — Claude generiše artifakt
-2. **Pregled** — Flavio pregleda i kaže OK ili daje primjedbe
-3. **Server + GitHub** — tek nakon OK ide na server i git push
-
-Bez izuzetaka.
+| Operacija | Trajanje |
+|-----------|---------|
+| run20 serijski (40 rec, 4 metode, 6 jezika) | ~40 min |
+| run20 batch=20 paralelno (Gemma+NLLB) | ~21 min |
+| Gemma batch (40 rec, 2 metode, 6 jezika) | ~12 min |
+| NLLB batch (40 rec, 2 metode, 6 jezika) | ~21 min |
+| GA (1 rečenica) | ~1.5 min |
+| MiniLM encoding | 41 rec/sec |
 
 ---
 
-## 11. Sledeći koraci
+## 13. Protokol dokumentacije
 
-1. ~~**Download knjiga**~~ ✅ — 3 knjige, HTML format, Gutenberg
-2. ~~**Shema baze**~~ ✅ — books, sentences, translations, embeddings, named_entities
-3. ~~**Punjenje baze (run10)**~~ ✅ — 12.093 rečenica u bazi
-4. ~~**buch_env.sh**~~ ✅ — kreiran, sourcuje se na početku svakog run skripte
-5. ~~**run15.sh**~~ ✅ — 12.093 rečenica, 6.364 NER entiteta, ~6 min
-6. ~~**NLLB instalacija**~~ ✅ — sentencepiece + sacremoses, facebook/nllb-200-distilled-600M
-7. ~~**Test ciklus sistem**~~ ✅ — test_registry.yaml, test_results tabela, run_test.py, run20.sh
-8. **Zapadnogermanski jezici** — de, nl, af
-9. **Romanski jezici** — fr, it, es, pt, ro
-10. **Analiza rezultata** — vizualizacija scores po jeziku i metodi
-11. **Pipeline orchestrator** — spaja sve zajedno
-8. **Evaluation modul** — embedding + cosine similarity
-9. **Pipeline orchestrator** — spaja sve zajedno
+1. Claude generiše artifakt
+2. Flavio pregleda i kaže OK
+3. Na server i GitHub tek nakon OK
+
+**Protokol komandi:** Claude uvijek prikazuje komandu prije izvršavanja.
+
+---
+
+## 14. Sledeći koraci
+
+1. ~~Punjenje baze~~ ✅
+2. ~~NER + sentiment~~ ✅
+3. ~~Test pipeline (run20)~~ ✅
+4. ~~Batch processing~~ ✅
+5. ~~GA implementacija~~ ✅
+6. ~~Paralelni pipeline~~ ✅
+7. **GA tuning** — conv_gens↑, crossover_rate, max_children
+8. **multilingual-e5-large** — testirati kao alternativu MiniLM
+9. **Retry logika** — exponential backoff za Ollama timeouts
+10. **Logging standardizacija**
+11. **Romanski jezici** — pt, ro, es još nisu testirani
+12. **Pipeline orchestrator** — spaja sve zajedno
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
+*Flavio & Claude · Buchenberg · V2 · 16. maj 2026.*
