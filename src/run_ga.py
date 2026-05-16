@@ -479,6 +479,8 @@ def main():
     parser.add_argument("--quality_stop", type=float, default=0.95)
     parser.add_argument("--mutate_rate",  type=float, default=0.15)
     parser.add_argument("--dup_thresh",   type=float, default=0.99)
+    parser.add_argument("--green_thresh", type=float, default=0.90,
+                        help="Rečenice sa tr_score >= ovo se preskačaju (zelene)")
     args = parser.parse_args()
 
     # Dostupni pivot jezici (svi osim EN)
@@ -506,12 +508,36 @@ def main():
 
     logger.info(f"Rečenica: {len(sentences)}, Jezici: {args.lang}")
 
+    # GA prag — samo žute i crvene (translation_score < GREEN_THRESH)
+    GREEN_THRESH = getattr(args, 'green_thresh', 0.90)
+
     ukupno = 0
+    preskoceno = 0
     for sid, original in sentences:
         for lang in args.lang:
             if lang not in LANG_MAP:
                 logger.warning(f"Nepoznat jezik: {lang}, preskačem")
                 continue
+
+            # Provjeri best translation_score iz test_results
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT MAX(translation_score)
+                FROM test_results
+                WHERE sentence_id = %s AND target_lang = %s
+            """, (sid, lang))
+            row = cur.fetchone()
+            cur.close()
+            best_tr = row[0] if row and row[0] else None
+
+            if best_tr is not None and best_tr >= GREEN_THRESH:
+                logger.info(f"s{sid} {lang} zelena ({best_tr:.4f} ≥ {GREEN_THRESH}) — preskačem GA")
+                preskoceno += 1
+                continue
+
+            tier = "crvena" if (best_tr or 0) < 0.80 else "žuta"
+            logger.info(f"s{sid} {lang} {tier} ({best_tr:.4f if best_tr else 'N/A'}) — pokrećem GA")
+
             pobjednik = ga_optimizacija(
                 sid, original, lang, dostupni_jezici,
                 conn, nllb_tok, nllb_mod, embedder, args

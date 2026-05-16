@@ -1,25 +1,14 @@
 # Buchenberg · test_registry.yaml
 # Definicija svih testova.
-# Ponovni run istog test_id briše samo njegove rezultate za navedene langs+methods.
 #
-# Parametri:
-#   book      : hound_of_the_baskervilles | frankenstein | poirot_investigates
-#   sent_from : sentence.id od (uključivo)
-#   sent_to   : sentence.id do (uključivo)
-#   langs     : lista ISO 639-1 kodova
-#   methods   : lista metoda — uvijek sve 4: [nllb, nllb_t05, gemma, gemma_t05]
+# Validne metode:
+#   nllb, nllb_t05, gemma, gemma_t05
 #
-# Validne metode (VALID_METHODS u run_test.py):
-#   nllb       — NLLB-200 beam search, deterministički
-#   nllb_t05   — NLLB-200 sampling, temperature=0.5
-#   gemma      — Gemma 3 12b Ollama Cloud, default temperatura
-#   gemma_t05  — Gemma 3 12b Ollama Cloud, temperature=0.5
-#
-# Standard: svaki jezik u svakom testu uvijek ima sve 4 metode.
+# Standard: svaki jezik uvijek ima sve 4 metode.
 
 test_001:
   book: hound_of_the_baskervilles
   sent_from: 1
-  sent_to: 20
+  sent_to: 40
   langs: [hr, sr, de, nl, fr, it]
   methods: [nllb, nllb_t05, gemma, gemma_t05]
