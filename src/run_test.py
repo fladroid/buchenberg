@@ -591,6 +591,14 @@ def main():
     langs     = params["langs"]
     methods   = params["methods"]
 
+    # Command line override — ako su --langs ili --methods zadani, koriste se umjesto registry
+    if args.langs:
+        langs   = args.langs
+        logger.info(f"Override langs: {langs}")
+    if args.methods:
+        methods = args.methods
+        logger.info(f"Override methods: {methods}")
+
     # Validacija metoda
     unknown = set(methods) - VALID_METHODS
     if unknown:

@@ -7,5 +7,5 @@ test_001:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [it]
-  methods: [nllb, gemma]
+  langs: [hr, sr, de, nl, fr, it]
+  methods: [nllb, nllb_t05, gemma, gemma_t05]
