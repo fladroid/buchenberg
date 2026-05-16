@@ -400,3 +400,94 @@ SentenceTransformer(EMBED_MODEL, local_files_only=True)
 Primijenjeno u `run_test.py` i `run_ga.py`.
 
 ---
+
+---
+
+## Korak 10 — Paralelni pipeline i embedding benchmark
+
+### Paralelni run — Gemma i NLLB odvojeno
+
+Ključna spoznaja: Gemma (cloud) i NLLB (lokalni CPU) ne dijele resurse — mogu teći potpuno paralelno bez race conditiona jer pišu različite `method` vrijednosti u istu tabelu.
+
+**Komande:**
+```bash
+# Faza 1 — Gemma (cloud)
+nohup venv/bin/python src/run_test.py --test_id test_001 \
+  --batch_size 20 --methods gemma gemma_t05 > logs/par_gemma.log 2>&1 &
+
+# Faza 2 — NLLB (lokalno, paralelno)
+nohup venv/bin/python src/run_test.py --test_id test_001 \
+  --batch_size 20 --methods nllb nllb_t05 > logs/par_nllb.log 2>&1 &
+```
+
+**Dodano:** `--methods` command line override — zaobilazi registry za metode.
+
+**Rezultati (40 rečenica, 6 jezika, 2+2 metode paralelno):**
+
+| Proces | Metode | Trajanje | Prevoda |
+|--------|--------|----------|---------|
+| Gemma | gemma, gemma_t05 | ~12 min | 480/480 |
+| NLLB | nllb, nllb_t05 | ~21 min | 480/480 |
+| **Ukupno paralelno** | sve 4 | **~21 min** | **960/960** |
+| Serijski (ranije) | sve 4 | ~40 min | 960/960 |
+
+**~2x ubrzanje** paralelnim razdvajanjem.
+
+### Usko grlo — NLLB vs Gemma
+
+Iz timestamp analize:
+
+| Metoda | 40 rečenica | Brzina |
+|--------|-------------|--------|
+| gemma | ~45 sec | ~53 rec/min |
+| gemma_t05 | ~44 sec | ~55 rec/min |
+| nllb | ~1 min 21 sec | ~30 rec/min |
+| nllb_t05 | ~1 min 47 sec | ~22 rec/min |
+
+**NLLB je usko grlo** — lokalni CPU vs Gemma cloud GPU.
+
+### JSON parser v2 — bracket counting
+
+Problem: Gemma vraća multi-line JSON ili ```json blokove koje stari parser nije prepoznavao.
+
+Rješenje — Strategija 2 sada koristi **bracket counting** umjesto regex:
+```python
+depth = 0
+for i, c in enumerate(clean[start:], start):
+    if c == '[': depth += 1
+    elif c == ']':
+        depth -= 1
+        if depth == 0: end = i; break
+```
+
+Eliminisani svi fallbacki na single mode.
+
+### Embedding benchmark — LaBSE vs MiniLM-L12
+
+Test na 200 rečenica, 6 jezika:
+
+| Model | Encoding | Brzina | Dim | Avg score |
+|-------|---------|--------|-----|-----------|
+| LaBSE | 16.32s | 12 rec/sec | 768 | 0.8638 |
+| **MiniLM-L12** | **4.83s** | **41 rec/sec** | 384 | 0.8548 |
+
+**MiniLM-L12 je 3.4x brži** uz samo 0.009 razliku u prosječnom scoreu.
+
+**Odluka: prelaz na MiniLM-L12** (`paraphrase-multilingual-MiniLM-L12-v2`).
+
+Sve vrijednosti u bazi reračunate (960 redova).
+
+---
+
+## Finalna lista otvorenog za sljedeću sesiju
+
+1. **GA tuning** — conv_gens↑, conv_thresh↓, crossover_rate, max_children
+2. **multilingual-e5-large** — testirati kao alternativu MiniLM
+3. **Retry logika** — exponential backoff za Ollama timeouts
+4. **Logging standardizacija** — timestamp u imenu loga, ukloniti dupli logging
+5. **NLLB batch optimizacija** — trenutno CPU-bound, razmotriti GPU ili kvantizaciju
+6. **README ažuriranje** — sve izmjene iz session_06
+
+---
+
+*Flavio & Claude · Session 06 · 16. maj 2026. (kompletna)*
