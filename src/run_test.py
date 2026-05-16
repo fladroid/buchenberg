@@ -51,7 +51,7 @@ LOG_DIR       = os.getenv("BUCH_LOG", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 NLLB_MODEL   = "facebook/nllb-200-distilled-600M"
-EMBED_MODEL  = "sentence-transformers/LaBSE"
+EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
