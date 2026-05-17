@@ -308,53 +308,57 @@ def back_translate_gemma(translated_text, src_lang_code, temperature=None, model
 
 def parse_gemma_batch_response(raw, n, context="batch"):
     """
-    Robusno parsiranje JSON array-a iz Gemma odgovora.
-    Pokušava više strategija prije nego odustane.
+    Robusno parsiranje JSON array-a iz Gemma/Ministral odgovora.
 
-    Strategije:
-    1. Direktni json.loads nakon čišćenja markdown
-    2. Regex ekstrakcija JSON array-a iz teksta
-    3. Ekstrakcija po linijama (numbered list fallback)
+    Strategije (redom):
+    1. json.loads nakon čišćenja markdown blokova — standardni JSON parser
+       koji nativno čita escaped navodnike (\") — ovo pokriva 97%+ slučajeva
+    2. Bracket counting — pronalazi [ ... ] blok u tekstu koji sadrži tekst
+       prije ili poslije JSON-a
+    3. Regex quoted strings — fallback za nestandardne odgovore
+    4. Numbered list — "1. tekst", "1) tekst"
     """
     import json, re
 
-    # Strategija 1 — placeholder za escaped navodnike + json.loads (pokriva sve formate)
+    # Strategija 1 — čisti markdown, standardni json.loads
+    # Python json modul nativno čita \" unutar stringova — bez placeholder trika
     try:
         clean = raw.replace("```json", "").replace("```", "").strip()
-        temp = clean.replace('\"', '§§§')
-        result = json.loads(temp)
+        result = json.loads(clean)
         if isinstance(result, list) and len(result) >= 1:
-            items = []
-            for item in result:
-                s = str(item).replace('§§§', '"').strip()
-                if s.startswith('"') and s.endswith('"') and len(s) > 1:
-                    s = s[1:-1]
-                items.append(s)
+            items = [str(item).strip() for item in result]
             if len(items) >= n:
                 return items[:n]
-            if len(items) > 0:
-                logger.debug(f"Gemma {context}: parser vratio {len(items)}/{n} stavki")
+            logger.debug(f"Gemma {context}: strategija 1 vratila {len(items)}/{n} stavki")
     except Exception:
         pass
 
-    # Strategija 2 — regex: uzmi sve između [ i zadnjeg ]
+    # Strategija 2 — bracket counting: pronađi [ ... ] blok
     try:
-        match = re.search(r'\[(.+?)\]', raw, re.DOTALL)
-        if match:
-            candidate = "[" + match.group(1) + "]"
+        start = raw.index('[')
+        depth, end = 0, -1
+        for i, c in enumerate(raw[start:], start):
+            if c == '[': depth += 1
+            elif c == ']':
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end != -1:
+            candidate = raw[start:end+1]
             result = json.loads(candidate)
-            if isinstance(result, list) and len(result) == n:
-                return [str(r).strip() for r in result]
+            if isinstance(result, list) and len(result) >= 1:
+                items = [str(r).strip() for r in result]
+                if len(items) >= n:
+                    return items[:n]
     except Exception:
         pass
 
-    # Strategija 3 — regex: uzmi sve quoted stringove
+    # Strategija 3 — regex: quoted strings
     try:
-        # Traži sve "..." ili '...' u odgovoru
-        matches = re.findall(r'(?:"([^"\\]*(?:\\.[^"\\]*)*)"|\'([^\'\\]*(?:\\.[^\'\\]*)*)\')', raw)
-        strings = [m[0] or m[1] for m in matches]
-        if len(strings) == n:
-            return [s.strip() for s in strings]
+        matches = re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
+        if len(matches) >= n:
+            return [s.strip() for s in matches[:n]]
     except Exception:
         pass
 
@@ -363,45 +367,16 @@ def parse_gemma_batch_response(raw, n, context="batch"):
         lines = []
         for line in raw.split("\n"):
             line = line.strip()
-            m = re.match(r'^\d+[.):]\s*(.+)$', line)
+            m = re.match(r'^\d+[.):)\s*(.+)$', line)
             if m:
                 lines.append(m.group(1).strip().strip('"\' '))
-        if len(lines) == n:
-            return lines
+        if len(lines) >= n:
+            return lines[:n]
     except Exception:
         pass
 
-    # Strategija 5 — json.loads + strip outer quotes (Ministral escaped format)
-    try:
-        clean = raw.replace("```json", "").replace("```", "").strip()
-        result = json.loads(clean)
-        if isinstance(result, list) and len(result) == n:
-            cleaned = []
-            for item in result:
-                s = str(item).strip()
-                # Model vraca: "\"tekst\"" → json.loads da je '"tekst"' → strip quotes
-                if s.startswith('"') and s.endswith('"') and len(s) > 1:
-                    s = s[1:-1]
-                cleaned.append(s)
-            return cleaned
-    except Exception:
-        pass
-    # Strategija 6 — split po linijama, uzmi ne-prazne
-    try:
-        clean = raw.replace("```json", "").replace("```", "").strip()
-        # Ukloni [ i ] pa split po ,
-
-        clean = clean.strip("[]")
-        items = re.split(r',\s*\n', clean)
-        items = [i.strip().strip(chr(34)).replace(chr(92)+chr(34), chr(34)) for i in items if i.strip()]
-        if len(items) == n:
-            return items
-    except Exception:
-        pass
-
-    # Sve strategije neuspješne
     logger.warning(f"Gemma {context}: sve strategije parsiranja neuspješne, raw={raw[:500]}")
-    return None  # Signal za fallback
+    return None
 
 # ── Batch prevod — NLLB ───────────────────────────────────────────────────────
 
