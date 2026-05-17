@@ -130,7 +130,7 @@ def save_registry(registry):
 
 def filter_sentences_by_score(conn, sentences, test_id, score_from, score_to):
     """
-    Filtrira rečenice čiji MAX translation_score (across svih metoda i test_id-eva)
+    Filtrira rečenice čiji MAX translation_score (samo za dati test_id)
     pada u interval [score_from, score_to].
     Ako score_from=0.0 i score_to=1.0 — vraća sve (bez filtera).
     Rečenice koje nemaju nijedan skor u bazi uvijek se uključuju.
@@ -142,8 +142,9 @@ def filter_sentences_by_score(conn, sentences, test_id, score_from, score_to):
     cur.execute("""
         SELECT sentence_id, MAX(translation_score) as best
         FROM test_results
+        WHERE test_id = %s
         GROUP BY sentence_id
-    """)
+    """, (test_id,))
     rows = cur.fetchall()
     scored = {row[0]: row[1] for row in rows}
 
