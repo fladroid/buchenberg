@@ -338,6 +338,13 @@ test_001:
   sent_to: 40
   langs: [hr, sr, de, nl, fr, it]
   methods: [nllb, nllb_t05, gemma, gemma_t05]
+
+test_002:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [ministral, ministral_t05]
 ```
 
 ---
@@ -412,12 +419,16 @@ bash run30.sh --sent_from 1 --sent_to 40 --lang it
 4. ~~Batch processing~~ ✅
 5. ~~GA implementacija~~ ✅
 6. ~~Paralelni pipeline~~ ✅
-7. **GA tuning** — conv_gens↑, crossover_rate, max_children
-8. **multilingual-e5-large** — testirati kao alternativu MiniLM
-9. **Retry logika** — exponential backoff za Ollama timeouts
-10. **Logging standardizacija**
-11. **Romanski jezici** — pt, ro, es još nisu testirani
-12. **Pipeline orchestrator** — spaja sve zajedno
+7. ~~GA tuning prvi krug~~ ✅ (conv_gens=6, conv_thresh=0.002)
+8. ~~Ministral kao treća LLM metoda~~ ✅
+9. **Parser fix** — escaped quotes u Ministral batch odgovoru
+10. **GA pobjednici kao `method = 'ga'`** — upisati u test_results
+11. **GA tuning drugi krug** — crossover_rate, max_children, varijabilni potomci
+12. **Nova arhitektura metoda** — zelena/žuta/crvena dodjela broja metoda
+13. **multilingual-e5-large** — testirati kao alternativu MiniLM
+14. **Logging standardizacija** — GA summary, ukupna statistika
+15. **Novi jezici** — bs, sl, mk, bg, af, es, pt, ro
+16. **Pipeline orchestrator** — spaja sve zajedno
 
 ---
 
