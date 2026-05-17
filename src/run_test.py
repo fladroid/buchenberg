@@ -149,12 +149,13 @@ def filter_sentences_by_score(conn, sentences, test_id, score_from, score_to):
     scored = {row[0]: row[1] for row in rows}
 
     filtered = []
-    for sent_id, text in sentences:
+    for row in sentences:
+        sent_id = row[0]
         best = scored.get(sent_id)
         if best is None:
-            filtered.append((sent_id, text))
+            filtered.append(row)
         elif score_from <= best <= score_to:
-            filtered.append((sent_id, text))
+            filtered.append(row)
 
     return filtered
 
@@ -190,7 +191,7 @@ def get_test(test_id):
 def load_sentences(conn, book_title, sent_from, sent_to):
     cur = conn.cursor()
     cur.execute("""
-        SELECT s.id, s.text
+        SELECT s.id, s.text, s.word_count
         FROM sentences s
         JOIN books b ON s.book_id = b.id
         WHERE b.title ILIKE %s
@@ -199,7 +200,7 @@ def load_sentences(conn, book_title, sent_from, sent_to):
     """, (f"%{book_title.replace('_', ' ')}%", sent_from, sent_to))
     rows = cur.fetchall()
     cur.close()
-    return rows
+    return rows  # lista (id, text, word_count)
 
 
 # ── Prevod — NLLB ─────────────────────────────────────────────────────────────
@@ -585,8 +586,11 @@ def main():
                         help="Maksimalni MAX translation_score (default: 1.0)")
     parser.add_argument("--langs",      nargs="+", default=None)
     parser.add_argument("--methods",    nargs="+", default=None)
-    parser.add_argument("--batch_size", type=int, default=20,
+    parser.add_argument("--batch_size",      type=int, default=20,
                         help="Broj rečenica po batchu (default: 20)")
+    parser.add_argument("--batch_min_words", type=int, default=6,
+                        help="Minimalan word_count za batch mode (default: 6); "
+                             "rečenice ispod praga prevode se single")
     args = parser.parse_args()
 
     log_file = os.path.join(LOG_DIR, f"{args.test_id}.log")
@@ -645,9 +649,25 @@ def main():
 
     total = len(sentences) * len(langs) * len(methods)
     done  = 0
-    batch_size = args.batch_size
+    batch_size      = args.batch_size
+    batch_min_words = args.batch_min_words
 
-    # Batch loop — za svaki lang+method procesiramo rečenice u grupama
+    # Razdvoji rečenice na single (kratke) i batch (duge)
+    # word_count je na poziciji [2] u svakom redu
+    single_sents = [(r[0], r[1]) for r in sentences if (r[2] or 0) < batch_min_words]
+    batch_sents  = [(r[0], r[1]) for r in sentences if (r[2] or 0) >= batch_min_words]
+    logger.info(f"Split: {len(single_sents)} single (word_count < {batch_min_words}), "
+                f"{len(batch_sents)} batch")
+
+    def process_single(sid, text, lang, method, nllb_lang):
+        """Prevod jedne rečenice — single mode."""
+        translated = dispatch_translate(method, text, lang, nllb_lang, nllb_tok, nllb_mod)
+        back       = dispatch_back_translate(method, translated, lang, nllb_lang, nllb_tok, nllb_mod)
+        sc    = compute_score(text, back, embedder)
+        tr_sc = compute_score(text, translated, embedder)
+        insert_result(conn, args.test_id, sid, lang, method, translated, back, sc, tr_sc)
+        return sc, tr_sc, translated
+
     for lang in langs:
         nllb_lang = LANG_MAP.get(lang)
         if not nllb_lang:
@@ -655,16 +675,26 @@ def main():
             continue
 
         for method in methods:
-            logger.info(f"--- {lang} {method} | batch_size={batch_size} ---")
+            logger.info(f"--- {lang} {method} | single={len(single_sents)} batch={len(batch_sents)} min_words={batch_min_words} ---")
 
-            # Podijeli rečenice u batcheve
-            for batch_start in range(0, len(sentences), batch_size):
-                batch = sentences[batch_start:batch_start + batch_size]
+            # ── Single mode za kratke rečenice ────────────────────────────
+            for sid, text in single_sents:
+                try:
+                    sc, tr_sc, translated = process_single(sid, text, lang, method, nllb_lang)
+                    done += 1
+                    logger.info(f"[{done}/{total}] s{sid} {lang} {method} [single] "
+                                f"score={sc:.3f} | {translated[:50]}...")
+                except Exception as e:
+                    logger.error(f"Greška single s{sid} {lang} {method}: {e}")
+
+            # ── Batch mode za duge rečenice ───────────────────────────────
+            for batch_start in range(0, len(batch_sents), batch_size):
+                batch = batch_sents[batch_start:batch_start + batch_size]
                 sids  = [s[0] for s in batch]
                 texts = [s[1] for s in batch]
 
                 try:
-                    # ── Batch prevod EN → lang ────────────────────────────
+                    # Batch prevod EN → lang
                     if method in ("nllb", "nllb_t05"):
                         temp = 0.5 if method == "nllb_t05" else None
                         translateds = translate_nllb_batch(
@@ -679,7 +709,7 @@ def main():
                         translateds = translate_gemma_batch(texts, lang, temperature=temp,
                                                             model=MINISTRAL_MODEL)
 
-                    # ── Batch back-translation lang → EN ──────────────────
+                    # Batch back-translation lang → EN
                     if method in ("nllb", "nllb_t05"):
                         temp = 0.5 if method == "nllb_t05" else None
                         backs = translate_nllb_batch(
@@ -695,42 +725,29 @@ def main():
                         backs = back_translate_gemma_batch(translateds, lang, temperature=temp,
                                                            model=MINISTRAL_MODEL)
 
-                    # ── Score i insert za svaku rečenicu u batchu ─────────
+                    # Score i insert
                     for i, (sid, text) in enumerate(zip(sids, texts)):
                         translated = translateds[i]
                         back       = backs[i]
-
                         sc    = compute_score(text, back, embedder)
                         tr_sc = compute_score(text, translated, embedder)
-
                         insert_result(conn, args.test_id, sid, lang,
                                       method, translated, back, sc, tr_sc)
                         done += 1
-                        logger.info(f"[{done}/{total}] s{sid} {lang} {method} "
+                        logger.info(f"[{done}/{total}] s{sid} {lang} {method} [batch] "
                                     f"score={sc:.3f} | {translated[:50]}...")
 
                 except Exception as e:
-                    logger.error(f"Greška batch {lang} {method} "
-                                 f"s{sids[0]}-s{sids[-1]}: {e}")
-                    # Fallback — probaj rečenicu po rečenicu
-                    logger.info("Fallback na single mode...")
+                    logger.error(f"Greška batch {lang} {method} s{sids[0]}-s{sids[-1]}: {e}")
+                    logger.info("Fallback na single mode za ovaj batch...")
                     for sid, text in zip(sids, texts):
                         try:
-                            translated = dispatch_translate(
-                                method, text, lang, nllb_lang, nllb_tok, nllb_mod
-                            )
-                            back = dispatch_back_translate(
-                                method, translated, lang, nllb_lang, nllb_tok, nllb_mod
-                            )
-                            sc    = compute_score(text, back, embedder)
-                            tr_sc = compute_score(text, translated, embedder)
-                            insert_result(conn, args.test_id, sid, lang,
-                                          method, translated, back, sc, tr_sc)
+                            sc, tr_sc, translated = process_single(sid, text, lang, method, nllb_lang)
                             done += 1
-                            logger.info(f"[{done}/{total}] s{sid} {lang} {method} "
+                            logger.info(f"[{done}/{total}] s{sid} {lang} {method} [fallback] "
                                         f"score={sc:.3f} | {translated[:50]}...")
                         except Exception as e2:
-                            logger.error(f"Greška single s{sid} {lang} {method}: {e2}")
+                            logger.error(f"Greška fallback s{sid} {lang} {method}: {e2}")
 
     update_winners(conn, args.test_id)
     conn.close()
