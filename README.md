@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V2
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 16. maj 2026. (sesija 06)  
+**Poslednje ažuriranje:** 17. maj 2026. (sesija 08)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
@@ -421,7 +421,7 @@ bash run30.sh --sent_from 1 --sent_to 40 --lang it
 6. ~~Paralelni pipeline~~ ✅
 7. ~~GA tuning prvi krug~~ ✅ (conv_gens=6, conv_thresh=0.002)
 8. ~~Ministral kao treća LLM metoda~~ ✅
-9. **Parser fix** — escaped quotes u Ministral batch odgovoru
+9. ~~**Parser fix**~~ ✅ — parser refaktor, uklonjen placeholder trik, 0 fallbacka
 10. **GA pobjednici kao `method = 'ga'`** — upisati u test_results
 11. **GA tuning drugi krug** — crossover_rate, max_children, varijabilni potomci
 12. **Nova arhitektura metoda** — zelena/žuta/crvena dodjela broja metoda
