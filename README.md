@@ -83,8 +83,10 @@ Prevod knjiga sa isteklom licencom sa **Project Gutenberg** na više jezika, kor
 | `nllb_t05` | NLLB-200 lokalno | do_sample=True, temp=0.5 | Stohastičan, raznolikiji |
 | `gemma` | Gemma 3 12b cloud | default temperatura | Brz, dobar za kompleksne rečenice |
 | `gemma_t05` | Gemma 3 12b cloud | temperature=0.5 | Konzervativniji od default |
+| `ministral` | Ministral 3 14b cloud | default temperatura | Jak na evropskim jezicima |
+| `ministral_t05` | Ministral 3 14b cloud | temperature=0.5 | Konzervativniji od default |
 
-**Standard:** svaki jezik u svakom testu uvijek ima sve 4 metode.
+**Standard:** svaki jezik u svakom testu uvijek ima sve 4 osnovne metode (nllb, nllb_t05, gemma, gemma_t05). Ministral se dodaje selektivno za žute/crvene rečenice.
 
 ### Kako dodati novu metodu
 
@@ -93,7 +95,7 @@ Samo 3 mjesta u `run_test.py`:
 2. `dispatch_translate()` — dodati `elif`
 3. `dispatch_back_translate()` — dodati `elif`
 
-Baza ne treba migraciju — `method` je `VARCHAR`.
+Baza ne treba migraciju — `method` je `VARCHAR(20)`. Napomena: proširen sa VARCHAR(10) na VARCHAR(20) zbog `ministral_t05` (13 znakova).
 
 ---
 
@@ -420,4 +422,4 @@ bash run30.sh --sent_from 1 --sent_to 40 --lang it
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
-*Flavio & Claude · Buchenberg · V2 · 16. maj 2026.*
+*Flavio & Claude · Buchenberg · V2 · 17. maj 2026.*
