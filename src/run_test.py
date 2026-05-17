@@ -14,6 +14,7 @@ Podržane metode:
 Registracija (prvi put):
   venv/bin/python src/run_test.py --test_id test_001 \
     --book hound_of_the_baskervilles --sent_from 1 --sent_to 20 \
+    --score_from 0.0 --score_to 0.899 \
     --langs sr --methods nllb gemma nllb_t05 gemma_t05
 
 Batch processing (default batch_size=20):
@@ -125,6 +126,36 @@ def save_registry(registry):
     os.makedirs(os.path.dirname(REGISTRY_PATH), exist_ok=True)
     with open(REGISTRY_PATH, "w") as f:
         yaml.dump(registry, f, default_flow_style=False, allow_unicode=True)
+
+
+def filter_sentences_by_score(conn, sentences, test_id, score_from, score_to):
+    """
+    Filtrira rečenice čiji MAX translation_score (across svih metoda i test_id-eva)
+    pada u interval [score_from, score_to].
+    Ako score_from=0.0 i score_to=1.0 — vraća sve (bez filtera).
+    Rečenice koje nemaju nijedan skor u bazi uvijek se uključuju.
+    """
+    if score_from == 0.0 and score_to == 1.0:
+        return sentences
+
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT sentence_id, MAX(translation_score) as best
+        FROM test_results
+        GROUP BY sentence_id
+    """)
+    rows = cur.fetchall()
+    scored = {row[0]: row[1] for row in rows}
+
+    filtered = []
+    for sent_id, text in sentences:
+        best = scored.get(sent_id)
+        if best is None:
+            filtered.append((sent_id, text))
+        elif score_from <= best <= score_to:
+            filtered.append((sent_id, text))
+
+    return filtered
 
 
 def register_test(test_id, book, sent_from, sent_to, langs, methods):
@@ -576,6 +607,10 @@ def main():
     parser.add_argument("--book",       default=None)
     parser.add_argument("--sent_from",  type=int, default=None)
     parser.add_argument("--sent_to",    type=int, default=None)
+    parser.add_argument("--score_from", type=float, default=0.0,
+                        help="Minimalni MAX translation_score (default: 0.0)")
+    parser.add_argument("--score_to",   type=float, default=1.0,
+                        help="Maksimalni MAX translation_score (default: 1.0)")
     parser.add_argument("--langs",      nargs="+", default=None)
     parser.add_argument("--methods",    nargs="+", default=None)
     parser.add_argument("--batch_size", type=int, default=20,
@@ -631,6 +666,10 @@ def main():
     clear_test(conn, args.test_id, langs, methods)
     sentences = load_sentences(conn, book, sent_from, sent_to)
     logger.info(f"Rečenica učitano: {len(sentences)}")
+
+    sentences = filter_sentences_by_score(conn, sentences, args.test_id,
+                                          args.score_from, args.score_to)
+    logger.info(f"Rečenica nakon score filtera [{args.score_from}-{args.score_to}]: {len(sentences)}")
 
     total = len(sentences) * len(langs) * len(methods)
     done  = 0
