@@ -119,3 +119,47 @@ test_009:
   - nllb_t05
   sent_from: 1
   sent_to: 40
+test_010:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - pt
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  sent_from: 1
+  sent_to: 40
+test_011:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - pt
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  sent_from: 1
+  sent_to: 40
+test_012:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - de
+  - nl
+  - it
+  - pt
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  - nllb
+  - nllb_t05
+  sent_from: 1
+  sent_to: 40
