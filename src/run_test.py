@@ -4,10 +4,12 @@ Buchenberg · run_test.py
 Glavni test runner — prevod + back-translation + scoring.
 
 Podržane metode:
-  nllb       — NLLB-200 beam search (deterministički, repetition_penalty=1.3)
-  nllb_t05   — NLLB-200 sampling, temperature=0.5 (kreativniji, stohastičan)
-  gemma      — Gemma 3 12b (Ollama Cloud), default temperatura
-  gemma_t05  — Gemma 3 12b (Ollama Cloud), temperature=0.5 (konzervativniji)
+  nllb          — NLLB-200 beam search (deterministički, repetition_penalty=1.3)
+  nllb_t05      — NLLB-200 sampling, temperature=0.5 (kreativniji, stohastičan)
+  gemma         — Gemma 3 12b (Ollama Cloud), default temperatura
+  gemma_t05     — Gemma 3 12b (Ollama Cloud), temperature=0.5 (konzervativniji)
+  ministral     — Ministral 3 14b (Ollama Cloud), default temperatura
+  ministral_t05 — Ministral 3 14b (Ollama Cloud), temperature=0.5 (konzervativniji)
 
 Registracija (prvi put):
   venv/bin/python src/run_test.py --test_id test_001 \
@@ -53,11 +55,12 @@ os.makedirs(LOG_DIR, exist_ok=True)
 NLLB_MODEL   = "facebook/nllb-200-distilled-600M"
 EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
+OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "gemma3:12b")
+MINISTRAL_MODEL  = os.getenv("MINISTRAL_MODEL", "ministral-3:14b")
 OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
 
 # Validne metode — jedini izvor istine
-VALID_METHODS = {"nllb", "nllb_t05", "gemma", "gemma_t05"}
+VALID_METHODS = {"nllb", "nllb_t05", "gemma", "gemma_t05", "ministral", "ministral_t05"}
 
 # NLLB jezik kodovi (ISO 639-1 → NLLB BCP-47 / FLORES-200)
 LANG_MAP = {
@@ -204,7 +207,7 @@ def translate_nllb(text, tokenizer, model, src_lang="eng_Latn", tgt_lang="srp_Cy
 
 # ── Prevod — Gemma (Ollama Cloud) ─────────────────────────────────────────────
 
-def translate_gemma(text, tgt_lang_code, temperature=None):
+def translate_gemma(text, tgt_lang_code, temperature=None, model=None):
     """
     Prevod koristeći Gemma 3 12b via Ollama Cloud.
 
@@ -218,7 +221,7 @@ def translate_gemma(text, tgt_lang_code, temperature=None):
         f"Text: {text}"
     )
     payload = {
-        "model":    OLLAMA_MODEL,
+        "model":    model or OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream":   False,
     }
@@ -237,7 +240,7 @@ def translate_gemma(text, tgt_lang_code, temperature=None):
 
 # ── Back-translation — Gemma ──────────────────────────────────────────────────
 
-def back_translate_gemma(translated_text, src_lang_code, temperature=None):
+def back_translate_gemma(translated_text, src_lang_code, temperature=None, model=None):
     """
     Back-translation koristeći Gemma 3 12b via Ollama Cloud.
 
@@ -251,7 +254,7 @@ def back_translate_gemma(translated_text, src_lang_code, temperature=None):
         f"Text: {translated_text}"
     )
     payload = {
-        "model":    OLLAMA_MODEL,
+        "model":    model or OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream":   False,
     }
@@ -369,7 +372,7 @@ def translate_nllb_batch(texts, tokenizer, model, src_lang="eng_Latn",
 
 # ── Batch prevod — Gemma (Ollama Cloud) ───────────────────────────────────────
 
-def translate_gemma_batch(texts, tgt_lang_code, temperature=None):
+def translate_gemma_batch(texts, tgt_lang_code, temperature=None, model=None):
     """
     Batch prevod koristeći Gemma 3 12b via Ollama Cloud.
     Prima listu tekstova, vraća listu prevoda istog reda.
@@ -413,10 +416,10 @@ def translate_gemma_batch(texts, tgt_lang_code, temperature=None):
         return result
     # Fallback: prevedi jednu po jednu
     logger.warning(f"Gemma batch translate→{tgt_lang_code}: fallback na single ({n} rečenica)")
-    return [translate_gemma(t, tgt_lang_code, temperature) for t in texts]
+    return [translate_gemma(t, tgt_lang_code, temperature, model=model) for t in texts]
 
 
-def back_translate_gemma_batch(texts, src_lang_code, temperature=None):
+def back_translate_gemma_batch(texts, src_lang_code, temperature=None, model=None):
     """
     Batch back-translation koristeći Gemma 3 12b via Ollama Cloud.
     Prima listu tekstova na src_lang_code, vraća listu engleskih prevoda.
@@ -456,7 +459,7 @@ def back_translate_gemma_batch(texts, src_lang_code, temperature=None):
         return result
     # Fallback: prevedi jednu po jednu
     logger.warning(f"Gemma back-batch→{src_lang_code}: fallback na single ({n} rečenica)")
-    return [back_translate_gemma(t, src_lang_code, temperature) for t in texts]
+    return [back_translate_gemma(t, src_lang_code, temperature, model=model) for t in texts]
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
@@ -541,6 +544,10 @@ def dispatch_translate(method, text, lang, nllb_lang, nllb_tok, nllb_mod):
         return translate_gemma(text, lang, temperature=None)
     elif method == "gemma_t05":
         return translate_gemma(text, lang, temperature=0.5)
+    elif method == "ministral":
+        return translate_gemma(text, lang, temperature=None, model=MINISTRAL_MODEL)
+    elif method == "ministral_t05":
+        return translate_gemma(text, lang, temperature=0.5, model=MINISTRAL_MODEL)
     else:
         raise ValueError(f"Nepoznata metoda: {method}")
 
@@ -554,6 +561,9 @@ def dispatch_back_translate(method, translated, lang, nllb_lang, nllb_tok, nllb_
     elif method in ("gemma", "gemma_t05"):
         temp = None if method == "gemma" else 0.5
         return back_translate_gemma(translated, lang, temperature=temp)
+    elif method in ("ministral", "ministral_t05"):
+        temp = None if method == "ministral" else 0.5
+        return back_translate_gemma(translated, lang, temperature=temp, model=MINISTRAL_MODEL)
     else:
         raise ValueError(f"Nepoznata metoda: {method}")
 
@@ -653,6 +663,10 @@ def main():
                     elif method in ("gemma", "gemma_t05"):
                         temp = 0.5 if method == "gemma_t05" else None
                         translateds = translate_gemma_batch(texts, lang, temperature=temp)
+                    elif method in ("ministral", "ministral_t05"):
+                        temp = 0.5 if method == "ministral_t05" else None
+                        translateds = translate_gemma_batch(texts, lang, temperature=temp,
+                                                            model=MINISTRAL_MODEL)
 
                     # ── Batch back-translation lang → EN ──────────────────
                     if method in ("nllb", "nllb_t05"):
@@ -665,6 +679,10 @@ def main():
                     elif method in ("gemma", "gemma_t05"):
                         temp = 0.5 if method == "gemma_t05" else None
                         backs = back_translate_gemma_batch(translateds, lang, temperature=temp)
+                    elif method in ("ministral", "ministral_t05"):
+                        temp = 0.5 if method == "ministral_t05" else None
+                        backs = back_translate_gemma_batch(translateds, lang, temperature=temp,
+                                                           model=MINISTRAL_MODEL)
 
                     # ── Score i insert za svaku rečenicu u batchu ─────────
                     for i, (sid, text) in enumerate(zip(sids, texts)):
