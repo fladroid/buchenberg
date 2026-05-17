@@ -326,8 +326,12 @@ def parse_gemma_batch_response(raw, n, context="batch"):
             items = [str(r).strip() for r in result]
             if len(items) == n:
                 return items
-            # Pogrešan broj — loguj ali nastavi
-            logger.debug(f"Gemma {context}: json.loads vratio {len(items)}/{n} stavki")
+            elif len(items) > n:
+                # Model vratio više — uzmi prvih n
+                logger.debug(f"Gemma {context}: json.loads vratio {len(items)}/{n}, uzimam prvih {n}")
+                return items[:n]
+            else:
+                logger.debug(f"Gemma {context}: json.loads vratio {len(items)}/{n} stavki")
     except Exception:
         pass
 
