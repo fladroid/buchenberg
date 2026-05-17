@@ -318,36 +318,22 @@ def parse_gemma_batch_response(raw, n, context="batch"):
     """
     import json, re
 
-    # Strategija 1 — direktni json.loads
-    try:
-        clean = raw.replace("```json", "").replace("```", "").strip()
-        result = json.loads(clean)
-        if isinstance(result, list) and len(result) >= 1:
-            items = [str(r).strip() for r in result]
-            if len(items) == n:
-                return items
-            elif len(items) > n:
-                # Model vratio više — uzmi prvih n
-                logger.debug(f"Gemma {context}: json.loads vratio {len(items)}/{n}, uzimam prvih {n}")
-                return items[:n]
-            else:
-                logger.debug(f"Gemma {context}: json.loads vratio {len(items)}/{n} stavki")
-    except Exception:
-        pass
-
-    # Strategija 1b — placeholder za escaped navodnike pa json.loads
+    # Strategija 1 — placeholder za escaped navodnike + json.loads (pokriva sve formate)
     try:
         clean = raw.replace("```json", "").replace("```", "").strip()
         temp = clean.replace('\"', '§§§')
         result = json.loads(temp)
-        if isinstance(result, list) and len(result) == n:
-            cleaned = []
+        if isinstance(result, list) and len(result) >= 1:
+            items = []
             for item in result:
                 s = str(item).replace('§§§', '"').strip()
                 if s.startswith('"') and s.endswith('"') and len(s) > 1:
                     s = s[1:-1]
-                cleaned.append(s)
-            return cleaned
+                items.append(s)
+            if len(items) >= n:
+                return items[:n]
+            if len(items) > 0:
+                logger.debug(f"Gemma {context}: parser vratio {len(items)}/{n} stavki")
     except Exception:
         pass
 
