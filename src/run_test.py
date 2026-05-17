@@ -317,12 +317,22 @@ def parse_separator_response(raw, n, context="batch"):
 
     Vraća listu od n stringova ili None ako parsiranje ne uspije.
     """
+    import re
     SEP = "__!!__"
     parts = raw.split(SEP)
-    parts = [p.strip() for p in parts if p.strip()]
-    if len(parts) >= n:
-        return parts[:n]
-    logger.warning(f"Gemma {context}: separator parser vratio {len(parts)}/{n}, raw={raw[:300]}")
+    cleaned = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        # Ukloni markdown bold/italic (*tekst*, **tekst**)
+        p = re.sub(r"\*+([^*]+)\*+", r"\1", p)
+        p = p.strip()
+        if p:
+            cleaned.append(p)
+    if len(cleaned) >= n:
+        return cleaned[:n]
+    logger.warning(f"Gemma {context}: separator parser vratio {len(cleaned)}/{n}, raw={raw[:300]}")
     return None
 
 
@@ -378,8 +388,9 @@ def translate_gemma_batch(texts, tgt_lang_code, temperature=None, model=None):
     numbered = "\n".join(f'{i+1}. {t}' for i, t in enumerate(texts))
     prompt = (
         f"Translate these {n} sentences to {lang_name}.\n"
-        f"Return ONLY the translations separated by __!!__ in the same order.\n"
-        f"No explanations, no numbering, no extra text — just the translations separated by __!!__\n\n"
+        f"Return ONLY the {n} translations separated by __!!__ with no other text.\n"
+        f"Do not add numbering, markdown, asterisks, or explanations.\n"
+        f"Example format: First translation__!!__Second translation__!!__Third translation\n\n"
         f"{numbered}"
     )
 
@@ -421,8 +432,9 @@ def back_translate_gemma_batch(texts, src_lang_code, temperature=None, model=Non
     numbered = "\n".join(f'{i+1}. {t}' for i, t in enumerate(texts))
     prompt = (
         f"Translate these {n} {lang_name} sentences to English.\n"
-        f"Return ONLY the translations separated by __!!__ in the same order.\n"
-        f"No explanations, no numbering, no extra text — just the translations separated by __!!__\n\n"
+        f"Return ONLY the {n} translations separated by __!!__ with no other text.\n"
+        f"Do not add numbering, markdown, asterisks, or explanations.\n"
+        f"Example format: First translation__!!__Second translation__!!__Third translation\n\n"
         f"{numbered}"
     )
 
