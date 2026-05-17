@@ -307,77 +307,24 @@ def back_translate_gemma(translated_text, src_lang_code, temperature=None, model
 
 # ── Robusno parsiranje Gemma batch odgovora ───────────────────────────────────
 
-def parse_gemma_batch_response(raw, n, context="batch"):
+def parse_separator_response(raw, n, context="batch"):
     """
-    Robusno parsiranje JSON array-a iz Gemma/Ministral odgovora.
+    Parsiranje separator-format odgovora (__!!__ kao separator između prijevoda).
+    Nema navodnika, zareza, zagrada — nema JSON sintaksnih problema.
 
-    Strategije (redom):
-    1. json.loads nakon čišćenja markdown blokova — standardni JSON parser
-       koji nativno čita escaped navodnike (\") — ovo pokriva 97%+ slučajeva
-    2. Bracket counting — pronalazi [ ... ] blok u tekstu koji sadrži tekst
-       prije ili poslije JSON-a
-    3. Regex quoted strings — fallback za nestandardne odgovore
-    4. Numbered list — "1. tekst", "1) tekst"
+    Očekivani format:
+        Prijevod rečenice 1__!!__Prijevod rečenice 2__!!__...
+
+    Vraća listu od n stringova ili None ako parsiranje ne uspije.
     """
-    import json, re
-
-    # Strategija 1 — čisti markdown, standardni json.loads
-    # Python json modul nativno čita \" unutar stringova — bez placeholder trika
-    try:
-        clean = raw.replace("```json", "").replace("```", "").strip()
-        result = json.loads(clean)
-        if isinstance(result, list) and len(result) >= 1:
-            items = [str(item).strip() for item in result]
-            if len(items) >= n:
-                return items[:n]
-            logger.debug(f"Gemma {context}: strategija 1 vratila {len(items)}/{n} stavki")
-    except Exception:
-        pass
-
-    # Strategija 2 — bracket counting: pronađi [ ... ] blok
-    try:
-        start = raw.index('[')
-        depth, end = 0, -1
-        for i, c in enumerate(raw[start:], start):
-            if c == '[': depth += 1
-            elif c == ']':
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-        if end != -1:
-            candidate = raw[start:end+1]
-            result = json.loads(candidate)
-            if isinstance(result, list) and len(result) >= 1:
-                items = [str(r).strip() for r in result]
-                if len(items) >= n:
-                    return items[:n]
-    except Exception:
-        pass
-
-    # Strategija 3 — regex: quoted strings
-    try:
-        matches = re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', raw)
-        if len(matches) >= n:
-            return [s.strip() for s in matches[:n]]
-    except Exception:
-        pass
-
-    # Strategija 4 — numbered list: "1. tekst" ili "1) tekst"
-    try:
-        lines = []
-        for line in raw.split("\n"):
-            line = line.strip()
-            m = re.match(r'^\d+[.):)\s*(.+)$', line)
-            if m:
-                lines.append(m.group(1).strip().strip('"\' '))
-        if len(lines) >= n:
-            return lines[:n]
-    except Exception:
-        pass
-
-    logger.warning(f"Gemma {context}: sve strategije parsiranja neuspješne, raw={raw[:500]}")
+    SEP = "__!!__"
+    parts = raw.split(SEP)
+    parts = [p.strip() for p in parts if p.strip()]
+    if len(parts) >= n:
+        return parts[:n]
+    logger.warning(f"Gemma {context}: separator parser vratio {len(parts)}/{n}, raw={raw[:300]}")
     return None
+
 
 # ── Batch prevod — NLLB ───────────────────────────────────────────────────────
 
@@ -418,70 +365,26 @@ def translate_nllb_batch(texts, tokenizer, model, src_lang="eng_Latn",
 
 def translate_gemma_batch(texts, tgt_lang_code, temperature=None, model=None):
     """
-    Batch prevod koristeći Gemma 3 12b via Ollama Cloud.
+    Batch prevod koristeći Gemma/Ministral via Ollama Cloud.
     Prima listu tekstova, vraća listu prevoda istog reda.
     Jedan API poziv za cijeli batch.
 
-    Prompt traži JSON array kao odgovor — parsira se i vraća kao lista.
-    Fallback: ako JSON parsiranje ne uspije, vraća single prevode.
+    Prompt traži __!!__ separator format — bez JSON sintaksnih problema.
+    Fallback: ako parsiranje ne uspije, prevodi jednu po jednu.
     """
-    import json
     lang_name = LANG_NAMES.get(tgt_lang_code, tgt_lang_code)
     n = len(texts)
 
-    numbered = "\n".join(f'{i+1}. "{t}"' for i, t in enumerate(texts))
+    numbered = "\n".join(f'{i+1}. {t}' for i, t in enumerate(texts))
     prompt = (
         f"Translate these {n} sentences to {lang_name}.\n"
-        f"Return ONLY a JSON array of exactly {n} translations in the same order.\n"
-        f"No explanations, no markdown, just the JSON array.\n\n"
+        f"Return ONLY the translations separated by __!!__ in the same order.\n"
+        f"No explanations, no numbering, no extra text — just the translations separated by __!!__\n\n"
         f"{numbered}"
     )
 
     payload = {
-        "model":    OLLAMA_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream":   False,
-    }
-    if temperature is not None:
-        payload["options"] = {"temperature": temperature}
-
-    response = requests.post(
-        f"{OLLAMA_URL}/api/chat",
-        headers={"Authorization": f"Bearer {OLLAMA_KEY}"},
-        json=payload,
-        timeout=120,  # batch treba više vremena
-    )
-    response.raise_for_status()
-    raw = response.json()["message"]["content"].strip()
-
-    # Robusno parsiranje JSON array-a
-    result = parse_gemma_batch_response(raw, n, context=f"translate→{tgt_lang_code}")
-    if result:
-        return result
-    # Fallback: prevedi jednu po jednu
-    logger.warning(f"Gemma batch translate→{tgt_lang_code}: fallback na single ({n} rečenica)")
-    return [translate_gemma(t, tgt_lang_code, temperature, model=model) for t in texts]
-
-
-def back_translate_gemma_batch(texts, src_lang_code, temperature=None, model=None):
-    """
-    Batch back-translation koristeći Gemma 3 12b via Ollama Cloud.
-    Prima listu tekstova na src_lang_code, vraća listu engleskih prevoda.
-    """
-    import json
-    lang_name = LANG_NAMES_BACK.get(src_lang_code, src_lang_code)
-    n = len(texts)
-
-    numbered = "\n".join(f'{i+1}. "{t}"' for i, t in enumerate(texts))
-    prompt = (
-        f"Translate these {n} {lang_name} sentences to English.\n"
-        f"Return ONLY a JSON array of exactly {n} translations in the same order.\n"
-        f"No explanations, no markdown, just the JSON array.\n\n"
-        f"{numbered}"
-    )
-
-    payload = {
-        "model":    OLLAMA_MODEL,
+        "model":    model or OLLAMA_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "stream":   False,
     }
@@ -497,13 +400,55 @@ def back_translate_gemma_batch(texts, src_lang_code, temperature=None, model=Non
     response.raise_for_status()
     raw = response.json()["message"]["content"].strip()
 
-    # Robusno parsiranje JSON array-a
-    result = parse_gemma_batch_response(raw, n, context=f"back→{src_lang_code}")
+    result = parse_separator_response(raw, n, context=f"translate\u2192{tgt_lang_code}")
     if result:
         return result
-    # Fallback: prevedi jednu po jednu
-    logger.warning(f"Gemma back-batch→{src_lang_code}: fallback na single ({n} rečenica)")
+    logger.warning(f"Gemma batch translate\u2192{tgt_lang_code}: fallback na single ({n} rečenica)")
+    return [translate_gemma(t, tgt_lang_code, temperature, model=model) for t in texts]
+
+
+def back_translate_gemma_batch(texts, src_lang_code, temperature=None, model=None):
+    """
+    Batch back-translation koristeći Gemma/Ministral via Ollama Cloud.
+    Prima listu tekstova na src_lang_code, vraća listu engleskih prevoda.
+
+    Prompt traži __!!__ separator format — bez JSON sintaksnih problema.
+    Fallback: ako parsiranje ne uspije, prevodi jednu po jednu.
+    """
+    lang_name = LANG_NAMES_BACK.get(src_lang_code, src_lang_code)
+    n = len(texts)
+
+    numbered = "\n".join(f'{i+1}. {t}' for i, t in enumerate(texts))
+    prompt = (
+        f"Translate these {n} {lang_name} sentences to English.\n"
+        f"Return ONLY the translations separated by __!!__ in the same order.\n"
+        f"No explanations, no numbering, no extra text — just the translations separated by __!!__\n\n"
+        f"{numbered}"
+    )
+
+    payload = {
+        "model":    model or OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream":   False,
+    }
+    if temperature is not None:
+        payload["options"] = {"temperature": temperature}
+
+    response = requests.post(
+        f"{OLLAMA_URL}/api/chat",
+        headers={"Authorization": f"Bearer {OLLAMA_KEY}"},
+        json=payload,
+        timeout=120,
+    )
+    response.raise_for_status()
+    raw = response.json()["message"]["content"].strip()
+
+    result = parse_separator_response(raw, n, context=f"back\u2192{src_lang_code}")
+    if result:
+        return result
+    logger.warning(f"Gemma back-batch\u2192{src_lang_code}: fallback na single ({n} rečenica)")
     return [back_translate_gemma(t, src_lang_code, temperature, model=model) for t in texts]
+
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
