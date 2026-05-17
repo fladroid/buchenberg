@@ -328,6 +328,22 @@ def parse_gemma_batch_response(raw, n, context="batch"):
     except Exception:
         pass
 
+    # Strategija 1b — placeholder za escaped navodnike pa json.loads
+    try:
+        clean = raw.replace("```json", "").replace("```", "").strip()
+        temp = clean.replace('\"', '§§§')
+        result = json.loads(temp)
+        if isinstance(result, list) and len(result) == n:
+            cleaned = []
+            for item in result:
+                s = str(item).replace('§§§', '"').strip()
+                if s.startswith('"') and s.endswith('"') and len(s) > 1:
+                    s = s[1:-1]
+                cleaned.append(s)
+            return cleaned
+    except Exception:
+        pass
+
     # Strategija 2 — regex: uzmi sve između [ i zadnjeg ]
     try:
         match = re.search(r'\[(.+?)\]', raw, re.DOTALL)
