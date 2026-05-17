@@ -362,6 +362,34 @@ def parse_gemma_batch_response(raw, n, context="batch"):
     except Exception:
         pass
 
+    # Strategija 5 — json.loads + strip outer quotes (Ministral escaped format)
+    try:
+        clean = raw.replace("```json", "").replace("```", "").strip()
+        result = json.loads(clean)
+        if isinstance(result, list) and len(result) == n:
+            cleaned = []
+            for item in result:
+                s = str(item).strip()
+                # Model vraca: "\"tekst\"" → json.loads da je '"tekst"' → strip quotes
+                if s.startswith('"') and s.endswith('"') and len(s) > 1:
+                    s = s[1:-1]
+                cleaned.append(s)
+            return cleaned
+    except Exception:
+        pass
+    # Strategija 6 — split po linijama, uzmi ne-prazne
+    try:
+        clean = raw.replace("```json", "").replace("```", "").strip()
+        # Ukloni [ i ] pa split po ,
+
+        clean = clean.strip("[]")
+        items = re.split(r',\s*\n', clean)
+        items = [i.strip().strip(chr(34)).replace(chr(92)+chr(34), chr(34)) for i in items if i.strip()]
+        if len(items) == n:
+            return items
+    except Exception:
+        pass
+
     # Sve strategije neuspješne
     logger.warning(f"Gemma {context}: sve strategije parsiranja neuspješne, raw={raw[:200]}")
     return None  # Signal za fallback
