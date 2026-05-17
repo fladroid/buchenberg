@@ -182,3 +182,79 @@ Naš parser ne prepoznaje taj format — pada na batch, fallback na single radi.
 ---
 
 *Flavio & Claude · Session 07 · 17. maj 2026.*
+
+---
+
+# Session 07 — Dopuna (nastavak sesije)
+
+## Korak 3 — Parser fix za Ministral escaped quotes
+
+Ministral vraća JSON sa escaped navodnicima unutar stringa što je rušilo batch parser. Iterativno smo popravili parser kroz više commitova:
+
+- `parser strategija 5` — prepoznavanje Ministral escaped quotes formata
+- `parser strategija 1b` — escaped quotes bez JSON omotača
+- `parser poboljšanja i debug` — dodatne korekcije
+- `parser strategija 1 prihvata više od n stavki` — uzima prvih n
+- `parser strategija 1 konsolidovana` — placeholder pokriva sve formate
+
+**Commit historija fixa:**
+```
+d86e169 fix: parser strategija 5 za Ministral escaped quotes format
+cefba00 fix: parser strategija 1b za escaped quotes bez json omotaca
+cc941dc fix: parser poboljsanja i debug
+fec60de fix: parser strategija 1 prihvata vise od n stavki (uzima prvih n)
+ea532c8 fix: parser strategija 1 konsolidovana - placeholder pokriva sve formate
+```
+
+## Korak 4 — Novi parametri `--score_from` i `--score_to`
+
+Dodani parametri za scoring fazu — omogućuje rekalkulaciju scores za podskup rečenica bez ponovnog prevoda.
+
+```
+1b6f35a feat: dodani --score_from i --score_to parametri
+```
+
+## Korak 5 — Test_006
+
+Pokrenut i završen test_006:
+- Knjiga: Hound of the Baskervilles
+- Rečenice: 1–40
+- Jezici: hr, bg, it, pt, de, nl
+- Metode: gemma, gemma_t05
+- Rezultat: 480/480
+
+### Rezultati test_006
+
+| lang | method | tr_score | back_score |
+|------|--------|----------|------------|
+| bg | gemma | 0.8267 | 0.8620 |
+| bg | gemma_t05 | 0.8205 | 0.8654 |
+| de | gemma | 0.8508 | 0.8816 |
+| de | gemma_t05 | 0.8439 | 0.8931 |
+| hr | gemma | 0.8405 | 0.8780 |
+| hr | gemma_t05 | 0.8527 | 0.8668 |
+| it | gemma | 0.8375 | 0.8870 |
+| it | gemma_t05 | 0.8531 | 0.8650 |
+| nl | gemma | 0.8736 | 0.8972 |
+| nl | gemma_t05 | 0.8635 | 0.9032 |
+| pt | gemma | 0.8532 | 0.9083 |
+| pt | gemma_t05 | 0.8483 | 0.9179 |
+
+## Napomena o kontekst prozoru
+
+U ovoj sesiji dostignut je limit kontekst prozora — Claude je izgubio uvid u raniji tok sesije. Ovo je poznati problem sa dugim sesijama. Rješenje: kraće sesije, češće snimanje session dokumenta.
+
+## Otvoreno za sljedeću sesiju (ažurirano)
+
+1. **Parser fix** — provjeriti da li je escaped quotes problem potpuno riješen
+2. **GA pobjednici kao `method = 'ga'`** — upisati u test_results
+3. **Log standardizacija** — GA summary i ukupna statistika
+4. **GA drugi krug tuninga** — crossover_rate, max_children
+5. **Novi jezici** — bs, sl, mk, af, es, ro
+6. **Nova arhitektura metoda** — zelena/žuta/crvena dodjela
+7. **Pipeline orchestrator**
+8. **multilingual-e5-large** — testirati kao alternativu MiniLM
+
+---
+
+*Flavio & Claude · Session 07 dopuna · 17. maj 2026.*

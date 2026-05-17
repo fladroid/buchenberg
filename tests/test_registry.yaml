@@ -1,11 +1,81 @@
-# Buchenberg · test_registry.yaml
-#
-# Validne metode: nllb, nllb_t05, gemma, gemma_t05
-# Standard: svaki jezik uvijek ima sve 4 metode.
-
 test_001:
   book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - sr
+  - de
+  - nl
+  - fr
+  - it
+  methods:
+  - nllb
+  - nllb_t05
+  - gemma
+  - gemma_t05
   sent_from: 1
   sent_to: 40
-  langs: [hr, sr, de, nl, fr, it]
-  methods: [nllb, nllb_t05, gemma, gemma_t05]
+test_002:
+  book: hound_of_the_baskervilles
+  langs:
+  - it
+  methods:
+  - ministral
+  - ministral_t05
+  sent_from: 1
+  sent_to: 40
+test_003:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - it
+  - pt
+  - de
+  - nl
+  methods:
+  - gemma
+  - gemma_t05
+  sent_from: 1
+  sent_to: 40
+test_004:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - it
+  - pt
+  - de
+  - nl
+  methods:
+  - gemma
+  - gemma_t05
+  sent_from: 1
+  sent_to: 40
+test_005:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - it
+  - pt
+  - de
+  - nl
+  methods:
+  - gemma
+  - gemma_t05
+  sent_from: 1
+  sent_to: 40
+test_006:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - it
+  - pt
+  - de
+  - nl
+  methods:
+  - gemma
+  - gemma_t05
+  sent_from: 1
+  sent_to: 40
