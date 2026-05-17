@@ -322,9 +322,12 @@ def parse_gemma_batch_response(raw, n, context="batch"):
     try:
         clean = raw.replace("```json", "").replace("```", "").strip()
         result = json.loads(clean)
-        if isinstance(result, list) and len(result) == n:
-            return [str(r).strip() for r in result]
-        # Pogrešan broj — ne odustajemo odmah, probamo dalje
+        if isinstance(result, list) and len(result) >= 1:
+            items = [str(r).strip() for r in result]
+            if len(items) == n:
+                return items
+            # Pogrešan broj — loguj ali nastavi
+            logger.debug(f"Gemma {context}: json.loads vratio {len(items)}/{n} stavki")
     except Exception:
         pass
 
@@ -407,7 +410,7 @@ def parse_gemma_batch_response(raw, n, context="batch"):
         pass
 
     # Sve strategije neuspješne
-    logger.warning(f"Gemma {context}: sve strategije parsiranja neuspješne, raw={raw[:200]}")
+    logger.warning(f"Gemma {context}: sve strategije parsiranja neuspješne, raw={raw[:500]}")
     return None  # Signal za fallback
 
 # ── Batch prevod — NLLB ───────────────────────────────────────────────────────
