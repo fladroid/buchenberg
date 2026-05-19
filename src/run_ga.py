@@ -5,13 +5,13 @@ Genetski algoritam za optimizaciju prevoda jedne ili više rečenica.
 
 Pokretanje:
   # Jedna rečenica, jedan jezik:
-  venv/bin/python src/run_ga.py --sentence_id 5 --lang it
+  venv/bin/python src/run_ga.py --test_id test_012 --sentence_id 5 --lang it
 
   # Raspon rečenica:
-  venv/bin/python src/run_ga.py --sent_from 1 --sent_to 10 --lang it
+  venv/bin/python src/run_ga.py --test_id test_012 --sent_from 1 --sent_to 10 --lang it
 
   # Više jezika:
-  venv/bin/python src/run_ga.py --sent_from 1 --sent_to 5 --lang it fr de
+  venv/bin/python src/run_ga.py --test_id test_012 --sent_from 1 --sent_to 5 --lang it fr de
 
 GA parametri (mogu se mijenjati):
   --pop_size      8      Maksimalna veličina populacije
@@ -97,45 +97,45 @@ def load_sentences_range(conn, sent_from, sent_to):
     return rows
 
 
-def get_existing_translation(conn, sentence_id, lang):
-    """Dohvati postojeći prevod iz test_results ako postoji."""
+def get_existing_translation(conn, sentence_id, lang, test_id):
+    """Dohvati postojeći prevod iz test_results za konkretan test_id."""
     cur = conn.cursor()
     cur.execute("""
         SELECT translated_text, method
         FROM test_results
-        WHERE sentence_id = %s AND target_lang = %s
-        ORDER BY score DESC NULLS LAST
+        WHERE sentence_id = %s AND target_lang = %s AND test_id = %s
+        ORDER BY translation_score DESC NULLS LAST
         LIMIT 1
-    """, (sentence_id, lang))
+    """, (sentence_id, lang, test_id))
     row = cur.fetchone()
     cur.close()
     return row
 
 
-def save_individua(conn, sentence_id, lang, generation, individua_id,
+def save_individua(conn, test_id, sentence_id, lang, generation, individua_id,
                    tekst, fitness, pivot_lang, metoda, je_elita, je_pobjednik):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO ga_results
-            (sentence_id, target_lang, generation, individua_id,
+            (test_id, sentence_id, target_lang, generation, individua_id,
              tekst, fitness, pivot_lang, metoda, je_elita, je_pobjednik)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (sentence_id, lang, generation, individua_id,
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """, (test_id, sentence_id, lang, generation, individua_id,
           tekst, fitness, pivot_lang, metoda, je_elita, je_pobjednik))
     conn.commit()
     cur.close()
 
 
-def clear_ga(conn, sentence_id, lang):
+def clear_ga(conn, test_id, sentence_id, lang):
     cur = conn.cursor()
     cur.execute(
-        "DELETE FROM ga_results WHERE sentence_id = %s AND target_lang = %s",
-        (sentence_id, lang)
+        "DELETE FROM ga_results WHERE test_id = %s AND sentence_id = %s AND target_lang = %s",
+        (test_id, sentence_id, lang)
     )
     deleted = cur.rowcount
     conn.commit()
     cur.close()
-    logger.info(f"Obrisano {deleted} starih GA rezultata za s{sentence_id} {lang}")
+    logger.info(f"Obrisano {deleted} starih GA rezultata za {test_id} s{sentence_id} {lang}")
 
 
 # ── Modeli ───────────────────────────────────────────────────────────────────
@@ -215,24 +215,23 @@ def cosine_pair(tekst1, tekst2, embedder):
 
 # ── GA operatori ─────────────────────────────────────────────────────────────
 
-def inicijalizacija(original, lang, conn, nllb_tok, nllb_mod, embedder):
+def inicijalizacija(original, lang, test_id, conn, nllb_tok, nllb_mod, embedder):
     """
-    Početna populacija — 4 individue iz test_results (ako postoje)
-    ili svježe generirane sa nllb i gemma.
+    Početna populacija — individue iz test_results za konkretan test_id,
+    ili svježe generirane sa nllb i gemma ako nema dovoljno.
     """
     populacija = []
-    metode = ["nllb", "nllb_t05", "gemma", "gemma_t05"]
 
-    # Pokušaj iz test_results
+    # Uzmi sve prevode za ovu rečenicu iz zadanog testa
     cur = conn.cursor()
     cur.execute("""
         SELECT translated_text, method, translation_score
         FROM test_results
         WHERE sentence_id = (
             SELECT id FROM sentences WHERE text = %s LIMIT 1
-        ) AND target_lang = %s
+        ) AND target_lang = %s AND test_id = %s
         ORDER BY translation_score DESC NULLS LAST
-    """, (original, lang))
+    """, (original, lang, test_id))
     rows = cur.fetchall()
     cur.close()
 
@@ -261,17 +260,17 @@ def inicijalizacija(original, lang, conn, nllb_tok, nllb_mod, embedder):
     return populacija
 
 
-def crossover(original, lang, dostupni_jezici, conn, nllb_tok, nllb_mod, embedder):
+def crossover(original, lang, test_id, dostupni_jezici, conn, nllb_tok, nllb_mod, embedder):
     """
     Crossover: EN → pivot → lang
-    Pivot prevod se uzima iz baze ako postoji, inače se generira.
+    Pivot prevod se uzima iz baze (za isti test_id) ako postoji, inače se generira.
     """
     pivot = random.choice([j for j in dostupni_jezici if j not in ("en", lang)])
     metoda = random.choice(["nllb", "gemma"])
 
-    # Uzmi pivot prevod iz baze
-    row = get_existing_translation(conn,
-          _get_sentence_id(conn, original), pivot)
+    # Uzmi pivot prevod iz baze (filtrirano po test_id)
+    sid = _get_sentence_id(conn, original)
+    row = get_existing_translation(conn, sid, pivot, test_id)
 
     if row:
         rf_pivot = row[0]
@@ -341,12 +340,9 @@ def selekcija(populacija, novi_kandidati, pop_size, elite_n, dup_thresh, embedde
     # Popuni do pop_size po raznolikosti
     preostali = filtrirani[elite_n:]
     while len(nova_pop) < pop_size and preostali:
-        # Najraznolikiji u odnosu na već odabrane
         najbolji = max(preostali, key=lambda k: min(
             cosine_pair(k["tekst"], o["tekst"], embedder) for o in nova_pop
         ) if nova_pop else k["fitness"])
-        # Zapravo uzimamo onaj sa najmanjim max-cosine (najraznolikiji)
-        # Koristimo negativni cosine kao ključ
         nova_pop.append(preostali.pop(preostali.index(najbolji)))
 
     return nova_pop
@@ -372,22 +368,22 @@ def _get_sentence_id(conn, text):
 
 # ── Glavni GA loop ────────────────────────────────────────────────────────────
 
-def ga_optimizacija(sentence_id, original, lang, dostupni_jezici, conn,
+def ga_optimizacija(test_id, sentence_id, original, lang, dostupni_jezici, conn,
                     nllb_tok, nllb_mod, embedder, args):
 
-    logger.info(f"=== GA START s{sentence_id} {lang} ===")
+    logger.info(f"=== GA START {test_id} s{sentence_id} {lang} ===")
     logger.info(f"Original: {original[:80]}")
 
-    clear_ga(conn, sentence_id, lang)
+    clear_ga(conn, test_id, sentence_id, lang)
 
     # Inicijalizacija
-    populacija = inicijalizacija(original, lang, conn, nllb_tok, nllb_mod, embedder)
+    populacija = inicijalizacija(original, lang, test_id, conn, nllb_tok, nllb_mod, embedder)
     logger.info(f"Init populacija: {len(populacija)} individua, "
                 f"best={populacija[0]['fitness']:.4f}")
 
     # Snimi generaciju 0
     for i, ind in enumerate(populacija):
-        save_individua(conn, sentence_id, lang, 0, i,
+        save_individua(conn, test_id, sentence_id, lang, 0, i,
                        ind["tekst"], ind["fitness"],
                        ind.get("pivot"), ind.get("metoda"),
                        i < args.elite_n, False)
@@ -400,7 +396,7 @@ def ga_optimizacija(sentence_id, original, lang, dostupni_jezici, conn,
         # Crossover
         for _ in range(args.pop_size // 2):
             try:
-                kandidat = crossover(original, lang, dostupni_jezici,
+                kandidat = crossover(original, lang, test_id, dostupni_jezici,
                                      conn, nllb_tok, nllb_mod, embedder)
                 novi.append(kandidat)
             except Exception as e:
@@ -428,7 +424,7 @@ def ga_optimizacija(sentence_id, original, lang, dostupni_jezici, conn,
 
         # Snimi generaciju
         for i, ind in enumerate(populacija):
-            save_individua(conn, sentence_id, lang, gen, i,
+            save_individua(conn, test_id, sentence_id, lang, gen, i,
                            ind["tekst"], ind["fitness"],
                            ind.get("pivot"), ind.get("metoda"),
                            i < args.elite_n, False)
@@ -446,16 +442,17 @@ def ga_optimizacija(sentence_id, original, lang, dostupni_jezici, conn,
     cur = conn.cursor()
     cur.execute("""
         UPDATE ga_results SET je_pobjednik = TRUE
-        WHERE sentence_id = %s AND target_lang = %s
+        WHERE test_id = %s AND sentence_id = %s AND target_lang = %s
           AND tekst = %s AND generation = (
               SELECT MAX(generation) FROM ga_results
-              WHERE sentence_id = %s AND target_lang = %s
+              WHERE test_id = %s AND sentence_id = %s AND target_lang = %s
           )
-    """, (sentence_id, lang, pobjednik["tekst"], sentence_id, lang))
+    """, (test_id, sentence_id, lang, pobjednik["tekst"],
+          test_id, sentence_id, lang))
     conn.commit()
     cur.close()
 
-    logger.info(f"=== GA DONE s{sentence_id} {lang} | "
+    logger.info(f"=== GA DONE {test_id} s{sentence_id} {lang} | "
                 f"fitness={pobjednik['fitness']:.4f} | {pobjednik['tekst'][:60]} ===")
     return pobjednik
 
@@ -464,6 +461,9 @@ def ga_optimizacija(sentence_id, original, lang, dostupni_jezici, conn,
 
 def main():
     parser = argparse.ArgumentParser(description="Buchenberg GA runner")
+    # Test ID — obavezan
+    parser.add_argument("--test_id", type=str, required=True,
+                        help="Test ID (npr. test_012) — koristi se za filtriranje inicijalne populacije")
     # Rečenice
     parser.add_argument("--sentence_id", type=int, default=None)
     parser.add_argument("--sent_from",   type=int, default=None)
@@ -487,8 +487,10 @@ def main():
     dostupni_jezici = list(LANG_MAP.keys())
     dostupni_jezici.remove("en")
 
-    log_file = os.path.join(LOG_DIR, "run_ga.log")
-    logger.add(log_file, rotation="10 MB", encoding="utf-8")
+    log_file = os.path.join(LOG_DIR, f"{args.test_id}_ga.log")
+    logger.add(log_file, rotation="10 MB", encoding="utf-8", enqueue=True)
+
+    logger.info(f"GA pokrenut za test_id={args.test_id}")
 
     # Učitaj modele
     embedder = load_embedder()
@@ -506,10 +508,9 @@ def main():
         logger.error("Treba --sentence_id ili --sent_from + --sent_to")
         sys.exit(1)
 
-    logger.info(f"Rečenica: {len(sentences)}, Jezici: {args.lang}")
+    logger.info(f"Rečenica: {len(sentences)}, Jezici: {args.lang}, Test: {args.test_id}")
 
-    # GA prag — samo žute i crvene (translation_score < GREEN_THRESH)
-    GREEN_THRESH = getattr(args, 'green_thresh', 0.90)
+    GREEN_THRESH = args.green_thresh
 
     ukupno = 0
     preskoceno = 0
@@ -519,13 +520,13 @@ def main():
                 logger.warning(f"Nepoznat jezik: {lang}, preskačem")
                 continue
 
-            # Provjeri best translation_score iz test_results
+            # Provjeri best translation_score iz test_results — samo za ovaj test_id
             cur = conn.cursor()
             cur.execute("""
                 SELECT MAX(translation_score)
                 FROM test_results
-                WHERE sentence_id = %s AND target_lang = %s
-            """, (sid, lang))
+                WHERE sentence_id = %s AND target_lang = %s AND test_id = %s
+            """, (sid, lang, args.test_id))
             row = cur.fetchone()
             cur.close()
             best_tr = row[0] if row and row[0] else None
@@ -539,7 +540,7 @@ def main():
             logger.info(f"s{sid} {lang} {tier} ({best_tr if best_tr is None else f'{best_tr:.4f}'}) — pokrećem GA")
 
             pobjednik = ga_optimizacija(
-                sid, original, lang, dostupni_jezici,
+                args.test_id, sid, original, lang, dostupni_jezici,
                 conn, nllb_tok, nllb_mod, embedder, args
             )
             ukupno += 1
@@ -547,7 +548,8 @@ def main():
             print(f"  {pobjednik['tekst']}")
 
     conn.close()
-    print(f"\n✓ GA završen: {ukupno} optimizacija")
+    logger.info(f"GA završen: {ukupno} optimizacija, {preskoceno} preskočeno")
+    print(f"\n✓ GA završen: {ukupno} optimizacija, {preskoceno} preskočeno (zelene)")
 
 
 if __name__ == "__main__":
