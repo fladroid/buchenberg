@@ -128,9 +128,9 @@ def save_registry(registry):
         yaml.dump(registry, f, default_flow_style=False, allow_unicode=True)
 
 
-def filter_sentences_by_score(conn, sentences, test_id, score_from, score_to):
+def filter_sentences_by_score(conn, sentences, test_id, lang, score_from, score_to):
     """
-    Filtrira rečenice čiji MAX translation_score (samo za dati test_id)
+    Filtrira rečenice čiji MAX translation_score (za dati test_id I target_lang)
     pada u interval [score_from, score_to].
     Ako score_from=0.0 i score_to=1.0 — vraća sve (bez filtera).
     Rečenice koje nemaju nijedan skor u bazi uvijek se uključuju.
@@ -142,9 +142,9 @@ def filter_sentences_by_score(conn, sentences, test_id, score_from, score_to):
     cur.execute("""
         SELECT sentence_id, MAX(translation_score) as best
         FROM test_results
-        WHERE test_id = %s
+        WHERE test_id = %s AND target_lang = %s
         GROUP BY sentence_id
-    """, (test_id,))
+    """, (test_id, lang))
     rows = cur.fetchall()
     scored = {row[0]: row[1] for row in rows}
 
@@ -639,10 +639,6 @@ def main():
     sentences = load_sentences(conn, book, sent_from, sent_to)
     logger.info(f"Rečenica učitano: {len(sentences)}")
 
-    sentences = filter_sentences_by_score(conn, sentences, args.test_id,
-                                          args.score_from, args.score_to)
-    logger.info(f"Rečenica nakon score filtera [{args.score_from}-{args.score_to}]: {len(sentences)}")
-
     total = len(sentences) * len(langs) * len(methods)
     done  = 0
     batch_size = args.batch_size
@@ -653,11 +649,16 @@ def main():
             logger.warning(f"Nepoznat jezik: {lang} — preskačem")
             continue
 
+        sentences_for_lang = filter_sentences_by_score(
+            conn, sentences, args.test_id, lang,
+            args.score_from, args.score_to)
+        logger.info(f"Rečenica nakon score filtera [{args.score_from}-{args.score_to}] za {lang}: {len(sentences_for_lang)}")
+
         for method in methods:
             logger.info(f"--- {lang} {method} | batch_size={batch_size} ---")
 
-            for batch_start in range(0, len(sentences), batch_size):
-                batch = sentences[batch_start:batch_start + batch_size]
+            for batch_start in range(0, len(sentences_for_lang), batch_size):
+                batch = sentences_for_lang[batch_start:batch_start + batch_size]
                 sids  = [s[0] for s in batch]
                 texts = [s[1] for s in batch]
 
