@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V2
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 17. maj 2026. (sesija 08)  
+**Poslednje ažuriranje:** 20. maj 2026. (sesija 12)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
@@ -104,14 +104,44 @@ Baza ne treba migraciju — `method` je `VARCHAR(20)`. Napomena: proširen sa VA
 ### Faze
 
 ```
-Faza 1 (run20.sh) — Prevod:
-  EN rečenice → sve metode → RF + RFE + score + translation_score → test_results
+Faza 1 (run20.sh) — gemma+gemma_t05 za SVE rečenice:
+  EN rečenice → gemma, gemma_t05 → RF + RFE + score + translation_score → test_results
 
-Faza 2 (ga_snapshot.py) — Snapshot:
-  Klasifikacija: zelene (≥0.90) / žute (0.80-0.89) / crvene (<0.80)
+Faza 2 (run20.sh) — ministral+ministral_t05 za ŽUTE+CRVENE:
+  Filtar: --score_to 0.8999 (per jezik!)
+  Žute+crvene → ministral, ministral_t05 → test_results
 
-Faza 3 (run30.sh) — GA optimizacija:
+Faza 3 (run20.sh) — nllb+nllb_t05 za CRVENE:
+  Filtar: --score_to 0.7999 (per jezik!)
+  Crvene → nllb, nllb_t05 → test_results
+
+GA (run30.sh) — optimizacija žutih+crvenih:
   Žute + crvene → GA evoluira populaciju → pobjednik → ga_results
+  ga_save_winners.py → pobjednici → test_results (method='ga_<pivot>')
+```
+
+**Važno:** `--score_to` filter radi per `(test_id, target_lang)` — ne miješa scoreove različitih jezika.
+
+### Pokretanje pipeline-a po fazama
+
+```bash
+# Faza 1 — sve rečenice, gemma
+bash run20.sh --test_id test_012 --sent_from 1 --sent_to 40 \
+  --langs it --methods gemma gemma_t05 > logs/test_012_f1_it.log 2>&1
+
+# Faza 2 — žute+crvene, ministral
+bash run20.sh --test_id test_012 --sent_from 1 --sent_to 40 \
+  --langs it --methods ministral ministral_t05 --score_to 0.8999 > logs/test_012_f2_it.log 2>&1
+
+# Faza 3 — crvene, nllb
+bash run20.sh --test_id test_012 --sent_from 1 --sent_to 40 \
+  --langs it --methods nllb nllb_t05 --score_to 0.7999 > logs/test_012_f3_it.log 2>&1
+
+# GA — žute+crvene
+bash run30.sh --test_id test_012 --sent_from 1 --sent_to 40 --lang it > logs/test_012_ga_it.log 2>&1
+
+# Upis GA pobjednika
+venv/bin/python src/ga_save_winners.py --test_id test_012 --lang it
 ```
 
 ### Paralelni pipeline
