@@ -5,13 +5,13 @@ Genetski algoritam za optimizaciju prevoda jedne ili više rečenica.
 
 Pokretanje:
   # Jedna rečenica, jedan jezik:
-  venv/bin/python src/run_ga.py --test_id test_012 --sentence_id 5 --lang it
+  venv/bin/python src/run_ga.py --test_id test_013 --sentence_id 5 --lang it
 
   # Raspon rečenica:
-  venv/bin/python src/run_ga.py --test_id test_012 --sent_from 1 --sent_to 10 --lang it
+  venv/bin/python src/run_ga.py --test_id test_013 --sent_from 1 --sent_to 10 --lang it
 
   # Više jezika:
-  venv/bin/python src/run_ga.py --test_id test_012 --sent_from 1 --sent_to 5 --lang it fr de
+  venv/bin/python src/run_ga.py --test_id test_013 --sent_from 1 --sent_to 5 --lang it fr de
 
 GA parametri (mogu se mijenjati):
   --pop_size      8      Maksimalna veličina populacije
@@ -22,6 +22,10 @@ GA parametri (mogu se mijenjati):
   --quality_stop  0.95   Fitness > ovo → stop
   --mutate_rate   0.15   Stopa mutacije (0.0–1.0)
   --dup_thresh    0.99   Cosine > ovo → duplikat
+
+Napomena (test_013+):
+  NLLB je uklonjen iz GA mutatora — koriste se samo gemma i ministral
+  sa temperature=0.8. NLLB ostaje u run_test.py (faza 3 pipeline-a).
 """
 
 import os
@@ -31,7 +35,6 @@ import argparse
 import psycopg2
 from dotenv import load_dotenv
 from loguru import logger
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
@@ -40,16 +43,20 @@ import requests
 
 load_dotenv()
 
-LOG_DIR      = os.getenv("BUCH_LOG", "logs")
+LOG_DIR       = os.getenv("BUCH_LOG", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-NLLB_MODEL   = "facebook/nllb-200-distilled-600M"
-EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
-OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
+EMBED_MODEL   = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+OLLAMA_URL    = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
+OLLAMA_KEY    = os.getenv("OLLAMA_API_KEY", "")
+GEMMA_MODEL   = os.getenv("OLLAMA_MODEL", "gemma3:12b")
+MINISTRAL_MODEL = "ministral-3:14b"
 
-# NLLB jezik kodovi
+# GA mutatori — samo LLM modeli, temperatura=0.8
+GA_MUTATORI = ["gemma", "ministral"]
+GA_TEMPERATURE = 0.8
+
+# NLLB jezik kodovi (koristi se samo za pivot lookup u bazi)
 LANG_MAP = {
     "sr": "srp_Cyrl", "hr": "hrv_Latn", "bs": "bos_Latn",
     "sl": "slv_Latn", "mk": "mkd_Cyrl", "bg": "bul_Cyrl",
@@ -58,13 +65,13 @@ LANG_MAP = {
     "pt": "por_Latn", "ro": "ron_Latn", "en": "eng_Latn",
 }
 
-# Gemma jezik nazivi
+# Jezik nazivi za LLM prompt
 LANG_NAMES = {
     "sr": "Serbian (Cyrillic)", "hr": "Croatian",  "bs": "Bosnian",
     "sl": "Slovenian",          "mk": "Macedonian", "bg": "Bulgarian",
     "de": "German",             "nl": "Dutch",      "af": "Afrikaans",
     "fr": "French",             "it": "Italian",    "es": "Spanish",
-    "pt": "Portuguese",         "ro": "Romanian",
+    "pt": "Portuguese",         "ro": "Romanian",   "en": "English",
 }
 
 
@@ -140,13 +147,6 @@ def clear_ga(conn, test_id, sentence_id, lang):
 
 # ── Modeli ───────────────────────────────────────────────────────────────────
 
-def load_nllb():
-    logger.info(f"Učitavanje NLLB: {NLLB_MODEL}")
-    tok = AutoTokenizer.from_pretrained(NLLB_MODEL)
-    mod = AutoModelForSeq2SeqLM.from_pretrained(NLLB_MODEL)
-    return tok, mod
-
-
 def load_embedder():
     logger.info(f"Učitavanje embeddera: {EMBED_MODEL}")
     return SentenceTransformer(EMBED_MODEL, local_files_only=True)
@@ -154,20 +154,8 @@ def load_embedder():
 
 # ── Prevod ───────────────────────────────────────────────────────────────────
 
-def translate_nllb(text, tok, mod, src_lang, tgt_lang):
-    tok.src_lang = src_lang
-    inputs = tok(text, return_tensors="pt", truncation=True, max_length=512)
-    out = mod.generate(
-        **inputs,
-        forced_bos_token_id=tok.convert_tokens_to_ids(tgt_lang),
-        max_length=512,
-        repetition_penalty=1.3,
-        do_sample=False,
-    )
-    return tok.decode(out[0], skip_special_tokens=True)
-
-
-def translate_gemma(text, src_lang_name, tgt_lang_name):
+def translate_llm(text, src_lang_name, tgt_lang_name, model, temperature=0.8):
+    """Prevod putem Ollama Cloud (gemma ili ministral)."""
     prompt = (
         f"Translate the following {src_lang_name} text to {tgt_lang_name}. "
         f"Return only the translation, no explanation.\n\nText: {text}"
@@ -176,8 +164,9 @@ def translate_gemma(text, src_lang_name, tgt_lang_name):
         f"{OLLAMA_URL}/api/chat",
         headers={"Authorization": f"Bearer {OLLAMA_KEY}"},
         json={
-            "model": OLLAMA_MODEL,
+            "model": model,
             "messages": [{"role": "user", "content": prompt}],
+            "options": {"temperature": temperature},
             "stream": False,
         },
         timeout=60,
@@ -186,19 +175,17 @@ def translate_gemma(text, src_lang_name, tgt_lang_name):
     return response.json()["message"]["content"].strip()
 
 
-def translate(text, src_lang, tgt_lang, metoda, nllb_tok, nllb_mod):
-    """Generički prevod — dispatcher po metodi."""
-    src_nllb = LANG_MAP.get(src_lang, "eng_Latn")
-    tgt_nllb = LANG_MAP.get(tgt_lang, "eng_Latn")
+def translate(text, src_lang, tgt_lang, metoda):
+    """Generički prevod — dispatcher po metodi. Samo LLM (gemma/ministral)."""
     src_name = LANG_NAMES.get(src_lang, "English")
-    tgt_name = LANG_NAMES.get(tgt_lang, src_lang)
+    tgt_name = LANG_NAMES.get(tgt_lang, tgt_lang)
 
-    if metoda == "nllb":
-        return translate_nllb(text, nllb_tok, nllb_mod, src_nllb, tgt_nllb)
-    elif metoda == "gemma":
-        return translate_gemma(text, src_name, tgt_name)
+    if metoda == "gemma":
+        return translate_llm(text, src_name, tgt_name, GEMMA_MODEL, GA_TEMPERATURE)
+    elif metoda == "ministral":
+        return translate_llm(text, src_name, tgt_name, MINISTRAL_MODEL, GA_TEMPERATURE)
     else:
-        raise ValueError(f"Nepoznata metoda: {metoda}")
+        raise ValueError(f"Nepoznata GA metoda: {metoda}. Dozvoljeno: {GA_MUTATORI}")
 
 
 # ── Fitness ──────────────────────────────────────────────────────────────────
@@ -215,14 +202,13 @@ def cosine_pair(tekst1, tekst2, embedder):
 
 # ── GA operatori ─────────────────────────────────────────────────────────────
 
-def inicijalizacija(original, lang, test_id, conn, nllb_tok, nllb_mod, embedder):
+def inicijalizacija(original, lang, test_id, conn, embedder):
     """
     Početna populacija — individue iz test_results za konkretan test_id,
-    ili svježe generirane sa nllb i gemma ako nema dovoljno.
+    ili svježe generirane sa gemma i ministral ako nema dovoljno.
     """
     populacija = []
 
-    # Uzmi sve prevode za ovu rečenicu iz zadanog testa
     cur = conn.cursor()
     cur.execute("""
         SELECT translated_text, method, translation_score
@@ -245,11 +231,11 @@ def inicijalizacija(original, lang, test_id, conn, nllb_tok, nllb_mod, embedder)
                 "pivot":   None,
             })
 
-    # Ako nema dovoljno — generiši svježe
+    # Ako nema dovoljno — generiši svježe sa LLM mutatorima
     if len(populacija) < 2:
-        for metoda in ["nllb", "gemma"]:
+        for metoda in GA_MUTATORI:
             try:
-                tekst = translate(original, "en", lang, metoda, nllb_tok, nllb_mod)
+                tekst = translate(original, "en", lang, metoda)
                 sc = fitness(original, tekst, embedder)
                 populacija.append({"tekst": tekst, "fitness": sc,
                                    "metoda": metoda, "pivot": None})
@@ -260,51 +246,47 @@ def inicijalizacija(original, lang, test_id, conn, nllb_tok, nllb_mod, embedder)
     return populacija
 
 
-def crossover(original, lang, test_id, dostupni_jezici, conn, nllb_tok, nllb_mod, embedder):
+def crossover(original, lang, test_id, dostupni_jezici, conn, embedder):
     """
     Crossover: EN → pivot → lang
     Pivot prevod se uzima iz baze (za isti test_id) ako postoji, inače se generira.
+    Koristi samo LLM mutatore (gemma/ministral).
     """
     pivot = random.choice([j for j in dostupni_jezici if j not in ("en", lang)])
-    metoda = random.choice(["nllb", "gemma"])
+    metoda1 = random.choice(GA_MUTATORI)
 
-    # Uzmi pivot prevod iz baze (filtrirano po test_id)
     sid = _get_sentence_id(conn, original)
     row = get_existing_translation(conn, sid, pivot, test_id)
 
     if row:
         rf_pivot = row[0]
     else:
-        # Generiši pivot prevod
-        rf_pivot = translate(original, "en", pivot, metoda, nllb_tok, nllb_mod)
+        rf_pivot = translate(original, "en", pivot, metoda1)
 
-    # Pivot → ciljni jezik
-    metoda2 = random.choice(["nllb", "gemma"])
-    rf_novi = translate(rf_pivot, pivot, lang, metoda2, nllb_tok, nllb_mod)
+    metoda2 = random.choice(GA_MUTATORI)
+    rf_novi = translate(rf_pivot, pivot, lang, metoda2)
 
     sc = fitness(original, rf_novi, embedder)
     return {
         "tekst":   rf_novi,
         "fitness": sc,
-        "metoda":  f"{metoda}+{metoda2}",
+        "metoda":  f"{metoda1}+{metoda2}",
         "pivot":   pivot,
     }
 
 
-def mutacija(individua, original, lang, dostupni_jezici, nllb_tok, nllb_mod, embedder):
+def mutacija(individua, original, lang, dostupni_jezici, embedder):
     """
     Mutacija: individua.tekst → pivot → lang
     Polazi od postojećeg individue, ne od originala.
+    Koristi samo LLM mutatore (gemma/ministral).
     """
     pivot = random.choice([j for j in dostupni_jezici if j not in ("en", lang)])
-    metoda1 = random.choice(["nllb", "gemma"])
-    metoda2 = random.choice(["nllb", "gemma"])
+    metoda1 = random.choice(GA_MUTATORI)
+    metoda2 = random.choice(GA_MUTATORI)
 
-    # individua → pivot
-    rf_pivot = translate(individua["tekst"], lang, pivot, metoda1, nllb_tok, nllb_mod)
-
-    # pivot → lang
-    rf_mutirani = translate(rf_pivot, pivot, lang, metoda2, nllb_tok, nllb_mod)
+    rf_pivot = translate(individua["tekst"], lang, pivot, metoda1)
+    rf_mutirani = translate(rf_pivot, pivot, lang, metoda2)
 
     sc = fitness(original, rf_mutirani, embedder)
     return {
@@ -316,14 +298,10 @@ def mutacija(individua, original, lang, dostupni_jezici, nllb_tok, nllb_mod, emb
 
 
 def selekcija(populacija, novi_kandidati, pop_size, elite_n, dup_thresh, embedder):
-    """
-    Elitizam + raznolikost.
-    Odbacuje duplikate (cosine > dup_thresh).
-    """
+    """Elitizam + raznolikost. Odbacuje duplikate (cosine > dup_thresh)."""
     svi = populacija + novi_kandidati
     svi.sort(key=lambda x: x["fitness"], reverse=True)
 
-    # Ukloni duplikate
     filtrirani = []
     for kandidat in svi:
         je_dup = False
@@ -334,10 +312,8 @@ def selekcija(populacija, novi_kandidati, pop_size, elite_n, dup_thresh, embedde
         if not je_dup:
             filtrirani.append(kandidat)
 
-    # Elita
     nova_pop = filtrirani[:elite_n]
 
-    # Popuni do pop_size po raznolikosti
     preostali = filtrirani[elite_n:]
     while len(nova_pop) < pop_size and preostali:
         najbolji = max(preostali, key=lambda k: min(
@@ -369,19 +345,17 @@ def _get_sentence_id(conn, text):
 # ── Glavni GA loop ────────────────────────────────────────────────────────────
 
 def ga_optimizacija(test_id, sentence_id, original, lang, dostupni_jezici, conn,
-                    nllb_tok, nllb_mod, embedder, args):
+                    embedder, args):
 
     logger.info(f"=== GA START {test_id} s{sentence_id} {lang} ===")
     logger.info(f"Original: {original[:80]}")
 
     clear_ga(conn, test_id, sentence_id, lang)
 
-    # Inicijalizacija
-    populacija = inicijalizacija(original, lang, test_id, conn, nllb_tok, nllb_mod, embedder)
+    populacija = inicijalizacija(original, lang, test_id, conn, embedder)
     logger.info(f"Init populacija: {len(populacija)} individua, "
                 f"best={populacija[0]['fitness']:.4f}")
 
-    # Snimi generaciju 0
     for i, ind in enumerate(populacija):
         save_individua(conn, test_id, sentence_id, lang, 0, i,
                        ind["tekst"], ind["fitness"],
@@ -393,26 +367,22 @@ def ga_optimizacija(test_id, sentence_id, original, lang, dostupni_jezici, conn,
     for gen in range(1, args.max_gen + 1):
         novi = []
 
-        # Crossover
         for _ in range(args.pop_size // 2):
             try:
                 kandidat = crossover(original, lang, test_id, dostupni_jezici,
-                                     conn, nllb_tok, nllb_mod, embedder)
+                                     conn, embedder)
                 novi.append(kandidat)
             except Exception as e:
                 logger.warning(f"Crossover greška gen{gen}: {e}")
 
-        # Mutacija
         for ind in populacija:
             if random.random() < args.mutate_rate:
                 try:
-                    mut = mutacija(ind, original, lang, dostupni_jezici,
-                                   nllb_tok, nllb_mod, embedder)
+                    mut = mutacija(ind, original, lang, dostupni_jezici, embedder)
                     novi.append(mut)
                 except Exception as e:
                     logger.warning(f"Mutacija greška gen{gen}: {e}")
 
-        # Selekcija
         populacija = selekcija(populacija, novi, args.pop_size,
                                args.elite_n, args.dup_thresh, embedder)
 
@@ -422,14 +392,12 @@ def ga_optimizacija(test_id, sentence_id, original, lang, dostupni_jezici, conn,
         logger.info(f"Gen {gen:02d}: best={trenutni_best['fitness']:.4f} "
                     f"pop={len(populacija)} | {trenutni_best['tekst'][:60]}...")
 
-        # Snimi generaciju
         for i, ind in enumerate(populacija):
             save_individua(conn, test_id, sentence_id, lang, gen, i,
                            ind["tekst"], ind["fitness"],
                            ind.get("pivot"), ind.get("metoda"),
                            i < args.elite_n, False)
 
-        # Stop kriterij
         stop, razlog = stop_kriterij(historija, trenutni_best,
                                      args.quality_stop, args.conv_thresh,
                                      args.conv_gens)
@@ -437,7 +405,6 @@ def ga_optimizacija(test_id, sentence_id, original, lang, dostupni_jezici, conn,
             logger.info(f"Stop: {razlog} nakon {gen} generacija")
             break
 
-    # Označi pobjednika
     pobjednik = populacija[0]
     cur = conn.cursor()
     cur.execute("""
@@ -461,16 +428,11 @@ def ga_optimizacija(test_id, sentence_id, original, lang, dostupni_jezici, conn,
 
 def main():
     parser = argparse.ArgumentParser(description="Buchenberg GA runner")
-    # Test ID — obavezan
-    parser.add_argument("--test_id", type=str, required=True,
-                        help="Test ID (npr. test_012) — koristi se za filtriranje inicijalne populacije")
-    # Rečenice
+    parser.add_argument("--test_id", type=str, required=True)
     parser.add_argument("--sentence_id", type=int, default=None)
     parser.add_argument("--sent_from",   type=int, default=None)
     parser.add_argument("--sent_to",     type=int, default=None)
-    # Jezici
     parser.add_argument("--lang", nargs="+", required=True)
-    # GA parametri
     parser.add_argument("--pop_size",     type=int,   default=8)
     parser.add_argument("--elite_n",      type=int,   default=2)
     parser.add_argument("--max_gen",      type=int,   default=20)
@@ -479,26 +441,20 @@ def main():
     parser.add_argument("--quality_stop", type=float, default=0.95)
     parser.add_argument("--mutate_rate",  type=float, default=0.15)
     parser.add_argument("--dup_thresh",   type=float, default=0.99)
-    parser.add_argument("--green_thresh", type=float, default=0.90,
-                        help="Rečenice sa tr_score >= ovo se preskačaju (zelene)")
+    parser.add_argument("--green_thresh", type=float, default=0.90)
     args = parser.parse_args()
 
-    # Dostupni pivot jezici (svi osim EN)
     dostupni_jezici = list(LANG_MAP.keys())
     dostupni_jezici.remove("en")
 
     log_file = os.path.join(LOG_DIR, f"{args.test_id}_ga.log")
     logger.add(log_file, rotation="10 MB", encoding="utf-8", enqueue=True)
 
-    logger.info(f"GA pokrenut za test_id={args.test_id}")
+    logger.info(f"GA pokrenut za test_id={args.test_id}, mutatori={GA_MUTATORI}, temp={GA_TEMPERATURE}")
 
-    # Učitaj modele
     embedder = load_embedder()
-    nllb_tok, nllb_mod = load_nllb()
-
     conn = get_conn()
 
-    # Odredi rečenice
     if args.sentence_id:
         row = load_sentence(conn, args.sentence_id)
         sentences = [row] if row else []
@@ -511,16 +467,15 @@ def main():
     logger.info(f"Rečenica: {len(sentences)}, Jezici: {args.lang}, Test: {args.test_id}")
 
     GREEN_THRESH = args.green_thresh
-
     ukupno = 0
     preskoceno = 0
+
     for sid, original in sentences:
         for lang in args.lang:
             if lang not in LANG_MAP:
                 logger.warning(f"Nepoznat jezik: {lang}, preskačem")
                 continue
 
-            # Provjeri best translation_score iz test_results — samo za ovaj test_id
             cur = conn.cursor()
             cur.execute("""
                 SELECT MAX(translation_score)
@@ -541,7 +496,7 @@ def main():
 
             pobjednik = ga_optimizacija(
                 args.test_id, sid, original, lang, dostupni_jezici,
-                conn, nllb_tok, nllb_mod, embedder, args
+                conn, embedder, args
             )
             ukupno += 1
             print(f"\n✓ s{sid} {lang}: fitness={pobjednik['fitness']:.4f}")
