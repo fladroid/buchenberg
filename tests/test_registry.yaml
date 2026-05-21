@@ -163,3 +163,21 @@ test_012:
   - nllb_t05
   sent_from: 1
   sent_to: 40
+test_013:
+  book: hound_of_the_baskervilles
+  langs:
+  - hr
+  - bg
+  - de
+  - nl
+  - it
+  - pt
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  - nllb
+  - nllb_t05
+  sent_from: 1
+  sent_to: 40
