@@ -636,7 +636,6 @@ def main():
 
     # DB
     conn = get_conn()
-    clear_test(conn, args.test_id, langs, methods)
     sentences = load_sentences(conn, book, sent_from, sent_to)
     logger.info(f"Rečenica učitano: {len(sentences)}")
 
