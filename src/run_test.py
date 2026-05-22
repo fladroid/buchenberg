@@ -506,6 +506,7 @@ def insert_result(conn, test_id, sentence_id, target_lang, method,
             score             = EXCLUDED.score,
             translation_score = EXCLUDED.translation_score,
             created_at        = NOW()
+        WHERE EXCLUDED.translation_score > test_results.translation_score
     """, (test_id, sentence_id, target_lang, method,
           translated, back_trans, score_val, translation_score_val))
     conn.commit()
