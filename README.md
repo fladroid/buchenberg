@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V2
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 20. maj 2026. (sesija 12)  
+**Poslednje ažuriranje:** 22. maj 2026. (sesija 15)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
@@ -37,7 +37,7 @@ score = cosine_similarity(RE, RF)    ← translation_score (direktni)
 
 ### Višestruko takmičenje metoda
 
-Isti postupak se radi sa **4 metode prevoda**. Metoda sa višim score-om **pobeđuje** za tu rečenicu. Krajnji rezultat je hibridni prevod koji kombinuje najbolje od svake metode.
+Isti postupak se radi sa više metoda prevoda. Metoda sa višim score-om **pobeđuje** za tu rečenicu. Krajnji rezultat je hibridni prevod koji kombinuje najbolje od svake metode.
 
 ### Genetski algoritam za optimizaciju
 
@@ -86,7 +86,7 @@ Prevod knjiga sa isteklom licencom sa **Project Gutenberg** na više jezika, kor
 | `ministral` | Ministral 3 14b cloud | default temperatura | Jak na evropskim jezicima |
 | `ministral_t05` | Ministral 3 14b cloud | temperature=0.5 | Konzervativniji od default |
 
-**Standard:** svaki jezik u svakom testu uvijek ima sve 4 osnovne metode (nllb, nllb_t05, gemma, gemma_t05). Ministral se dodaje selektivno za žute/crvene rečenice.
+**Standard:** svaki jezik u svakom testu uvijek ima sve 6 metoda (gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05).
 
 ### Kako dodati novu metodu
 
@@ -104,8 +104,8 @@ Baza ne treba migraciju — `method` je `VARCHAR(20)`. Napomena: proširen sa VA
 ### Faze
 
 ```
-Faza 1 (run20.sh) — gemma+gemma_t05 za SVE rečenice:
-  EN rečenice → gemma, gemma_t05 → RF + RFE + score + translation_score → test_results
+Faza 1 (run20.sh) — gemma+gemma_t05+ministral+ministral_t05 za SVE rečenice:
+  EN rečenice → gemma, gemma_t05, ministral, ministral_t05 → RF + RFE + score + translation_score → test_results
 
 Faza 2 (run20.sh) — ministral+ministral_t05 za ŽUTE+CRVENE:
   Filtar: --score_to 0.8999 (per jezik!)
@@ -122,26 +122,28 @@ GA (run30.sh) — optimizacija žutih+crvenih:
 
 **Važno:** `--score_to` filter radi per `(test_id, target_lang)` — ne miješa scoreove različitih jezika.
 
+**Ponavljanje faza:** Faze 1, 2 i 3 mogu se ponavljati više puta na istom testu. `ON CONFLICT WHERE` garantuje da `translation_score` može samo rasti — nikad pasti. Svako ponavljanje je sigurno i može donijeti poboljšanje zbog stohastičnosti modela.
+
 ### Pokretanje pipeline-a po fazama
 
 ```bash
-# Faza 1 — sve rečenice, gemma
-bash run20.sh --test_id test_012 --sent_from 1 --sent_to 40 \
-  --langs it --methods gemma gemma_t05 > logs/test_012_f1_it.log 2>&1
+# Faza 1 — sve rečenice, svi LLM modeli
+bash run20.sh --test_id test_018 --sent_from 1 --sent_to 40 \
+  --langs it --methods gemma gemma_t05 ministral ministral_t05 > logs/test_018_f1.log 2>&1
 
 # Faza 2 — žute+crvene, ministral
-bash run20.sh --test_id test_012 --sent_from 1 --sent_to 40 \
-  --langs it --methods ministral ministral_t05 --score_to 0.8999 > logs/test_012_f2_it.log 2>&1
+bash run20.sh --test_id test_018 --sent_from 1 --sent_to 40 \
+  --langs it --methods ministral ministral_t05 --score_to 0.8999 > logs/test_018_f2.log 2>&1
 
 # Faza 3 — crvene, nllb
-bash run20.sh --test_id test_012 --sent_from 1 --sent_to 40 \
-  --langs it --methods nllb nllb_t05 --score_to 0.7999 > logs/test_012_f3_it.log 2>&1
+bash run20.sh --test_id test_018 --sent_from 1 --sent_to 40 \
+  --langs it --methods nllb nllb_t05 --score_to 0.7999 > logs/test_018_f3.log 2>&1
 
 # GA — žute+crvene
-bash run30.sh --test_id test_012 --sent_from 1 --sent_to 40 --lang it > logs/test_012_ga_it.log 2>&1
+bash run30.sh --test_id test_018 --sent_from 1 --sent_to 40 --lang it > logs/test_018_ga_it.log 2>&1
 
 # Upis GA pobjednika
-venv/bin/python src/ga_save_winners.py --test_id test_012 --lang it
+venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 ```
 
 ### Paralelni pipeline
@@ -207,10 +209,10 @@ NLLB batch: `tokenizer(texts, padding=True)` → `batch_decode`
 venv/bin/python src/ga_snapshot.py --lang it
 
 # GA za žute/crvene rečenice
-bash run30.sh --sent_from 1 --sent_to 40 --lang it
+bash run30.sh --test_id test_018 --sent_from 1 --sent_to 40 --lang it
 
 # Sa custom parametrima
-bash run30.sh --sent_from 1 --sent_to 40 --lang it --max_gen 10 --conv_gens 5
+bash run30.sh --test_id test_018 --sent_from 1 --sent_to 40 --lang it --max_gen 10 --conv_gens 5
 ```
 
 ---
@@ -223,6 +225,7 @@ bash run30.sh --sent_from 1 --sent_to 40 --lang it --max_gen 10 --conv_gens 5
 |--------|----------|---------|
 | **NLLB-200-distilled-600M** | Lokalno na foxuno (~2.5GB keš) | CPU-bound, ~22-30 rec/min |
 | **Gemma 3 12b** | Ollama Cloud (`api.ollama.com`) | GPU cloud, ~53-55 rec/min |
+| **Ministral 3 14b** | Ollama Cloud (`api.ollama.com`) | GPU cloud, jak na evropskim jezicima |
 
 > ⚠️ LLM modeli se **ne nalaze** na foxuno niti balsam. Koristi se Ollama Cloud.
 
@@ -308,7 +311,7 @@ CREATE TABLE ga_results (
 | `run10.sh` | Punjenje baze | `bash run10.sh` |
 | `run15.sh` | Sentiment + NER | `bash run15.sh` |
 | `run20.sh` | Prevod — test runner | `bash run20.sh --test_id test_001 --batch_size 20` |
-| `run30.sh` | GA optimizer | `bash run30.sh --sent_from 1 --sent_to 40 --lang it` |
+| `run30.sh` | GA optimizer | `bash run30.sh --test_id test_018 --sent_from 1 --sent_to 40 --lang it` |
 
 ### Python skripte (`src/`)
 
@@ -322,8 +325,10 @@ CREATE TABLE ga_results (
 | `step6_create_test_table.py` | Kreira `test_results` tabelu |
 | `step7_create_ga_table.py` | Kreira `ga_results` tabelu |
 | `run_test.py` | Glavni test runner (batch, scoring) |
-| `run_ga.py` | GA runner (528 linija) |
+| `run_ga.py` | GA runner |
 | `ga_snapshot.py` | Snapshot zelene/žute/crvene |
+| `count_colors.py` | Broji rečenice po boji za dati test |
+| `health_check.py` | Infrastrukturna provjera svih komponenti |
 | `ram_monitor.sh` | Monitor RAM/swap tokom runa |
 
 ---
@@ -338,7 +343,7 @@ CREATE TABLE ga_results (
 | **balsam** | `balsam.dynu.net` | Docker host — PostgreSQL |
 
 > ⚠️ Sav razvoj je na **foxuno**. User se zove `balsam` ali to je user na foxuno serveru!
-> ⚠️ `docker exec pgdb psql` komande se izvršavaju **ručno na balsam serveru**.
+> ⚠️ `docker exec pgdb psql` komande Claude izvršava direktno putem `balsam:run_command`.
 
 ### Struktura direktorijuma
 
@@ -369,12 +374,12 @@ test_001:
   langs: [hr, sr, de, nl, fr, it]
   methods: [nllb, nllb_t05, gemma, gemma_t05]
 
-test_002:
+test_018:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
   langs: [it]
-  methods: [ministral, ministral_t05]
+  methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
 ```
 
 ---
@@ -392,28 +397,30 @@ test_002:
 
 ## 11. Korisne komande
 
-### PostgreSQL (na balsam serveru)
+### PostgreSQL (Claude izvršava putem balsam:run_command)
 
 ```bash
 docker exec pgdb psql -U pgu -d buchenberg
 docker exec pgdb psql -U pgu -d buchenberg -c "TRUNCATE test_results RESTART IDENTITY;"
+docker exec pgdb psql -U pgu -d buchenberg -c "TRUNCATE ga_results RESTART IDENTITY;"
 ```
 
-### Paralelni prevod
+### Provjera stanja testa
 
 ```bash
-cd /home/balsam/buchenberg
-nohup venv/bin/python src/run_test.py --test_id test_001 \
-  --batch_size 20 --methods gemma gemma_t05 > logs/par_gemma.log 2>&1 &
-nohup venv/bin/python src/run_test.py --test_id test_001 \
-  --batch_size 20 --methods nllb nllb_t05 > logs/par_nllb.log 2>&1 &
+# Broj boja po jeziku
+venv/bin/python src/count_colors.py --test_id test_018 --sent_from 1 --sent_to 40 --langs it
+
+# Infrastrukturna provjera
+venv/bin/python src/health_check.py
 ```
 
 ### GA workflow
 
 ```bash
 venv/bin/python src/ga_snapshot.py --lang it
-bash run30.sh --sent_from 1 --sent_to 40 --lang it
+bash run30.sh --test_id test_018 --sent_from 1 --sent_to 40 --lang it
+venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 ```
 
 ---
@@ -422,10 +429,10 @@ bash run30.sh --sent_from 1 --sent_to 40 --lang it
 
 | Operacija | Trajanje |
 |-----------|---------|
-| run20 serijski (40 rec, 4 metode, 6 jezika) | ~40 min |
-| run20 batch=20 paralelno (Gemma+NLLB) | ~21 min |
-| Gemma batch (40 rec, 2 metode, 6 jezika) | ~12 min |
-| NLLB batch (40 rec, 2 metode, 6 jezika) | ~21 min |
+| Faza 1 (40 rec, 4 LLM metode, 1 jezik) | ~2 min |
+| Faza 1 (40 rec, 4 LLM metode, 6 jezika) | ~15 min |
+| Faza 2 (žute+crvene, 1 jezik) | ~45 sec |
+| Faza 3 (crvene, NLLB, 1 jezik) | ~40 sec |
 | GA (1 rečenica) | ~1.5 min |
 | MiniLM encoding | 41 rec/sec |
 
@@ -437,7 +444,7 @@ bash run30.sh --sent_from 1 --sent_to 40 --lang it
 2. Flavio pregleda i kaže OK
 3. Na server i GitHub tek nakon OK
 
-**Protokol komandi:** Claude uvijek prikazuje komandu prije izvršavanja.
+**Protokol komandi:** Claude uvijek prikazuje komandu prije izvršavanja. Bez izuzetka.
 
 ---
 
@@ -451,16 +458,16 @@ bash run30.sh --sent_from 1 --sent_to 40 --lang it
 6. ~~Paralelni pipeline~~ ✅
 7. ~~GA tuning prvi krug~~ ✅ (conv_gens=6, conv_thresh=0.002)
 8. ~~Ministral kao treća LLM metoda~~ ✅
-9. ~~**Parser fix**~~ ✅ — parser refaktor, uklonjen placeholder trik, 0 fallbacka
-10. **GA pobjednici kao `method = 'ga'`** — upisati u test_results
-11. **GA tuning drugi krug** — crossover_rate, max_children, varijabilni potomci
-12. **Nova arhitektura metoda** — zelena/žuta/crvena dodjela broja metoda
-13. **multilingual-e5-large** — testirati kao alternativu MiniLM
-14. **Logging standardizacija** — GA summary, ukupna statistika
-15. **Novi jezici** — bs, sl, mk, bg, af, es, pt, ro
+9. ~~Parser fix~~ ✅ — parser refaktor, uklonjen placeholder trik, 0 fallbacka
+10. ~~**ON CONFLICT WHERE fix**~~ ✅ — score može samo rasti, nikad pasti
+11. ~~**Uklonjen clear_test poziv**~~ ✅ — faze se mogu bezbijedno ponavljati
+12. **GA pobjednici kao `method = 'ga'`** — upisati u test_results
+13. **GA tuning drugi krug** — crossover_rate, max_children, varijabilni potomci
+14. **multilingual-e5-large** — testirati kao alternativu MiniLM
+15. **Novi jezici** — bs, sl, mk, af, es, ro
 16. **Pipeline orchestrator** — spaja sve zajedno
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
-*Flavio & Claude · Buchenberg · V2 · 17. maj 2026.*
+*Flavio & Claude · Buchenberg · V2 · 22. maj 2026.*
