@@ -200,19 +200,19 @@ test_016:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [it]
+  langs: [it, pt]
   methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
 
 test_017:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [it]
+  langs: [it, pt]
   methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
 
 test_018:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [it]
+  langs: [it, pt]
   methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
