@@ -1,0 +1,26 @@
+pivot_001:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [hr, de, fr, it]
+  models: [gemma3:12b, ministral-3:14b]
+  temperatures: [0.3, 0.7]
+  max_iterations: 10
+
+pivot_002:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [de, hr, fr, it]
+  models: [gemma3:12b]
+  temperatures: [0.3]
+  max_iterations: 10
+
+pivot_003:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [de, hr, fr, it]
+  models: [gemma3:12b]
+  temperatures: [0.3]
+  max_iterations: 10
