@@ -181,38 +181,101 @@ test_013:
   - nllb_t05
   sent_from: 1
   sent_to: 40
-
 test_014:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [hr, bg, de, nl, it, pt]
-  methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
-
+  langs:
+  - hr
+  - bg
+  - de
+  - nl
+  - it
+  - pt
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  - nllb
+  - nllb_t05
 test_015:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [hr, bg, de, nl, it, pt]
-  methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
-
+  langs:
+  - hr
+  - bg
+  - de
+  - nl
+  - it
+  - pt
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  - nllb
+  - nllb_t05
 test_016:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [it, pt, hr, bg, de, nl]
-  methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
-
+  langs:
+  - it
+  - pt
+  - hr
+  - bg
+  - de
+  - nl
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  - nllb
+  - nllb_t05
 test_017:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [it, pt, hr, bg, de, nl]
-  methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
-
+  langs:
+  - it
+  - pt
+  - hr
+  - bg
+  - de
+  - nl
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  - nllb
+  - nllb_t05
 test_018:
   book: hound_of_the_baskervilles
   sent_from: 1
   sent_to: 40
-  langs: [it, pt, hr, bg, de, nl]
-  methods: [gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05]
+  langs:
+  - it
+  - pt
+  - hr
+  - bg
+  - de
+  - nl
+  - fr
+  - ro
+  - es
+  - af
+  - bs
+  - sr
+  - sl
+  - mk
+  methods:
+  - gemma
+  - gemma_t05
+  - ministral
+  - ministral_t05
+  - nllb
+  - nllb_t05
