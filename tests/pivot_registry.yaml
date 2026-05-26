@@ -24,3 +24,12 @@ pivot_003:
   models: [gemma3:12b]
   temperatures: [0.3]
   max_iterations: 10
+
+pivot_004:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [de, hr]
+  models: [gemma3:12b]
+  temperatures: [0.3]
+  max_iterations: 10

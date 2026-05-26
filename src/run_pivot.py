@@ -13,8 +13,8 @@ Logika po iteraciji:
   - Stop ako nema poboljšanja ili dostignuti max_iterations
 
 Pokretanje:
-  venv/bin/python src/run_pivot.py --test_id pivot_001
-  venv/bin/python src/run_pivot.py --test_id pivot_001 --sent_from 1 --sent_to 10
+  venv/bin/python src/run_pivot.py
+  venv/bin/python src/run_pivot.py --sent_from 1 --sent_to 10
 """
 
 import os
@@ -35,8 +35,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
-PIVOT_REGISTRY_PATH = os.path.join(os.getenv("BUCH_HOME", "."), "tests", "pivot_registry.yaml")
-LOG_DIR             = os.getenv("BUCH_LOG", "logs")
+PIVOT_PATH = os.path.join(os.getenv("BUCH_HOME", "."), "tests", "pivot.yaml")
+LOG_DIR    = os.getenv("BUCH_LOG", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 NLLB_MODEL  = "facebook/nllb-200-distilled-600M"
@@ -62,21 +62,14 @@ LANG_NAMES = {
 
 BATCH_SIZE = 20
 
-# ── Registry ─────────────────────────────────────────────────────────────────
+# ── Pivot config ──────────────────────────────────────────────────────────────
 
-def load_pivot_registry():
-    if not os.path.exists(PIVOT_REGISTRY_PATH):
-        logger.error(f"pivot_registry.yaml nije pronađen: {PIVOT_REGISTRY_PATH}")
+def load_pivot():
+    if not os.path.exists(PIVOT_PATH):
+        logger.error(f"pivot.yaml nije pronađen: {PIVOT_PATH}")
         sys.exit(1)
-    with open(PIVOT_REGISTRY_PATH, "r") as f:
+    with open(PIVOT_PATH, "r") as f:
         return yaml.safe_load(f) or {}
-
-def get_pivot_test(test_id):
-    registry = load_pivot_registry()
-    if test_id not in registry:
-        logger.error(f"Test {test_id} nije pronađen u pivot_registry.yaml!")
-        sys.exit(1)
-    return registry[test_id]
 
 # ── DB ───────────────────────────────────────────────────────────────────────
 
@@ -128,9 +121,6 @@ def upsert_pivot(conn, test_id, sentence_id, target_lang, model,
     return row is not None
 
 def load_pivot_state(conn, test_id, sent_ids):
-    """
-    Vraća dict: { sentence_id: { lang: (score, translated_text) } }
-    """
     if not sent_ids:
         return {}
     cur = conn.cursor()
@@ -263,16 +253,17 @@ def score_batch(originals, translations, embedder):
 
 def main():
     parser = argparse.ArgumentParser(description="Buchenberg pivot runner")
-    parser.add_argument("--test_id",   required=True)
     parser.add_argument("--sent_from", type=int, default=None)
     parser.add_argument("--sent_to",   type=int, default=None)
     args = parser.parse_args()
 
-    log_file = os.path.join(LOG_DIR, f"{args.test_id}_pivot.log")
-    logger.add(log_file, rotation="10 MB", encoding="utf-8", enqueue=True)
-    logger.info(f"=== {args.test_id} PIVOT START ===")
+    params  = load_pivot()
+    test_id = params["test_id"]
 
-    params         = get_pivot_test(args.test_id)
+    log_file = os.path.join(LOG_DIR, f"{test_id}_pivot.log")
+    logger.add(log_file, rotation="10 MB", encoding="utf-8", enqueue=True)
+    logger.info(f"=== {test_id} PIVOT START ===")
+
     book           = params["book"]
     sent_from      = args.sent_from or params["sent_from"]
     sent_to        = args.sent_to   or params["sent_to"]
@@ -299,18 +290,13 @@ def main():
     for iteration in range(1, max_iterations + 1):
         logger.info(f"=== Iteracija {iteration}/{max_iterations} ===")
 
-        # Učitaj trenutno stanje iz baze
-        state    = load_pivot_state(conn, args.test_id, sent_ids)
-
-        # Samo rečenice s >= 2 jezika mogu imati pivot
+        state    = load_pivot_state(conn, test_id, sent_ids)
         eligible = [sid for sid in sent_ids if len(state.get(sid, {})) >= 2]
         if not eligible:
             logger.info("Nema rečenica s >= 2 prevoda — kraj pivot faze")
             break
 
-        # Per rečenica: pronađi pivot (jezik s max scoreom)
-        # Grupiši rečenice koje dijele isti pivot jezik — batch optimizacija
-        pivot_groups = defaultdict(list)  # pivot_lang → [sid, ...]
+        pivot_groups = defaultdict(list)
         for sid in eligible:
             pivot_lang = max(state[sid], key=lambda l: state[sid][l][0])
             pivot_groups[pivot_lang].append(sid)
@@ -349,12 +335,11 @@ def main():
                                         b_pivot, pivot_lang, tgt_lang, model, temp)
                                     db_temp = temp
 
-                                # Score: uvijek cosine(EN_original, novi_prevod)
                                 scores = score_batch(b_en, translations, embedder)
 
                                 for sid, translation, sc in zip(b_sids, translations, scores):
                                     changed = upsert_pivot(
-                                        conn, args.test_id, sid, tgt_lang,
+                                        conn, test_id, sid, tgt_lang,
                                         model, db_temp, translation, sc)
                                     if changed:
                                         test_improved += 1
@@ -377,8 +362,8 @@ def main():
             break
 
     conn.close()
-    logger.info(f"=== {args.test_id} PIVOT DONE ===")
-    print(f"\n✓ {args.test_id} pivot završen")
+    logger.info(f"=== {test_id} PIVOT DONE ===")
+    print(f"\n✓ {test_id} pivot završen")
 
 if __name__ == "__main__":
     main()

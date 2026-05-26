@@ -7,8 +7,8 @@ Za svaku kombinaciju (lang, model, temperature) prevodi sve rečenice
 i upisuje u pivot_results. Ovo je prvi korak pivot pipeline-a.
 
 Pokretanje:
-  venv/bin/python src/run_pivot_init.py --test_id pivot_001
-  venv/bin/python src/run_pivot_init.py --test_id pivot_001 --sent_from 1 --sent_to 10
+  venv/bin/python src/run_pivot_init.py
+  venv/bin/python src/run_pivot_init.py --sent_from 1 --sent_to 10
 """
 
 import os
@@ -28,8 +28,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
-PIVOT_REGISTRY_PATH = os.path.join(os.getenv("BUCH_HOME", "."), "tests", "pivot_registry.yaml")
-LOG_DIR             = os.getenv("BUCH_LOG", "logs")
+PIVOT_PATH = os.path.join(os.getenv("BUCH_HOME", "."), "tests", "pivot.yaml")
+LOG_DIR    = os.getenv("BUCH_LOG", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 NLLB_MODEL  = "facebook/nllb-200-distilled-600M"
@@ -55,21 +55,14 @@ LANG_NAMES = {
 
 BATCH_SIZE = 20
 
-# ── Registry ─────────────────────────────────────────────────────────────────
+# ── Pivot config ──────────────────────────────────────────────────────────────
 
-def load_pivot_registry():
-    if not os.path.exists(PIVOT_REGISTRY_PATH):
-        logger.error(f"pivot_registry.yaml nije pronađen: {PIVOT_REGISTRY_PATH}")
+def load_pivot():
+    if not os.path.exists(PIVOT_PATH):
+        logger.error(f"pivot.yaml nije pronađen: {PIVOT_PATH}")
         sys.exit(1)
-    with open(PIVOT_REGISTRY_PATH, "r") as f:
+    with open(PIVOT_PATH, "r") as f:
         return yaml.safe_load(f) or {}
-
-def get_pivot_test(test_id):
-    registry = load_pivot_registry()
-    if test_id not in registry:
-        logger.error(f"Test {test_id} nije pronađen u pivot_registry.yaml!")
-        sys.exit(1)
-    return registry[test_id]
 
 # ── DB ───────────────────────────────────────────────────────────────────────
 
@@ -234,16 +227,17 @@ def score_batch(originals, translations, embedder):
 
 def main():
     parser = argparse.ArgumentParser(description="Buchenberg pivot init")
-    parser.add_argument("--test_id",   required=True)
     parser.add_argument("--sent_from", type=int, default=None)
     parser.add_argument("--sent_to",   type=int, default=None)
     args = parser.parse_args()
 
-    log_file = os.path.join(LOG_DIR, f"{args.test_id}_init.log")
-    logger.add(log_file, rotation="10 MB", encoding="utf-8", enqueue=True)
-    logger.info(f"=== {args.test_id} PIVOT INIT START ===")
+    params   = load_pivot()
+    test_id  = params["test_id"]
 
-    params       = get_pivot_test(args.test_id)
+    log_file = os.path.join(LOG_DIR, f"{test_id}_init.log")
+    logger.add(log_file, rotation="10 MB", encoding="utf-8", enqueue=True)
+    logger.info(f"=== {test_id} PIVOT INIT START ===")
+
     book         = params["book"]
     sent_from    = args.sent_from or params["sent_from"]
     sent_to      = args.sent_to   or params["sent_to"]
@@ -295,7 +289,7 @@ def main():
                         scores = score_batch(batch_txts, translations, embedder)
 
                         for sid, translation, sc in zip(batch_sids, translations, scores):
-                            changed = upsert_pivot(conn, args.test_id, sid, lang,
+                            changed = upsert_pivot(conn, test_id, sid, lang,
                                                    model, db_temp, translation, sc)
                             done += 1
                             status = "✓" if changed else "-"
@@ -307,8 +301,8 @@ def main():
                                      f"s{batch_sids[0]}-s{batch_sids[-1]}: {e}")
 
     conn.close()
-    logger.info(f"=== {args.test_id} PIVOT INIT DONE — {done}/{total} ===")
-    print(f"\n✓ {args.test_id} pivot init završen: {done}/{total}")
+    logger.info(f"=== {test_id} PIVOT INIT DONE — {done}/{total} ===")
+    print(f"\n✓ {test_id} pivot init završen: {done}/{total}")
 
 if __name__ == "__main__":
     main()
