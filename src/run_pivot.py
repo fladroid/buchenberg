@@ -249,6 +249,41 @@ def score_batch(originals, translations, embedder):
     return [float(cosine_similarity([o], [t])[0][0])
             for o, t in zip(enc_orig, enc_trans)]
 
+
+# ── Pivot selekcija ───────────────────────────────────────────────────────────
+
+def find_pivot(state_sid, embedder):
+    """
+    Nova pivot strategija — međusobni cosinus između jezika.
+
+    Za svaki jezik l:
+        avg_score[l] = prosjek cosine(embed(tekst_l), embed(tekst_k))
+                       za sve k != l
+
+    pivot_lang = argmax(avg_score)
+    pivot_text = tekst pivot_langa (jedini kandidat per jezik)
+
+    Fallback: ako postoji samo jedan jezik, vraća ga direktno.
+    """
+    langs = list(state_sid.keys())
+    if len(langs) < 2:
+        lang = langs[0]
+        return lang, state_sid[lang][1]
+
+    texts  = [state_sid[l][1] for l in langs]
+    embeds = embedder.encode(texts)
+
+    avg_scores = {}
+    for i, l in enumerate(langs):
+        others = [j for j in range(len(langs)) if j != i]
+        sims   = [float(cosine_similarity([embeds[i]], [embeds[j]])[0][0])
+                  for j in others]
+        avg_scores[l] = sum(sims) / len(sims)
+
+    pivot_lang = max(avg_scores, key=lambda l: avg_scores[l])
+    pivot_text = state_sid[pivot_lang][1]
+    return pivot_lang, pivot_text
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -298,7 +333,7 @@ def main():
 
         pivot_groups = defaultdict(list)
         for sid in eligible:
-            pivot_lang = max(state[sid], key=lambda l: state[sid][l][0])
+            pivot_lang, _ = find_pivot(state[sid], embedder)
             pivot_groups[pivot_lang].append(sid)
 
         logger.info(f"Pivot grupe: { {k: len(v) for k, v in pivot_groups.items()} }")
@@ -317,7 +352,8 @@ def main():
 
                         for batch_start in range(0, len(group_sids), BATCH_SIZE):
                             b_sids  = group_sids[batch_start:batch_start + BATCH_SIZE]
-                            b_pivot = [state[sid][pivot_lang][1] for sid in b_sids]
+                            b_pivot = [find_pivot(state[sid], embedder)[1]
+                                       for sid in b_sids]
                             b_en    = [sent_map[sid] for sid in b_sids]
 
                             try:
