@@ -1,8 +1,8 @@
-test_id: pivot_009
+test_id: pivot_012
 book: hound_of_the_baskervilles
 sent_from: 1
-sent_to: 80
-langs: [de]
-models: [gemma3:12b, ministral-3:14b, gemma4:31b]
+sent_to: 40
+langs: [sr, hr, sl]
+models: [nllb_t05]
 temperatures: [0.3]
 max_iterations: 10

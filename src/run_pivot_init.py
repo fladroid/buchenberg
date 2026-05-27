@@ -32,7 +32,7 @@ PIVOT_PATH = os.path.join(os.getenv("BUCH_HOME", "."), "tests", "pivot.yaml")
 LOG_DIR    = os.getenv("BUCH_LOG", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-NLLB_MODEL  = "facebook/nllb-200-distilled-600M"
+NLLB_MODEL  = "facebook/nllb-200-distilled-1.3B"
 EMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 OLLAMA_URL  = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_KEY  = os.getenv("OLLAMA_API_KEY", "")
