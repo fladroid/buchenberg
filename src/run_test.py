@@ -42,6 +42,7 @@ import yaml
 from dotenv import load_dotenv
 from loguru import logger
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import anthropic
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -59,9 +60,11 @@ OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 MINISTRAL_MODEL  = os.getenv("MINISTRAL_MODEL", "ministral-3:14b")
 OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
+CLAUDE_MODEL  = "claude-sonnet-4-6"
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # Validne metode — jedini izvor istine
-VALID_METHODS = {"nllb", "nllb_t05", "gemma", "gemma_t05", "ministral", "ministral_t05"}
+VALID_METHODS = {"nllb", "nllb_t05", "gemma", "gemma_t05", "ministral", "ministral_t05", "claude", "claude_t05"}
 
 # NLLB jezik kodovi (ISO 639-1 → NLLB BCP-47 / FLORES-200)
 LANG_MAP = {
@@ -536,6 +539,104 @@ def update_winners(conn, test_id):
 
 # ── Method dispatch ───────────────────────────────────────────────────────────
 
+
+
+def translate_claude_batch(texts, tgt_lang_code, temperature=0.5):
+    """
+    Batch prevod koristeći Claude Sonnet 4.6 via Anthropic API.
+    Prima listu tekstova, vraća listu prevoda istog reda.
+    Jedan API poziv za cijeli batch.
+    """
+    lang_name = LANG_NAMES.get(tgt_lang_code, tgt_lang_code)
+    n = len(texts)
+    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    prompt = (
+        f"Translate these {n} sentences to {lang_name}.\n"
+        f"You MUST return exactly {n} translations separated by __!!__ — one per input sentence.\n"
+        f"Even if a sentence is very short (one word, a title, a name) — it still gets its own translation.\n"
+        f"Do not merge sentences. Do not add numbering, markdown, or explanations.\n"
+        f"Example format: First translation__!!__Second translation__!!__Third translation\n\n"
+        f"{numbered}"
+    )
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    msg = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=2048,
+        temperature=temperature,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    raw = msg.content[0].text.strip()
+    result = parse_separator_response(raw, n, context=f"claude_batch→{tgt_lang_code}")
+    if result:
+        return result
+    logger.warning(f"Claude batch translate→{tgt_lang_code}: fallback na single ({n} rečenica)")
+    return [translate_claude(t, tgt_lang_code, temperature) for t in texts]
+
+
+def back_translate_claude_batch(texts, src_lang_code, temperature=0.5):
+    """
+    Batch back-translation koristeći Claude Sonnet 4.6 via Anthropic API.
+    Prima listu tekstova na src_lang_code, vraća listu engleskih prevoda.
+    """
+    lang_name = LANG_NAMES_BACK.get(src_lang_code, src_lang_code)
+    n = len(texts)
+    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    prompt = (
+        f"Translate these {n} {lang_name} sentences to English.\n"
+        f"You MUST return exactly {n} translations separated by __!!__ — one per input sentence.\n"
+        f"Do not merge sentences. Do not add numbering, markdown, or explanations.\n"
+        f"Example format: First translation__!!__Second translation__!!__Third translation\n\n"
+        f"{numbered}"
+    )
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    msg = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=2048,
+        temperature=temperature,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    raw = msg.content[0].text.strip()
+    result = parse_separator_response(raw, n, context=f"claude_back_batch→{src_lang_code}")
+    if result:
+        return result
+    logger.warning(f"Claude back-batch→{src_lang_code}: fallback na single ({n} rečenica)")
+    return [back_translate_claude(t, src_lang_code, temperature) for t in texts]
+
+def translate_claude(text, tgt_lang_code, temperature=0.5):
+    """Prevod koristeći Claude Sonnet 4.6 via Anthropic API."""
+    lang_name = LANG_NAMES.get(tgt_lang_code, tgt_lang_code)
+    prompt = (
+        f"Translate the following English text to {lang_name}. "
+        f"Return only the translation, no explanation.\n\n"
+        f"Text: {text}"
+    )
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    msg = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=512,
+        temperature=temperature,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return msg.content[0].text.strip()
+
+
+def back_translate_claude(translated_text, src_lang_code, temperature=0.5):
+    """Back-translation koristeći Claude Sonnet 4.6 via Anthropic API."""
+    lang_name = LANG_NAMES_BACK.get(src_lang_code, src_lang_code)
+    prompt = (
+        f"Translate the following {lang_name} text to English. "
+        f"Return only the translation, no explanation.\n\n"
+        f"Text: {translated_text}"
+    )
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    msg = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=512,
+        temperature=temperature,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return msg.content[0].text.strip()
+
 def dispatch_translate(method, text, lang, nllb_lang, nllb_tok, nllb_mod):
     """Prevod EN → lang za datu metodu. Vraća translated string."""
     if method == "nllb":
@@ -552,6 +653,10 @@ def dispatch_translate(method, text, lang, nllb_lang, nllb_tok, nllb_mod):
         return translate_gemma(text, lang, temperature=None, model=MINISTRAL_MODEL)
     elif method == "ministral_t05":
         return translate_gemma(text, lang, temperature=0.5, model=MINISTRAL_MODEL)
+    elif method == "claude":
+        return translate_claude(text, lang, temperature=1.0)
+    elif method == "claude_t05":
+        return translate_claude(text, lang, temperature=0.5)
     else:
         raise ValueError(f"Nepoznata metoda: {method}")
 
@@ -568,6 +673,10 @@ def dispatch_back_translate(method, translated, lang, nllb_lang, nllb_tok, nllb_
     elif method in ("ministral", "ministral_t05"):
         temp = None if method == "ministral" else 0.5
         return back_translate_gemma(translated, lang, temperature=temp, model=MINISTRAL_MODEL)
+    elif method == "claude":
+        return back_translate_claude(translated, lang, temperature=1.0)
+    elif method == "claude_t05":
+        return back_translate_claude(translated, lang, temperature=0.5)
     else:
         raise ValueError(f"Nepoznata metoda: {method}")
 
@@ -677,6 +786,9 @@ def main():
                         temp = 0.5 if method == "ministral_t05" else None
                         translateds = translate_gemma_batch(texts, lang, temperature=temp,
                                                             model=MINISTRAL_MODEL)
+                    elif method in ("claude", "claude_t05"):
+                        temp = 0.5
+                        translateds = translate_claude_batch(texts, lang, temperature=temp)
 
                     # Batch back-translation lang → EN
                     if method in ("nllb", "nllb_t05"):
@@ -693,6 +805,9 @@ def main():
                         temp = 0.5 if method == "ministral_t05" else None
                         backs = back_translate_gemma_batch(translateds, lang, temperature=temp,
                                                            model=MINISTRAL_MODEL)
+                    elif method in ("claude", "claude_t05"):
+                        temp = 0.5
+                        backs = back_translate_claude_batch(translateds, lang, temperature=temp)
 
                     # Score i insert
                     for i, (sid, text) in enumerate(zip(sids, texts)):

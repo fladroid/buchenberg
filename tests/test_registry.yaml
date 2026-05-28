@@ -279,3 +279,17 @@ test_018:
   - ministral_t05
   - nllb
   - nllb_t05
+
+test_claude_002:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [fr, it, pt]
+  methods: [claude_t05]
+
+test_claude_003:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [fr]
+  methods: [claude_t05]
