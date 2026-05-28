@@ -85,15 +85,22 @@ Prevod knjiga sa isteklom licencom sa **Project Gutenberg** na više jezika, kor
 | `gemma_t05` | Gemma 3 12b cloud | temperature=0.5 | Konzervativniji od default |
 | `ministral` | Ministral 3 14b cloud | default temperatura | Jak na evropskim jezicima |
 | `ministral_t05` | Ministral 3 14b cloud | temperature=0.5 | Konzervativniji od default |
+| `gemma4` | Gemma 4 31b cloud | default temperatura | Veliki model, sporiji |
+| `gemma4_t05` | Gemma 4 31b cloud | temperature=0.5 | Konzervativniji od default |
+| `claude` | Claude Sonnet 4.6 | temperature=1.0 | Anthropic API, književni stil |
+| `claude_t05` | Claude Sonnet 4.6 | temperature=0.5 | Konzervativniji, preporučeni |
+| `claude_literal` | Claude Sonnet 4.6 | temperature=1.0 | Doslovan prevod, čuva strukturu |
+| `claude_literal_t05` | Claude Sonnet 4.6 | temperature=0.5 | Doslovan + konzervativniji |
 
 **Standard:** svaki jezik u svakom testu uvijek ima sve 6 metoda (gemma, gemma_t05, ministral, ministral_t05, nllb, nllb_t05).
 
 ### Kako dodati novu metodu
 
-Samo 3 mjesta u `run_test.py`:
+Samo 4 mjesta u `run_test.py`:
 1. `VALID_METHODS` — dodati string
 2. `dispatch_translate()` — dodati `elif`
 3. `dispatch_back_translate()` — dodati `elif`
+4. Batch blokovi u `main()` — dodati `elif` za translate i back_translate batch
 
 Baza ne treba migraciju — `method` je `VARCHAR(20)`. Napomena: proširen sa VARCHAR(10) na VARCHAR(20) zbog `ministral_t05` (13 znakova).
 
@@ -231,10 +238,14 @@ bash run30.sh --test_id test_018 --sent_from 1 --sent_to 40 --lang it --max_gen 
 
 ### Embeddings
 
-| Model | Dim | Jezici | Brzina | Napomena |
-|-------|-----|--------|--------|---------|
-| `paraphrase-multilingual-MiniLM-L12-v2` | 384 | 50+ | **41 rec/sec** | **Trenutni — optimalan balans** |
-| `LaBSE` | 768 | 109 | 12 rec/sec | Testiran, sporiji |
+| Model | Dim | Jezici | Brzina | `--embedder` | Napomena |
+|-------|-----|--------|--------|-------------|---------|
+| `paraphrase-multilingual-MiniLM-L12-v2` | 384 | 50+ | **41 rec/sec** | `minilm` (default) | Brz, pristran prema doslovnosti |
+| `intfloat/multilingual-e5-large` | 1024 | 100+ | ~15 rec/sec | `e5` | **Preporučeni** — zlatna sredina |
+| `cointegrated/SONAR_200_text_encoder` | 1024 | 202 | ~8 rec/sec | `sonar` | Pravi cross-lingual, strog |
+| `LaBSE` | 768 | 109 | 12 rec/sec | — | Testiran, nije u upotrebi |
+
+**Izbor embeddera:** `--embedder e5` preporučeno za produkciju. MiniLM favorizuje doslovne prevode (NLLB), SONAR je previše strog za zeleno/žuto/crveno sistem s trenutnim thresholdima.
 
 ### NLP
 - **spaCy** + `en_core_web_sm` — sentence splitting i NER
@@ -435,6 +446,8 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 | Faza 3 (crvene, NLLB, 1 jezik) | ~40 sec |
 | GA (1 rečenica) | ~1.5 min |
 | MiniLM encoding | 41 rec/sec |
+| e5-large encoding | ~15 rec/sec |
+| SONAR encoding | ~8 rec/sec |
 
 ---
 
@@ -463,11 +476,11 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 11. ~~**Uklonjen clear_test poziv**~~ ✅ — faze se mogu bezbijedno ponavljati
 12. **GA pobjednici kao `method = 'ga'`** — upisati u test_results
 13. **GA tuning drugi krug** — crossover_rate, max_children, varijabilni potomci
-14. **multilingual-e5-large** — testirati kao alternativu MiniLM
+14. ~~**multilingual-e5-large**~~ ✅ — testiran, preporučen kao produkcijski embedder (`--embedder e5`)
 15. **Novi jezici** — bs, sl, mk, af, es, ro
 16. **Pipeline orchestrator** — spaja sve zajedno
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
-*Flavio & Claude · Buchenberg · V2 · 22. maj 2026.*
+*Flavio & Claude · Buchenberg · V2 · 28. maj 2026.*

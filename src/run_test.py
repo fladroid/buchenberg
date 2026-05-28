@@ -41,7 +41,9 @@ import psycopg2
 import yaml
 from dotenv import load_dotenv
 from loguru import logger
+import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers.models.m2m_100.modeling_m2m_100 import M2M100Encoder
 import anthropic
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -55,16 +57,19 @@ LOG_DIR       = os.getenv("BUCH_LOG", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 NLLB_MODEL   = "facebook/nllb-200-distilled-600M"
-EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBED_MODEL     = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBED_MODEL_E5   = "intfloat/multilingual-e5-large"
+EMBED_MODEL_SONAR = "cointegrated/SONAR_200_text_encoder"
 OLLAMA_URL   = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_MODEL     = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 MINISTRAL_MODEL  = os.getenv("MINISTRAL_MODEL", "ministral-3:14b")
+GEMMA4_MODEL     = os.getenv("GEMMA4_MODEL", "gemma4:31b")
 OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
 CLAUDE_MODEL  = "claude-sonnet-4-6"
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # Validne metode — jedini izvor istine
-VALID_METHODS = {"nllb", "nllb_t05", "gemma", "gemma_t05", "ministral", "ministral_t05", "claude", "claude_t05"}
+VALID_METHODS = {"nllb", "nllb_t05", "gemma", "gemma_t05", "ministral", "ministral_t05", "claude", "claude_t05", "gemma4", "gemma4_t05", "claude_literal", "claude_literal_t05"}
 
 # NLLB jezik kodovi (ISO 639-1 → NLLB BCP-47 / FLORES-200)
 LANG_MAP = {
@@ -469,12 +474,39 @@ def back_translate_gemma_batch(texts, src_lang_code, temperature=None, model=Non
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
-def load_embedder():
-    logger.info(f"Učitavanje embedding modela: {EMBED_MODEL}")
-    return SentenceTransformer(EMBED_MODEL, local_files_only=True)
+def load_embedder(model_name=None):
+    m = model_name or EMBED_MODEL
+    logger.info(f"Učitavanje embedding modela: {m}")
+    if m == EMBED_MODEL_SONAR:
+        tokenizer = AutoTokenizer.from_pretrained(m, local_files_only=True)
+        encoder   = M2M100Encoder.from_pretrained(m, local_files_only=True)
+        return ("sonar", tokenizer, encoder)
+    return SentenceTransformer(m, local_files_only=True)
 
 
-def compute_score(original, back_translation, embedder):
+def _sonar_encode(texts, embedder_tuple, lang="eng_Latn"):
+    _, tokenizer, encoder = embedder_tuple
+    tokenizer.src_lang = lang
+    tok = tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    with torch.no_grad():
+        out = encoder(**tok)
+    emb = out.last_hidden_state.mean(dim=1)
+    return torch.nn.functional.normalize(emb, dim=-1).numpy()
+
+# NLLB lang code → SONAR/FLORES-200 lang code
+SONAR_LANG = {
+    "hr": "hrv_Latn", "sr": "srp_Cyrl", "bs": "bos_Latn", "sl": "slv_Latn",
+    "mk": "mkd_Cyrl", "bg": "bul_Cyrl", "de": "deu_Latn", "nl": "nld_Latn",
+    "af": "afr_Latn", "fr": "fra_Latn", "it": "ita_Latn", "es": "spa_Latn",
+    "pt": "por_Latn", "ro": "ron_Latn",
+}
+
+def compute_score(original, back_translation, embedder, tgt_lang=None):
+    if isinstance(embedder, tuple) and embedder[0] == "sonar":
+        en_vec  = _sonar_encode([original], embedder, "eng_Latn")
+        tgt_code = SONAR_LANG.get(tgt_lang, "eng_Latn")
+        bt_vec  = _sonar_encode([back_translation], embedder, tgt_code)
+        return float(cosine_similarity(en_vec, bt_vec)[0][0])
     vecs = embedder.encode([original, back_translation])
     return float(cosine_similarity([vecs[0]], [vecs[1]])[0][0])
 
@@ -620,6 +652,56 @@ def translate_claude(text, tgt_lang_code, temperature=0.5):
     return msg.content[0].text.strip()
 
 
+def translate_claude_literal(text, tgt_lang_code, temperature=0.5):
+    """Doslovni prevod koristeći Claude — čuva strukturu rečenice."""
+    lang_name = LANG_NAMES.get(tgt_lang_code, tgt_lang_code)
+    prompt = (
+        f"Translate the following English text to {lang_name}.\n"
+        f"Preserve the sentence structure and word order as closely as possible.\n"
+        f"Translate literally — do not paraphrase, do not improve, do not simplify.\n"
+        f"Return only the translation, no explanation.\n\n"
+        f"Text: {text}"
+    )
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    msg = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=512,
+        temperature=temperature,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return msg.content[0].text.strip()
+
+
+def translate_claude_literal_batch(texts, tgt_lang_code, temperature=0.5):
+    """Batch doslovni prevod koristeći Claude."""
+    lang_name = LANG_NAMES.get(tgt_lang_code, tgt_lang_code)
+    n = len(texts)
+    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    prompt = (
+        f"Translate these {n} sentences to {lang_name}.\n"
+        f"Preserve the sentence structure and word order as closely as possible.\n"
+        f"Translate literally — do not paraphrase, do not improve, do not simplify.\n"
+        f"You MUST return exactly {n} translations separated by __!!__ — one per input sentence.\n"
+        f"Even if a sentence is very short (one word, a title, a name) — it still gets its own translation.\n"
+        f"Do not merge sentences. Do not add numbering, markdown, or explanations.\n"
+        f"Example format: First translation__!!__Second translation__!!__Third translation\n\n"
+        f"{numbered}"
+    )
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    msg = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=2048,
+        temperature=temperature,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    raw = msg.content[0].text.strip()
+    result = parse_separator_response(raw, n, context=f"claude_literal_batch→{tgt_lang_code}")
+    if result:
+        return result
+    logger.warning(f"Claude literal batch→{tgt_lang_code}: fallback na single ({n} rečenica)")
+    return [translate_claude_literal(t, tgt_lang_code, temperature) for t in texts]
+
+
 def back_translate_claude(translated_text, src_lang_code, temperature=0.5):
     """Back-translation koristeći Claude Sonnet 4.6 via Anthropic API."""
     lang_name = LANG_NAMES_BACK.get(src_lang_code, src_lang_code)
@@ -653,10 +735,18 @@ def dispatch_translate(method, text, lang, nllb_lang, nllb_tok, nllb_mod):
         return translate_gemma(text, lang, temperature=None, model=MINISTRAL_MODEL)
     elif method == "ministral_t05":
         return translate_gemma(text, lang, temperature=0.5, model=MINISTRAL_MODEL)
+    elif method == "gemma4":
+        return translate_gemma(text, lang, temperature=None, model=GEMMA4_MODEL)
+    elif method == "gemma4_t05":
+        return translate_gemma(text, lang, temperature=0.5, model=GEMMA4_MODEL)
     elif method == "claude":
         return translate_claude(text, lang, temperature=1.0)
     elif method == "claude_t05":
         return translate_claude(text, lang, temperature=0.5)
+    elif method == "claude_literal":
+        return translate_claude_literal(text, lang, temperature=1.0)
+    elif method == "claude_literal_t05":
+        return translate_claude_literal(text, lang, temperature=0.5)
     else:
         raise ValueError(f"Nepoznata metoda: {method}")
 
@@ -673,6 +763,9 @@ def dispatch_back_translate(method, translated, lang, nllb_lang, nllb_tok, nllb_
     elif method in ("ministral", "ministral_t05"):
         temp = None if method == "ministral" else 0.5
         return back_translate_gemma(translated, lang, temperature=temp, model=MINISTRAL_MODEL)
+    elif method in ("gemma4", "gemma4_t05"):
+        temp = None if method == "gemma4" else 0.5
+        return back_translate_gemma(translated, lang, temperature=temp, model=GEMMA4_MODEL)
     elif method == "claude":
         return back_translate_claude(translated, lang, temperature=1.0)
     elif method == "claude_t05":
@@ -695,6 +788,8 @@ def main():
                         help="Maksimalni MAX translation_score (default: 1.0)")
     parser.add_argument("--langs",      nargs="+", default=None)
     parser.add_argument("--methods",    nargs="+", default=None)
+    parser.add_argument("--embedder",   choices=["minilm", "e5", "sonar"], default="minilm",
+                        help="Embedder za scoring: minilm (default) ili e5")
     parser.add_argument("--batch_size", type=int, default=20,
                         help="Broj rečenica po batchu (default: 20)")
     args = parser.parse_args()
@@ -736,7 +831,13 @@ def main():
                 f"langs={langs}, methods={methods}")
 
     # Učitaj alate
-    embedder = load_embedder()
+    if args.embedder == "e5":
+        embed_model = EMBED_MODEL_E5
+    elif args.embedder == "sonar":
+        embed_model = EMBED_MODEL_SONAR
+    else:
+        embed_model = EMBED_MODEL
+    embedder = load_embedder(embed_model)
 
     # NLLB — učitaj jednom, koriste ga i nllb i nllb_t05
     nllb_tok, nllb_mod = (None, None)
@@ -786,7 +887,11 @@ def main():
                         temp = 0.5 if method == "ministral_t05" else None
                         translateds = translate_gemma_batch(texts, lang, temperature=temp,
                                                             model=MINISTRAL_MODEL)
-                    elif method in ("claude", "claude_t05"):
+                    elif method in ("gemma4", "gemma4_t05"):
+                        temp = 0.5 if method == "gemma4_t05" else None
+                        translateds = translate_gemma_batch(texts, lang, temperature=temp,
+                                                            model=GEMMA4_MODEL)
+                    elif method in ("claude", "claude_t05", "claude_literal", "claude_literal_t05"):
                         temp = 0.5
                         translateds = translate_claude_batch(texts, lang, temperature=temp)
 
@@ -805,7 +910,11 @@ def main():
                         temp = 0.5 if method == "ministral_t05" else None
                         backs = back_translate_gemma_batch(translateds, lang, temperature=temp,
                                                            model=MINISTRAL_MODEL)
-                    elif method in ("claude", "claude_t05"):
+                    elif method in ("gemma4", "gemma4_t05"):
+                        temp = 0.5 if method == "gemma4_t05" else None
+                        backs = back_translate_gemma_batch(translateds, lang, temperature=temp,
+                                                           model=GEMMA4_MODEL)
+                    elif method in ("claude", "claude_t05", "claude_literal", "claude_literal_t05"):
                         temp = 0.5
                         backs = back_translate_claude_batch(translateds, lang, temperature=temp)
 
@@ -813,8 +922,8 @@ def main():
                     for i, (sid, text) in enumerate(zip(sids, texts)):
                         translated = translateds[i]
                         back       = backs[i]
-                        sc    = compute_score(text, back, embedder)
-                        tr_sc = compute_score(text, translated, embedder)
+                        sc    = compute_score(text, back, embedder, tgt_lang=lang)
+                        tr_sc = compute_score(text, translated, embedder, tgt_lang=lang)
                         insert_result(conn, args.test_id, sid, lang,
                                       method, translated, back, sc, tr_sc)
                         done += 1
@@ -830,8 +939,8 @@ def main():
                                 method, text, lang, nllb_lang, nllb_tok, nllb_mod)
                             back = dispatch_back_translate(
                                 method, translated, lang, nllb_lang, nllb_tok, nllb_mod)
-                            sc    = compute_score(text, back, embedder)
-                            tr_sc = compute_score(text, translated, embedder)
+                            sc    = compute_score(text, back, embedder, tgt_lang=lang)
+                            tr_sc = compute_score(text, translated, embedder, tgt_lang=lang)
                             insert_result(conn, args.test_id, sid, lang,
                                           method, translated, back, sc, tr_sc)
                             done += 1

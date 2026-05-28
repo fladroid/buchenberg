@@ -293,3 +293,94 @@ test_claude_003:
   sent_to: 40
   langs: [fr]
   methods: [claude_t05]
+
+test_claude_004:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [claude_t05]
+
+test_ministral_001:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [ministral_t05]
+
+test_gemma_001:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [gemma_t05]
+
+test_gemma4_001:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [gemma4_t05]
+
+test_claude_005:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [claude_literal_t05]
+
+test_e5_nllb:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [nllb_t05]
+
+test_e5_claude:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [claude_t05]
+
+test_e5_ministral:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [ministral_t05]
+
+test_e5_gemma4:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [gemma4_t05]
+
+test_sonar_nllb:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [nllb_t05]
+
+test_sonar_claude:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [claude_t05]
+
+test_sonar_ministral:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [ministral_t05]
+
+test_sonar_gemma4:
+  book: hound_of_the_baskervilles
+  sent_from: 1
+  sent_to: 40
+  langs: [it]
+  methods: [gemma4_t05]
