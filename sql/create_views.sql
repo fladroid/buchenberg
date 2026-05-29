@@ -26,3 +26,21 @@ SELECT DISTINCT ON (sentence_id)
     embedder, cosine_score
 FROM translation_scores
 ORDER BY sentence_id, cosine_score DESC;
+
+-- VIEW: color_summary
+-- Broj zelenih/žutih/crvenih po jeziku i embedderu (best score per sentence)
+CREATE VIEW color_summary AS
+WITH best_per_sentence AS (
+    SELECT target_lang, embedder, sentence_id,
+           MAX(cosine_score) AS best_score
+    FROM translation_scores
+    GROUP BY target_lang, embedder, sentence_id
+)
+SELECT target_lang, embedder,
+       COUNT(*) FILTER (WHERE best_score >= 0.90)                       AS zelene,
+       COUNT(*) FILTER (WHERE best_score >= 0.80 AND best_score < 0.90) AS zute,
+       COUNT(*) FILTER (WHERE best_score <  0.80)                       AS crvene,
+       COUNT(*)                                                         AS ukupno
+FROM best_per_sentence
+GROUP BY target_lang, embedder
+ORDER BY embedder, target_lang;
