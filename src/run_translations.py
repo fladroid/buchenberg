@@ -3,6 +3,7 @@
 run_translations.py — Punjenje tabele translations
 Prevodi rečenice s više modela i temperatura, upisuje u bazu.
 ON CONFLICT DO NOTHING — sigurno ponavljanje.
+Fallback na single mode ako batch parsiranje ne uspije.
 
 Upotreba:
     venv/bin/python src/run_translations.py \
@@ -74,10 +75,9 @@ def fetch_sentences(sent_from, sent_to):
     )
     rows = cur.fetchall()
     conn.close()
-    return rows  # [(id, text, book_id), ...]
+    return rows
 
 def insert_batch(conn, rows):
-    """rows = [(sentence_id, book_id, target_lang, model, temperature, translation), ...]"""
     cur = conn.cursor()
     cur.executemany("""
         INSERT INTO translations
@@ -115,7 +115,21 @@ def parse_sep(raw, n, context=""):
     return None
 
 
-# ── LLM batch prevod (jedan chunk) ───────────────────────
+# ── LLM single prevod (fallback) ─────────────────────────
+def translate_llm_single(model_str, text, lang_name, temperature):
+    prompt = (
+        f"Translate the following English sentence to {lang_name}.\n"
+        f"Return ONLY the translation, nothing else.\n\n"
+        f"{text}"
+    )
+    try:
+        return ollama_call(model_str, prompt, temperature).strip()
+    except Exception as e:
+        logger.error(f"  single greška: {e}")
+        return None
+
+
+# ── LLM batch prevod s fallback ──────────────────────────
 def translate_llm_chunk(model_str, chunk, lang_name, temperature, context=""):
     n = len(chunk)
     numbered = "\n".join(f"{i+1}. {text}" for i, (_, text, _) in enumerate(chunk))
@@ -127,7 +141,18 @@ def translate_llm_chunk(model_str, chunk, lang_name, temperature, context=""):
         f"{numbered}"
     )
     raw = ollama_call(model_str, prompt, temperature)
-    return parse_sep(raw, n, context=context)
+    parts = parse_sep(raw, n, context=context)
+
+    if parts is not None:
+        return parts
+
+    # Fallback na single
+    logger.warning(f"  [{context}] batch pao — fallback na single ({n} rečenica)...")
+    results = []
+    for _, text, _ in chunk:
+        translation = translate_llm_single(model_str, text, lang_name, temperature)
+        results.append(translation or "")
+    return results
 
 
 # ── NLLB batch prevod ────────────────────────────────────
@@ -193,7 +218,6 @@ def main():
     sentences = fetch_sentences(args.sent_from, args.sent_to)
     logger.info(f"Učitano {len(sentences)} rečenica.\n")
 
-    # Chunking
     chunks = [
         sentences[i:i + args.batch_size]
         for i in range(0, len(sentences), args.batch_size)
@@ -221,10 +245,6 @@ def main():
                         continue
                     parts = translate_llm_chunk(model_str, chunk, lang_name, temp, context)
                     model_label = model_str
-
-                if parts is None:
-                    logger.error(f"  Chunk {ci+1} nije uspio, preskačem.")
-                    continue
 
                 rows = [
                     (sid, book_id, args.lang, model_label, temp, parts[i])
