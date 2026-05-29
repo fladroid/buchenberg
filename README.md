@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V2
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 22. maj 2026. (sesija 15)  
+**Poslednje ažuriranje:** 29. maj 2026. (sesija 29)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
@@ -178,6 +178,13 @@ NLLB batch: `tokenizer(texts, padding=True)` → `batch_decode`
 
 **Ubrzanje vs single mode: ~6x**
 
+> ⚠️ **Batch fallback pattern (obavezno):** Svaka skripta s batch API pozivima mora imati fallback na single mode. Uzrok većine padova: rečenice s1–s3 su metadata (naslov, autor, poglavlje) — modeli ih spajaju i vraćaju 19/20 separatora. Pattern iz `run_test.py` i `run_translations.py`:
+> ```python
+> parts = translate_batch(...)
+> if parts is None:
+>     parts = [translate_single(text) for text in chunk]
+> ```
+
 ### Grupiranje rečenica
 
 - 🟢 **Zelene** (translation_score ≥ 0.90) — preskačemo GA
@@ -313,6 +320,29 @@ CREATE TABLE ga_results (
 
 ---
 
+### `translations` (centralna tabela prevoda)
+
+```sql
+CREATE TABLE translations (
+    id            SERIAL PRIMARY KEY,
+    sentence_id   INTEGER REFERENCES sentences(id),
+    book_id       INTEGER REFERENCES books(id),
+    target_lang   CHAR(2)      NOT NULL,
+    model         VARCHAR(30)  NOT NULL,
+    temperature   REAL         NOT NULL,
+    translation   TEXT,
+    created_at    TIMESTAMP DEFAULT NOW(),
+    UNIQUE (sentence_id, target_lang, model, temperature)
+);
+```
+
+**Trenutni sadržaj:** 4480 redova — 14 jezika × 4 modela × 2 temperature × 40 rečenica.  
+**Modeli:** `gemma3:12b`, `ministral-3:14b`, `gemma4:31b`, `nllb-600M`  
+**Temperature:** 0.1 (deterministički) i 0.5 (stohastički)  
+**Namjena:** Jednom prevesti, slobodno evaluirati — bez stalnog pozivanja Ollame.
+
+---
+
 ## 8. Skripte
 
 ### Run skripte
@@ -336,6 +366,7 @@ CREATE TABLE ga_results (
 | `step6_create_test_table.py` | Kreira `test_results` tabelu |
 | `step7_create_ga_table.py` | Kreira `ga_results` tabelu |
 | `run_test.py` | Glavni test runner (batch, scoring) |
+| `run_translations.py` | Punjenje tabele `translations` — batch prevod s fallback na single |
 | `run_ga.py` | GA runner |
 | `ga_snapshot.py` | Snapshot zelene/žute/crvene |
 | `count_colors.py` | Broji rečenice po boji za dati test |
@@ -446,6 +477,8 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 | Faza 3 (crvene, NLLB, 1 jezik) | ~40 sec |
 | GA (1 rečenica) | ~1.5 min |
 | MiniLM encoding | 41 rec/sec |
+| `run_translations.py` (40 rec, 4 modela, 2 temp, 1 jezik) | ~5 min |
+| `run_translations.py` (14 jezika serijski) | ~70 min |
 | e5-large encoding | ~15 rec/sec |
 | SONAR encoding | ~8 rec/sec |
 
@@ -479,6 +512,10 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 14. ~~**multilingual-e5-large**~~ ✅ — testiran, preporučen kao produkcijski embedder (`--embedder e5`)
 15. **Novi jezici** — bs, sl, mk, af, es, ro
 16. **Pipeline orchestrator** — spaja sve zajedno
+17. ~~**Tabela `translations`**~~ ✅ — 4480 prevoda, 14 jezika, potpuna
+18. **Evaluacija iz tabele `translations`** — metoda koja ne poziva Ollamu
+19. **DeepL integracija** — kao peta metoda prevoda u `translations`
+20. **Metadata rečenice fix** — s1-s3 tretirati posebno (naslov/autor/poglavlje)
 
 ---
 
