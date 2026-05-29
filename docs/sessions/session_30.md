@@ -135,3 +135,51 @@ s5 i s7 (rečenice o "the stick") imaju najniže scoreove — konzistentno s ran
 ---
 
 *Flavio & Claude · Session 30 · 2026-05-29*
+
+---
+
+## Addendum (session_30b–e)
+
+### run_embeddings.py — punjenje vektora
+
+Nova skripta za punjenje `sentence_embeddings` i `translation_embeddings`.
+MiniLM run (40 EN + 4480 prevoda) završen za 2:10 min. ON CONFLICT DO NOTHING.
+
+```bash
+venv/bin/python src/run_embeddings.py --embedder minilm --sent_from 1 --sent_to 40
+```
+
+### ALTER TABLE — fleksibilna dimenzija
+
+`vec vector(1024)` → `vec vector` (bez fiksne dim) — podržava i MiniLM (384) i e5/SONAR (1024).
+
+### VIEW: translation_scores
+
+Cosinus sličnost direktno iz pgvector — bez pozivanja modela:
+```sql
+1 - (se.vec <=> te.vec)  -- pgvector cosinus distance operator
+```
+
+### VIEW: best_translation
+
+Za svaku rečenicu — jedan red s globalnim best scoreom (svi jezici, svi modeli):
+```sql
+SELECT DISTINCT ON (sentence_id) ... ORDER BY sentence_id, cosine_score DESC
+```
+
+### sql/create_views.sql
+
+Novi direktorij `sql/` s reproducibilnom shemom VIEW-ova.
+
+### Stanje baze
+
+| Tabela | Redova |
+|--------|--------|
+| `sentence_embeddings` | 40 (MiniLM) |
+| `translation_embeddings` | 4480 (MiniLM) |
+
+### Na horizontu
+
+1. Popuniti e5-large vektore (`--embedder e5`) za usporedbu s MiniLM
+2. `sql/create_tables.sql` — kompletna shema baze za reproducibilnost
+3. Pipeline orchestrator — finalni prevod iz `best_translation`
