@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V2
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 29. maj 2026. (sesija 29)  
+**Poslednje ažuriranje:** 29. maj 2026. (sesija 31)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
@@ -248,7 +248,7 @@ bash run30.sh --test_id test_018 --sent_from 1 --sent_to 40 --lang it --max_gen 
 | Model | Dim | Jezici | Brzina | `--embedder` | Napomena |
 |-------|-----|--------|--------|-------------|---------|
 | `paraphrase-multilingual-MiniLM-L12-v2` | 384 | 50+ | **41 rec/sec** | `minilm` (default) | Brz, pristran prema doslovnosti |
-| `intfloat/multilingual-e5-large` | 1024 | 100+ | ~15 rec/sec | `e5` | **Preporučeni** — zlatna sredina |
+| `intfloat/multilingual-e5-large` | 1024 | 100+ | ~15 rec/sec | `e5` | **Produkcijski embedder.** Thresholdovi: 🟢≥0.93 🟡0.88-0.92 🔴<0.88. MiniLM je pristran prema doslovnosti — e5 daje realnu sliku. |
 | `cointegrated/SONAR_200_text_encoder` | 1024 | 202 | ~8 rec/sec | `sonar` | Pravi cross-lingual, strog |
 | `LaBSE` | 768 | 109 | 12 rec/sec | — | Testiran, nije u upotrebi |
 
@@ -372,6 +372,10 @@ CREATE TABLE translations (
 | `count_colors.py` | Broji rečenice po boji za dati test |
 | `health_check.py` | Infrastrukturna provjera svih komponenti |
 | `ram_monitor.sh` | Monitor RAM/swap tokom runa |
+| `run_embeddings.py` | Punjenje sentence_embeddings + translation_embeddings |
+| `run_pivot.py` | Cross-lingual hint pivot za poboljšanje prevoda (log only) |
+| `run_context.py` | Kontekstualni prevod — prozor 3 rečenice za žute/crvene (log only) |
+| `run_deepl.py` | DeepL prevod za crvene rečenice (log only) |
 
 ---
 
@@ -479,7 +483,7 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 | MiniLM encoding | 41 rec/sec |
 | `run_translations.py` (40 rec, 4 modela, 2 temp, 1 jezik) | ~5 min |
 | `run_translations.py` (14 jezika serijski) | ~70 min |
-| e5-large encoding | ~15 rec/sec |
+| e5-large encoding | ~15 rec/sec (4520 vektora = 12:34 min) |
 | SONAR encoding | ~8 rec/sec |
 
 ---
@@ -515,9 +519,15 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 17. ~~**Tabela `translations`**~~ ✅ — 4480 prevoda, 14 jezika, potpuna
 18. **Evaluacija iz tabele `translations`** — metoda koja ne poziva Ollamu
 19. **DeepL integracija** — kao peta metoda prevoda u `translations`
-20. **Metadata rečenice fix** — s1-s3 tretirati posebno (naslov/autor/poglavlje)
+20. ~~**Metadata rečenice fix**~~ — s1-s3 tretirati posebno (naslov/autor/poglavlje)
+21. ~~**e5-large vektori**~~ ✅ — 4520 vektora (40 EN + 4480 prevoda), 12:34 min
+22. **color_summary VIEW rekalibracija** — thresholdovi za e5: 🟢≥0.93, 🟡0.88-0.92, 🔴<0.88
+23. **Pipeline orchestrator** — finalni prijevod iz best_translation VIEW-a
+24. **COMET-QE** — neuralni QE model bez referentnog prijevoda
+25. **Referentni prijevod** — HR prijevod "Psa Baskervillevih" za gold-standard evaluaciju
+26. **Batch commits** u `run_embeddings.py` — otpornost na crash (commit svakih 500 redova)
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
-*Flavio & Claude · Buchenberg · V2 · 28. maj 2026.*
+*Flavio & Claude · Buchenberg · V2 · 29. maj 2026.*
