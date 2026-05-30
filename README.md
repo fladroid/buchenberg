@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V2
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 29. maj 2026. (sesija 31)  
+**Poslednje ažuriranje:** 30. maj 2026. (sesija 32)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
@@ -526,8 +526,14 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 24. **COMET-QE** — neuralni QE model bez referentnog prijevoda
 25. **Referentni prijevod** — HR prijevod "Psa Baskervillevih" za gold-standard evaluaciju
 26. **Batch commits** u `run_embeddings.py` — otpornost na crash (commit svakih 500 redova)
+27. ~~**umap-learn instaliran**~~ ✅ — u venv, UMAP redukcija 1024D→2D operativna
+28. **`src/export_umap.py`** — skripta za UMAP export (trenutno samo u artifaktu)
+29. **Book X-Ray skaliranje** — e5 vektori za cijeli Hound (3852 rečenica)
+30. **Višeknjižna vizualizacija** — Hound + Frankenstein + Poirot na istom UMAP platnu
+31. **Cellular automaton** — rečenice kao ćelije, semantička sličnost kao pravilo interakcije
+32. **HTTPS Book X-Ray** — web stranica koja servira vizualizaciju za svaku knjigu
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
-*Flavio & Claude · Buchenberg · V2 · 29. maj 2026.*
+*Flavio & Claude · Buchenberg · V2 · 30. maj 2026.*

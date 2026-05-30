@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-run_deepl.py — DeepL prevod za crvene HR rečenice.
-Prevodi EN original DeepL-om → HR, skoruje MiniLM-om, loguje usporedbu.
-Bez upisa u bazu — samo log.
+run_deepl.py — DeepL HR prevod svih 40 rečenica.
+Upisuje u translations (model='deepl', temperature=0.0).
+Loguje usporedbu s trenutnim e5 best scoreom.
 
 Upotreba:
-    venv/bin/python src/run_deepl.py > logs/deepl_hr_001.log 2>&1
+    venv/bin/python src/run_deepl.py > logs/deepl_hr_002.log 2>&1
 """
 
 import os
@@ -25,10 +25,9 @@ DB_NAME       = os.getenv("DB_NAME")
 DB_USER       = os.getenv("DB_USER")
 DB_PASSWORD   = os.getenv("DB_PASSWORD")
 
-MODEL_EMBED  = "paraphrase-multilingual-MiniLM-L12-v2"
-RED_THRESH   = 0.80
-SENT_FROM    = 1
-SENT_TO      = 40
+MODEL_EMBED = "intfloat/multilingual-e5-large"
+SENT_FROM   = 1
+SENT_TO     = 40
 
 
 def get_conn():
@@ -38,24 +37,34 @@ def get_conn():
     )
 
 
-def fetch_red_hr(conn):
+def fetch_sentences(conn):
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT DISTINCT ON (sentence_id)
-                sentence_id,
-                s.text         AS en_text,
-                ts.translation AS hr_text,
-                ts.cosine_score AS hr_score
-            FROM translation_scores ts
-            JOIN sentences s ON s.id = ts.sentence_id
-            WHERE ts.target_lang = 'hr'
-              AND ts.embedder    = 'minilm'
-              AND ts.sentence_id BETWEEN %s AND %s
-            ORDER BY sentence_id, cosine_score DESC
+            SELECT s.id, s.text, s.book_id,
+                   ts.cosine_score AS best_e5_score
+            FROM sentences s
+            LEFT JOIN (
+                SELECT DISTINCT ON (sentence_id)
+                    sentence_id, cosine_score
+                FROM translation_scores
+                WHERE target_lang = 'hr' AND embedder = 'e5'
+                ORDER BY sentence_id, cosine_score DESC
+            ) ts ON ts.sentence_id = s.id
+            WHERE s.id BETWEEN %s AND %s
+            ORDER BY s.id
         """, (SENT_FROM, SENT_TO))
-        rows = cur.fetchall()
-    return [(sid, en, hr, float(sc)) for sid, en, hr, sc in rows
-            if float(sc) < RED_THRESH]
+        return cur.fetchall()
+
+
+def insert_translation(conn, sentence_id, book_id, translation):
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO translations
+                (sentence_id, book_id, target_lang, model, temperature, translation)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (sentence_id, target_lang, model, temperature) DO NOTHING
+        """, (sentence_id, book_id, 'hr', 'deepl', 0.0, translation))
+    conn.commit()
 
 
 def cosine(v1, v2):
@@ -64,47 +73,53 @@ def cosine(v1, v2):
 
 def main():
     logger.info("=" * 62)
-    logger.info("  run_deepl.py — DeepL prevod crvenih HR rečenica")
-    logger.info(f"  Prag: score < {RED_THRESH}")
+    logger.info("  run_deepl.py — DeepL HR, sve rečenice")
+    logger.info(f"  Rečenice: {SENT_FROM}–{SENT_TO}  |  model=deepl  temp=0.0")
     logger.info("=" * 62)
 
     conn = get_conn()
-    candidates = fetch_red_hr(conn)
-    conn.close()
-    logger.info(f"Crvenih HR rečenica: {len(candidates)}\n")
+    sentences = fetch_sentences(conn)
+    logger.info(f"Rečenica: {len(sentences)}\n")
 
     translator = deepl.Translator(DEEPL_API_KEY)
     usage = translator.get_usage()
     logger.info(f"DeepL usage: {usage.character.count}/{usage.character.limit} znakova\n")
 
-    logger.info("Učitavam MiniLM embedder...")
+    logger.info("Učitavam e5-large embedder...")
     embedder = SentenceTransformer(MODEL_EMBED)
-    logger.info("MiniLM učitan.\n")
+    logger.info("e5 učitan.\n")
 
     improved = 0
+    inserted = 0
 
-    for sid, en_text, hr_old, hr_old_score in candidates:
-        logger.info(f"── s{sid} ────────────────────────────────────────")
-        logger.info(f"  EN:        {en_text[:80]}")
-        logger.info(f"  HR stari:  {hr_old[:80]}")
-        logger.info(f"             score={hr_old_score:.4f}")
-
+    for sid, en_text, book_id, best_e5 in sentences:
         result = translator.translate_text(en_text, target_lang="HR")
-        new_hr = result.text
+        deepl_text = result.text
 
-        vecs = embedder.encode([en_text, new_hr])
-        new_score = round(cosine(vecs[0], vecs[1]), 4)
-        delta = round(new_score - hr_old_score, 4)
-        verdict = "✅ POBOLJŠANJE" if new_score > hr_old_score else "❌ ZADRŽATI STARI"
+        vecs = embedder.encode([en_text, deepl_text], normalize_embeddings=True)
+        deepl_score = round(cosine(vecs[0], vecs[1]), 4)
 
-        logger.info(f"  HR DeepL:  {new_hr[:80]}")
-        logger.info(f"             score={new_score:.4f}  delta={delta:+.4f}  {verdict}")
+        insert_translation(conn, sid, book_id, deepl_text)
+        inserted += 1
 
-        if new_score > hr_old_score:
-            improved += 1
+        if best_e5 is not None:
+            delta = round(deepl_score - float(best_e5), 4)
+            icon = "✅" if delta > 0 else ("➖" if delta == 0 else "🔽")
+            logger.info(
+                f"s{sid:2d}  deepl={deepl_score:.4f}  "
+                f"best_e5={float(best_e5):.4f}  "
+                f"delta={delta:+.4f}  {icon}  |  {deepl_text[:55]}"
+            )
+            if delta > 0:
+                improved += 1
+        else:
+            logger.info(f"s{sid:2d}  deepl={deepl_score:.4f}  |  {deepl_text[:55]}")
+
+    conn.close()
 
     logger.info("\n" + "=" * 62)
-    logger.info(f"  Rezultat: {improved}/{len(candidates)} rečenica poboljšano")
+    logger.info(f"  Upisano:  {inserted}/40")
+    logger.info(f"  DeepL > best_e5: {improved}/40")
     logger.info("=" * 62)
 
 
