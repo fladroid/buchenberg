@@ -40,38 +40,21 @@ Originalna skripta podržavala je samo Ollama Cloud modele. Dodana je NLLB podr�
 
 **Važne odluke:**
 - NLLB uvijek koristi beam search (`do_sample=False`) — temperatura nema smisla za specijalizirani MT model
-- NLLB nema batch fallback jer `tokenizer(texts, padding=True)` je inherentno robustan
 - Temperatura za NLLB = 0 je ispravan i jedini smisleni izbor
 
-### 3. Prvi NLLB run u bb pipeline-u (MiniLM)
+### 3. NLLB runovi — MiniLM vs e5-large
 
 ```bash
-venv/bin/python src/bb_03_prevod.py \
-    --knjiga 1 --od 1 --do 40 \
-    --model "nllb-600M" \
-    --embedder "paraphrase-multilingual-MiniLM-L12-v2" \
-    --jezici hr fr it
+# MiniLM
+venv/bin/python src/bb_03_prevod.py --knjiga 1 --od 1 --do 40 \
+    --model "nllb-600M" --embedder "paraphrase-multilingual-MiniLM-L12-v2" \
+    --jezici hr fr it   # log: bb_03_nllb_hr_fr_it.log — 3:56 min
+
+# e5-large
+venv/bin/python src/bb_03_prevod.py --knjiga 1 --od 1 --do 40 \
+    --model "nllb-600M" --embedder "multilingual-e5-large" \
+    --jezici hr fr it   # log: bb_03_nllb_e5_hr_fr_it.log — 4:55 min
 ```
-
-**Trajanje:** 3:56 min | **Log:** `logs/bb_03_nllb_hr_fr_it.log`
-
-| Jezik | avg_score (MiniLM) |
-|-------|-------------------|
-| IT | 0.8926 |
-| FR | 0.8803 |
-| HR | 0.8624 |
-
-### 4. NLLB run s e5-large
-
-```bash
-venv/bin/python src/bb_03_prevod.py \
-    --knjiga 1 --od 1 --do 40 \
-    --model "nllb-600M" \
-    --embedder "multilingual-e5-large" \
-    --jezici hr fr it
-```
-
-**Trajanje:** 4:55 min | **Log:** `logs/bb_03_nllb_e5_hr_fr_it.log`
 
 | Jezik | MiniLM | e5-large | Δ |
 |-------|--------|----------|---|
@@ -79,18 +62,16 @@ venv/bin/python src/bb_03_prevod.py \
 | HR | 0.8624 | 0.9510 | +0.0886 |
 | IT | 0.8926 | 0.9614 | +0.0688 |
 
-**Zaključak:** prevodi su identični (NLLB deterministički), samo embedder mjeri drugačije. e5-large daje realističniju sliku semantičke ekvivalentnosti.
+**Zaključak:** prevodi identični (NLLB deterministički), samo embedder mjeri drugačije. e5-large realnija slika.
 
-### 5. Fer usporedba svih modela s e5-large
-
-Pokrenuti svi Ollama modeli s e5-large da bi usporedba bila pod istim scorerom:
+### 4. Fer usporedba svih modela s e5-large
 
 ```bash
-# gemma3, ministral, gemma4 — serijski
-logs/bb_03_ollama_e5_hr_fr_it.log
+# gemma3, ministral, gemma4 — serijski, e5-large
+# log: bb_03_ollama_e5_hr_fr_it.log
 ```
 
-**Rezultati (e5-large, avg_score):**
+**Rezultati (e5-large, avg_back_score):**
 
 | Model | FR | HR | IT |
 |-------|----|----|-----|
@@ -99,10 +80,10 @@ logs/bb_03_ollama_e5_hr_fr_it.log
 | gemma3:12b | 0.9660 | 0.9635 | 0.9671 |
 | nllb-600M | 0.9583 | 0.9510 | 0.9614 |
 
-### 6. Kompozitni score — translation_score
+### 5. Kompozitni score — translation_score
 
 **Flaviova ideja:** kombinovati dva scorea:
-- `score` = `cosine(EN, back_EN)` — informacijska stabilnost (back-translation)
+- `score` = `cosine(EN, back_EN)` — informacijska stabilnost
 - `translation_score` = `cosine(EN, prevod)` — direktna semantička blizina
 
 ```
@@ -111,70 +92,101 @@ composite = (score + translation_score) / 2
 
 **Implementacija:**
 - `ALTER TABLE bb_prevodi_recenica ADD COLUMN translation_score REAL`
-- `bb_03_prevod.py` — dodani `prevod_vektori` i izračun `translation_score` u petlji
-- Nova skripta `bb_calc_translation_score.py` — UPDATE za postojeće redove
+- `bb_03_prevod.py` — dodani `prevod_vektori` i izračun `translation_score`
+- Nova skripta `src/bb_calc_translation_score.py` — UPDATE za postojeće redove
 
-**Run:**
 ```bash
 venv/bin/python src/bb_calc_translation_score.py --embedder "multilingual-e5-large"
 venv/bin/python src/bb_calc_translation_score.py --embedder "paraphrase-multilingual-MiniLM-L12-v2"
+# log: bb_calc_ts.log — 960 redova ažurirano (480 po embedderu)
 ```
-960 redova ažurirano (480 po embedderu). | **Log:** `logs/bb_calc_ts.log`
 
 **Kompozitni rezultati (e5-large):**
 
-| Model | FR composite | HR composite | IT composite |
-|-------|-------------|-------------|-------------|
-| gemma4:31b | 0.9448 | **0.9489** | **0.9463** |
+| Model | FR | HR | IT |
+|-------|----|----|-----|
 | gemma3:12b | **0.9461** | 0.9460 | 0.9421 |
+| gemma4:31b | 0.9448 | **0.9489** | **0.9463** |
 | nllb-600M | 0.9458 | 0.9395 | 0.9422 |
 | ministral-3:14b | 0.9412 | 0.9435 | 0.9446 |
 
-**Ključna observacija:** `avg_direct` konzistentno niži od `avg_back` za LLM modele. Za NLLB su gotovo izjednačeni — e5-large razotkriva razliku između bukvalne i kreativne stabilnosti. MiniLM tu razliku ne vidi.
+**Ključna observacija:** `avg_direct` konzistentno niži od `avg_back` za LLM modele. Za NLLB gotovo izjednačeni — e5-large razotkriva razliku između bukvalne i kreativne stabilnosti.
 
-### 7. Jezički RAG — koncept
+### 6. Jezički RAG — koncept i implementacija
 
-**Flaviova ideja:** "duh jezika" — prirodnost prevoda u ciljnom jeziku, ne samo semantička blizina originalu.
+**Flaviova ideja ("Jezički RAG"):** mjeriti prirodnost prevoda u ciljnom jeziku, ne samo semantičku blizinu originalu.
 
-**Arhitektura:**
 ```
-Korpus prirodnog teksta (Tatoeba/OPUS/Gutenberg po jeziku)
-    → parsiranje → rečenice
-    → e5-large embeddings
-    → pohrana u pgvector
-
-Za ocjenu prevoda:
-    prevod_vektor → k-NN upit u pgvector → avg cosine k susjeda
-    = naturalness_score
-
+naturalness_score = avg cosine(prevod_vektor, k-NN iz korpusa ciljnog jezika)
 final_score = α × semantic_score + β × naturalness_score
 ```
 
-`α` i `β` kao kontrolni mehanizam između vjernosti i prirodnosti prevoda.
+**Napomena o modelima:**
+- Jezički RAG kao **scorer** vrijedi za sve modele (NLLB + LLM)
+- Jezički RAG kao **vodič za reprevod** (few-shot) — samo LLM modeli, ne NLLB
 
-**Izvori po jezicima:**
-- Romanski/germanski: Project Gutenberg (FR, IT, DE, NL dobro zastupljeni)
-- Južnoslavenski: **Tatoeba** i **OPUS** (HR, SR, BS, SL, MK, BG) — Gutenberg nije dovoljan
-- pgvector već postoji u infrastrukturi — prirodna ekstenzija
+**Istraživanje izvora:**
+
+| Izvor | HR | IT | DE |
+|-------|----|----|-----|
+| Tatoeba direktni | 83 KB | 9.3 MB | 11.9 MB |
+| OPUS/Tatoeba | 70 KB | 7.6 MB | 11.2 MB |
+| **OPUS/OpenSubtitles** | **1.05 GB** | **0.98 GB** | **0.48 GB** |
+
+Odabran **OPUS OpenSubtitles v2018** — isti izvor za sve jezike, konzistentan registar.
+
+**Infrastruktura:**
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;  -- pgvector u bb bazi
+CREATE TABLE bb_rag_korpus (
+    id       SERIAL PRIMARY KEY,
+    jezik_id INTEGER REFERENCES bb_jezik(id),
+    tekst    TEXT NOT NULL,
+    vektor   vector(1024)
+);
+CREATE INDEX ON bb_rag_korpus USING ivfflat (vektor vector_cosine_ops) WITH (lists = 100);
+```
+
+**Nova skripta `src/bb_rag_init.py`:**
+- Stream download (ne skida cijeli GB)
+- Filtriranje: dužina 10–200 znakova, min 60% alfa znakova
+- Enkodiranje batch po batch s e5-large (BATCH_SIZE=256)
+- Idempotentno — preskače već upisane rečenice
+
+**Test run (1000 HR rečenica):** ✅ 2 minute, 1000 rečenica upisano
+
+**Produkcijski run — pokrenut u backgroundu:**
+```bash
+nohup time venv/bin/python src/bb_rag_init.py \
+  --jezici hr it de \
+  --max_recenica 50000 \
+  --embedder "multilingual-e5-large" \
+  > logs/bb_rag_init_hr_it_de.log 2>&1 &
+# PID: 78991 — procjena trajanja: ~100 min
+```
 
 ---
 
-## Ključni uvidi
+## Ključni uvidi sesije
 
 - **Ne možemo utjecati na prevod, ali možemo na ocjenu prevoda** — scorer je naša odgovornost
-- **Kompozitni score** (`score + translation_score) / 2`) bogatija metrika od jednog scorea
+- **Kompozitni score** `(score + translation_score) / 2` bogatija metrika od jednog scorea
 - **e5-large vs MiniLM:** e5-large razlikuje bukvalni vs kreativni prevod, MiniLM ne
-- **Jezički RAG** — sljedeći korak prema "duhu jezika", prirodnosti prevoda u ciljnom jeziku
-- **Apsolutne vrijednosti nisu bitne, relativne jesu** — poređenje modela pod istim scorerom
+- **Jezički RAG** — prirodnost prevoda u ciljnom jeziku kao dodatna dimenzija ocjene
+- **OPUS OpenSubtitles** jedini izvor koji pokriva sve naše jezike ravnomjerno
+- **Apsolutne vrijednosti nisu bitne, relativne jesu**
 
 ---
 
 ## Otvoreno za sljedeću sesiju
 
-1. Implementacija Jezičkog RAG-a — odabir izvora i prvog jezika
-2. `bb_04_pobjednik.py` — pokrenuti s kompozitnim scoreom
-3. NLLB run za preostale jezike (de, nl, es, pt, sr, bg, bs, sl, mk, af, ro)
-4. Git commit i push izmjena (`bb_03_prevod.py`, `bb_calc_translation_score.py`)
+1. **Provjeriti završetak RAG runa** — `tail logs/bb_rag_init_hr_it_de.log`
+2. **Implementirati `bb_rag_score.py`** — k-NN upit u pgvector, naturalness_score
+3. **Testirati kompozitnu metriku** — `α × semantic_score + β × naturalness_score`
+4. **Odlučiti α i β** — omjer vjernosti vs prirodnosti
+5. **`bb_04_pobjednik.py`** — ažurirati da koristi kompozitni score
+6. **Git commit** — `bb_rag_init.py`, `bb_03_prevod.py`, `bb_calc_translation_score.py`
+7. **Proširiti RAG** na ostale jezike (fr, es, pt, ro, bs, sr, sl, mk, bg, nl, af)
 
 ---
 
