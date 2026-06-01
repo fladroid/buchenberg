@@ -1,4 +1,4 @@
-# Session 35 — NLLB u bb pipeline-u
+# Session 35 — NLLB, kompozitni score, Jezički RAG
 
 **Datum:** 1. jun 2026.
 **Učesnici:** Flavio & Claude
@@ -36,23 +36,24 @@ Originalna skripta podržavala je samo Ollama Cloud modele. Dodana je NLLB podr�
 | `nllb_single()` | Wrapper oko `nllb_batch()` za jedan tekst |
 | `is_nllb` flag | Branch u `main()` — ako `--model nllb-600M`, koristi NLLB engine, inače Ollama |
 | `--temp` | Sada opcionalan (default=0.0), nije potreban za NLLB |
+| `EMBEDDER_PATH_MAP` | Mapping naziv u bb_embeddings → HuggingFace path |
 
 **Važne odluke:**
 - NLLB uvijek koristi beam search (`do_sample=False`) — temperatura nema smisla za specijalizirani MT model
-- NLLB nema batch fallback (za razliku od Ollame) jer `tokenizer(texts, padding=True)` je inherentno robustan
-- Provjera `OLLAMA_BASE_URL` umjesto `OLLAMA_URL` — usklađeno s `.env` fajlom
+- NLLB nema batch fallback jer `tokenizer(texts, padding=True)` je inherentno robustan
+- `--temp` je opcionalan (default=0.0) — kompatibilno s NLLB i Ollama
 
 ### 3. Prvi NLLB run u bb pipeline-u
 
 ```bash
 venv/bin/python src/bb_03_prevod.py \
-  --knjiga 1 --od 1 --do 40 \
-  --model "nllb-600M" \
-  --embedder "paraphrase-multilingual-MiniLM-L12-v2" \
-  --jezici hr fr it
+    --knjiga 1 --od 1 --do 40 \
+    --model "nllb-600M" \
+    --embedder "paraphrase-multilingual-MiniLM-L12-v2" \
+    --jezici hr fr it
 ```
 
-**Rezultati:**
+**Rezultati (MiniLM):**
 
 | Jezik | avg_score | n |
 |-------|-----------|---|
@@ -60,42 +61,135 @@ venv/bin/python src/bb_03_prevod.py \
 | 🇫🇷 FR | 0.8803 | 40 |
 | 🇭🇷 HR | 0.8624 | 40 |
 
-**Trajanje:** 3 minute 56 sekundi za 3 jezika × 40 rečenica (CPU, lokalni model).
-
-**Primjer prevoda (s1, s2):**
-
-| Jezik | s1 | s2 |
-|-------|----|----|
-| FR | Le chien des Baskervilles. | par Sir Arthur Conan Doyle . |
-| HR | Pas Baskervilsa. | Sir Arthur Conan Doyle. |
-| IT | Il cane dei Baskerville. | di Sir Arthur Conan Doyle. |
+**Trajanje:** 3:56 min za 3 jezika × 40 rečenica (CPU, lokalni model).
 
 ### 4. Analiza temperature kod NLLB
 
-Flavio je zatražio objašnjenje utjecaja temperature na NLLB rezultate. Zaključci:
-
 - NLLB je treniran i optimiziran za beam search — to je njegov prirodni način rada
-- Sampling s temperaturom tehnički radi ali donosi malo raznolikosti u odnosu na LLM-ove — NLLB je specijalizirani MT model bez "kreativnog" prostora
-- Literatura potvrđuje: kombiniranje više sampling kandidata (QE-fusion) može poboljšati kvalitet, ali zahtijeva dodatni QE model — za bb pipeline beam search je optimalan
-- Empirijski potvrđeno i u starom pipeline-u: `nllb_t05` rijetko pobjeđivao `nllb`
+- Sampling s temperaturom donosi malo raznolikosti — NLLB je specijalizirani MT model bez "kreativnog" prostora
+- Empirijski potvrđeno u starom pipeline-u: `nllb_t05` rijetko pobjeđivao `nllb`
+- Temperatura=0 (beam search) je ispravan i jedini smisleni izbor za NLLB
+
+### 5. Usporedba embeddera — MiniLM vs e5-large za NLLB
+
+```bash
+venv/bin/python src/bb_03_prevod.py \
+    --knjiga 1 --od 1 --do 40 \
+    --model "nllb-600M" \
+    --embedder "multilingual-e5-large" \
+    --jezici hr fr it
+```
+
+| Jezik | MiniLM | e5-large | Δ |
+|-------|--------|----------|---|
+| 🇫🇷 FR | 0.8803 | 0.9583 | +0.0780 |
+| 🇭🇷 HR | 0.8624 | 0.9510 | +0.0886 |
+| 🇮🇹 IT | 0.8926 | 0.9614 | +0.0688 |
+
+**Ključni zaključak:** prevodi su identični (NLLB deterministički), samo embedder mjeri drugačije. e5-large daje realističniju sliku semantičke ekvivalentnosti.
+
+**Trajanje e5-large run:** 4:55 min (+59s vs MiniLM). e5-large učitan iz lokalnog keša.
+
+### 6. Fer usporedba svih modela pod e5-large
+
+```bash
+# Gemma3, Ministral, Gemma4 — svi s e5-large
+nohup bash -c '
+venv/bin/python src/bb_03_prevod.py --knjiga 1 --od 1 --do 40 \
+    --model "gemma3:12b" --temp 0.8 --embedder "multilingual-e5-large" --jezici hr fr it &&
+venv/bin/python src/bb_03_prevod.py --knjiga 1 --od 1 --do 40 \
+    --model "ministral-3:14b" --temp 0.8 --embedder "multilingual-e5-large" --jezici hr fr it &&
+venv/bin/python src/bb_03_prevod.py --knjiga 1 --od 1 --do 40 \
+    --model "gemma4:31b" --temp 0.8 --embedder "multilingual-e5-large" --jezici hr fr it
+'
+```
+
+**Rezultati (e5-large, avg_score):**
+
+| Model | FR | HR | IT |
+|-------|----|----|-----|
+| gemma4:31b | **0.9780** | **0.9702** | **0.9749** |
+| ministral-3:14b | 0.9669 | 0.9610 | 0.9673 |
+| gemma3:12b | 0.9660 | 0.9635 | 0.9671 |
+| nllb-600M | 0.9583 | 0.9510 | 0.9614 |
+
+Svi modeli iznad 0.95 — zelena zona po e5-large pragovima (≥0.93).
+
+### 7. Kompozitni score — nova metrika
+
+**Ideja (Flavio):** kombinirati back-translation score i direktni translation score:
+```
+composite = (score(EN, back_EN) + score(EN, prevod)) / 2
+```
+
+**Implementacija:**
+- Nova kolona `translation_score REAL` dodana u `bb_prevodi_recenica`
+- `bb_03_prevod.py` — dodan izračun `prevod_vektori` i `translation_score` u petlji
+- Nova skripta `bb_calc_translation_score.py` — UPDATE postojećih redova
+
+```bash
+venv/bin/python src/bb_calc_translation_score.py --embedder "multilingual-e5-large"
+venv/bin/python src/bb_calc_translation_score.py --embedder "paraphrase-multilingual-MiniLM-L12-v2"
+# Ukupno ažurirano: 960 redova
+```
+
+**Kompozitni score rezultati (e5-large):**
+
+| Model | FR composite | HR composite | IT composite |
+|-------|-------------|-------------|-------------|
+| gemma3:12b | **0.9461** | 0.9460 | 0.9421 |
+| nllb-600M | 0.9458 | 0.9395 | 0.9422 |
+| gemma4:31b | 0.9448 | **0.9489** | **0.9463** |
+| ministral-3:14b | 0.9412 | 0.9435 | **0.9446** |
+
+**Ključna observacija:** `avg_direct` konzistentno niži od `avg_back` za LLM modele. Za NLLB su gotovo izjednačeni — kompozitni score razotkriva razliku između bukvalne i kreativne stabilnosti. Relativne vrijednosti su bitnije od apsolutnih.
+
+### 8. Jezički RAG — konceptualni prijedlog
+
+**Ideja (Flavio):** "Jezički RAG" — mjeriti prirodnost prevoda u prostoru ciljnog jezika, ne samo blizinu originalu.
+
+**Arhitektura:**
+```
+Korpus prirodnog teksta na ciljnom jeziku (Tatoeba/OPUS/Gutenberg)
+    → parsiranje → rečenice
+    → e5-large embeddings
+    → pohrana u pgvector
+
+Za ocjenu prevoda:
+    prevod_vektor → k-NN upit u pgvector → avg cosine k susjeda
+    = naturalness_score
+
+final_score = α × semantic_score + β × naturalness_score
+```
+
+**Izvori po jeziku:**
+- Romanski i germanski (FR, IT, DE, NL): Project Gutenberg — dobra pokrivenost
+- Južnoslavenski (HR, SR, BS, SL, MK, BG): **Tatoeba** i **OPUS** — Gutenberg nije dovoljan
+- α i β parametri kontrolišu omjer vjernost vs. prirodnost (bukvalan vs. kreativan prevod)
+
+**pgvector već postoji** u infrastrukturi — prirodna ekstenzija bez novih komponenti.
 
 ---
 
-## Ključni uvidi
+## Ključni uvidi sesije
 
-- **bb_03_prevod.py je sada generički** — jedan ulazni punkt za sve modele (Ollama + NLLB), razlika samo u `--model` argumentu
-- **NLLB performanse u bb kontekstu** — avg 0.86–0.89, usporedivo s Gemma3/Ministral iz session_34 (0.86–0.91), ali lokalno i bez API troškova
-- **Temperatura za NLLB = 0** je ispravan i jedini smisleni izbor za beam search MT model
+- **bb_03_prevod.py je sada generički** — jedan ulazni punkt za sve modele (Ollama + NLLB)
+- **e5-large je ispravan embedder** — odluka potvrđena fer usporedbom svih modela
+- **Kompozitni score** je bogatija metrika od jednog scorea — mjeri i semantičku blizinu i informacijsku stabilnost
+- **Apsolutne vrijednosti nisu bitne, nego relativne** — ključni princip za sve analize
+- **Jezički RAG** je sljedeći logički korak prema ocjeni prirodnosti prevoda
 
 ---
 
-## Otvoreno za nastavak sesije / sljedeću sesiju
+## Otvoreno za sljedeću sesiju
 
-1. `bb_04_pobjednik.py` — pokrenuti za hr/fr/it NLLB run
-2. Usporedba modela — NLLB vs gemma3 vs ministral vs gemma4 za iste jezike i rečenice
-3. NLLB run za preostale jezike (de, nl, es, pt, sr, bg, bs, sl, mk, af, ro)
-4. e5-large kao embedder — testirati umjesto MiniLM
-5. Git commit i push
+1. Implementacija Jezičkog RAG-a — odabir jezika i izvora (Tatoeba/OPUS/Gutenberg)
+2. Izgradnja pgvector indeksa za ciljne jezike
+3. `naturalness_score` kao treća komponenta metrike
+4. Definisanje α i β parametara (vjernost vs. prirodnost)
+5. `bb_04_pobjednik.py` — ažurirati za kompozitni score
+6. NLLB run za preostale jezike (de, nl, es, pt, sr, bg, bs, sl, mk, af, ro)
+7. Git commit i push
 
 ---
 

@@ -44,6 +44,12 @@ OLLAMA_URL  = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_KEY  = os.getenv("OLLAMA_API_KEY", "")
 BATCH_SIZE  = 20
 
+# Mapping: naziv u bb_embeddings → HuggingFace model path
+EMBEDDER_PATH_MAP = {
+    "multilingual-e5-large": "intfloat/multilingual-e5-large",
+    "paraphrase-multilingual-MiniLM-L12-v2": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+}
+
 NLLB_MODEL_NAME = "facebook/nllb-200-distilled-600M"
 
 NLLB_LANG_MAP = {
@@ -240,13 +246,13 @@ def already_done(cur, prevodi_knjige_id, recenica_id):
     return cur.fetchone() is not None
 
 
-def upisi_prevod(cur, prevodi_knjige_id, recenica_id, prevod, back_translation, score):
+def upisi_prevod(cur, prevodi_knjige_id, recenica_id, prevod, back_translation, score, translation_score):
     cur.execute("""
         INSERT INTO bb_prevodi_recenica
-            (prevodi_knjige_id, recenica_id, prevod, back_translation, score)
-        VALUES (%s, %s, %s, %s, %s)
+            (prevodi_knjige_id, recenica_id, prevod, back_translation, score, translation_score)
+        VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (prevodi_knjige_id, recenica_id) DO NOTHING
-    """, (prevodi_knjige_id, recenica_id, prevod, back_translation, score))
+    """, (prevodi_knjige_id, recenica_id, prevod, back_translation, score, translation_score))
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -268,8 +274,9 @@ def main():
 
     is_nllb = (args.model == "nllb-600M")
 
-    print(f"Učitavam embedder: {args.embedder}")
-    embedder = SentenceTransformer(args.embedder)
+    embedder_path = EMBEDDER_PATH_MAP.get(args.embedder, args.embedder)
+    print(f"Učitavam embedder: {args.embedder} ({embedder_path})")
+    embedder = SentenceTransformer(embedder_path)
 
     nllb_tok, nllb_mod = (None, None)
     if is_nllb:
@@ -346,14 +353,16 @@ def main():
                     backs = [back_prevedi_single(p, jezik_naziv, args.model, args.temp)
                              for p in prevodi]
 
-            en_vektori   = embedder.encode(tekstovi)
-            back_vektori = embedder.encode(backs)
+            en_vektori     = embedder.encode(tekstovi)
+            back_vektori   = embedder.encode(backs)
+            prevod_vektori = embedder.encode(prevodi)
 
             for j, (rid, poz, tekst) in enumerate(chunk):
-                score = cosine(en_vektori[j], back_vektori[j])
+                score             = cosine(en_vektori[j], back_vektori[j])
+                translation_score = cosine(en_vektori[j], prevod_vektori[j])
                 upisi_prevod(cur, prevodi_knjige_id, rid,
-                             prevodi[j], backs[j], score)
-                print(f"    s{poz}: score={score:.4f}")
+                             prevodi[j], backs[j], score, translation_score)
+                print(f"    s{poz}: score={score:.4f} ts={translation_score:.4f}")
 
             conn.commit()
 
