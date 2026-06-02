@@ -537,3 +537,91 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
 *Flavio & Claude · Buchenberg · V2 · 30. maj 2026.*
+
+---
+
+## 15. bb pipeline (novi minimalistički pipeline)
+
+### Filozofija
+
+Povratak na osnovu (sesija 34): čista shema, nova baza `bb`, bez GA, bez NLP enrichmenta. Jedina metrika kvaliteta je cosinus sličnost + LLM sudija.
+
+### Baza `bb` — tabele
+
+| Tabela | Opis |
+|--------|------|
+| `bb_jezik` | 14 jezika |
+| `bb_modeli` | 9 modela (gemma3, ministral, nllb, claude, gemma4 × temperature) |
+| `bb_embeddings` | 2 embeddera (MiniLM, e5-large) |
+| `bb_knjige` | Knjige |
+| `bb_recenice` | Rečenice (pozicija, tekst) |
+| `bb_prevodi_knjige` | UNIQUE(knjiga, jezik, model, embedder) |
+| `bb_prevodi_recenica` | Prevod + back_translation + score + translation_score + prevod_vektor + naturalness_score + sudija ocjene |
+| `bb_prev_knjige` | Finalni prevod knjige UNIQUE(knjiga, jezik) |
+| `bb_prev_recenica` | FK na pobjednika u bb_prevodi_recenica |
+| `bb_rag_korpus` | RAG korpus (150k rečenica, hr/it/de, e5-large vektori) |
+
+### Skripte (`src/bb_*.py`)
+
+| Skripta | Opis |
+|---------|------|
+| `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
+| `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy) |
+| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); podržava Ollama Cloud i NLLB |
+| `bb_04_pobjednik.py` | Bira pobjednika po kompozitnom scoreu `(score + translation_score) / 2`, tiebreak abecedni |
+| `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
+| `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` u bb_prevodi_recenica |
+| `bb_07_rag_score.py` | k-NN upit u bb_rag_korpus → `naturalness_score` (odgođeno — pogrešan korpus) |
+| `bb_08_sudija.py` | Gemma4:31b kao blind sudija → `sudija_grammar/naturalness/fidelity/avg` |
+| `bb_rag_init.py` | Stream-download OPUS OpenSubtitles + enkodiranje → bb_rag_korpus |
+| `bb_calc_translation_score.py` | UPDATE translation_score za postojeće redove |
+
+### Metrike kvaliteta
+
+| Metrika | Formula | Opis |
+|---------|---------|------|
+| `score` | cosine(EN, back_EN) | Informacijska stabilnost kroz back-translation |
+| `translation_score` | cosine(EN, prevod) | Direktna semantička blizina originalu |
+| `kompozitni` | (score + translation_score) / 2 | Trenutni kriterij pobjednika |
+| `naturalness_score` | avg cosine(prevod, k-NN u RAG korpusu) | Prirodnost u ciljnom jeziku — odgođeno |
+| `sudija_avg` | (grammar + naturalness + fidelity) / 3 | LLM blind evaluacija — ključna metrika |
+
+### Modeli u bb pipeline-u
+
+| Model | Uloga |
+|-------|-------|
+| gemma3:12b | Prevođenje |
+| ministral-3:14b | Prevođenje |
+| nllb-600M | Prevođenje |
+| gemma4:31b | Sudija (ne prevodi) |
+
+### Pokretanje bb pipeline-a
+
+```bash
+# 1. Prevođenje (Ollama Cloud)
+venv/bin/python src/bb_03_prevod.py --knjiga 1 --od 1 --do 40 \
+    --model "gemma3:12b" --embedder "multilingual-e5-large" --jezici hr it
+
+# 2. Prevođenje (NLLB lokalno)
+venv/bin/python src/bb_03_prevod.py --knjiga 1 --od 1 --do 40 \
+    --model "nllb-600M" --embedder "multilingual-e5-large" --jezici hr it
+
+# 3. Enkodiranje prevoda
+venv/bin/python src/bb_06_enkodiranje.py --embedder "multilingual-e5-large"
+
+# 4. Sudija evaluacija
+venv/bin/python src/bb_08_sudija.py --knjiga 1 --od 1 --do 40 --jezici hr it
+
+# 5. Izbor pobjednika
+venv/bin/python src/bb_04_pobjednik.py --knjiga 1 --od 1 --do 40 --jezici hr it
+
+# 6. Export
+venv/bin/python src/bb_05_export.py --knjiga 1 --jezici hr it
+```
+
+### Ključni uvidi
+
+- **NLLB kažnjen od sudije** — bukvalni prevodi imaju visok cosinus score ali nizak sudija_avg
+- **gemma3 i ministral dominiraju** po sudija ocjeni, posebno za IT
+- **Cosinus score i sudija su komplementarni** — treba kombinovati
+
