@@ -56,7 +56,8 @@ Return JSON only, no explanation, no markdown:
 ]"""
 
 
-def call_sudija(prompt):
+def call_sudija(prompt, max_retries=3, wait=30):
+    import time
     headers = {"Authorization": f"Bearer {OLLAMA_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": SUDIJA_MODEL,
@@ -64,9 +65,19 @@ def call_sudija(prompt):
         "stream": False,
         "options": {"temperature": SUDIJA_TEMP}
     }
-    resp = requests.post(f"{OLLAMA_URL}/api/chat", headers=headers, json=payload, timeout=120)
-    resp.raise_for_status()
-    return resp.json()["message"]["content"].strip()
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(f"{OLLAMA_URL}/api/chat", headers=headers, json=payload, timeout=120)
+            resp.raise_for_status()
+            return resp.json()["message"]["content"].strip()
+        except (requests.exceptions.HTTPError,
+                requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectionError) as e:
+            if attempt < max_retries - 1:
+                print(f"  Greška ({e}), čekam {wait}s pa ponavljam (pokušaj {attempt+1}/{max_retries})...")
+                time.sleep(wait)
+            else:
+                raise
 
 
 def parse_ocjene(raw):

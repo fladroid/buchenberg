@@ -137,11 +137,18 @@ def main():
         pobjednici = cur.fetchall()
         print(f"  Pobjednika: {len(pobjednici)}")
 
-        # Resetuj pobjednike za ovaj jezik
+        # Resetuj pobjednike samo za trenutni raspon recenica
         cur.execute("""
             DELETE FROM bb_prev_recenica
             WHERE prev_knjige_id = %s
-        """, (prev_knjige_id,))
+            AND prevodi_recenica_id IN (
+                SELECT id FROM bb_prevodi_recenica
+                WHERE recenica_id IN (
+                    SELECT id FROM bb_recenice
+                    WHERE knjiga_id = %s AND pozicija BETWEEN %s AND %s
+                )
+            )
+        """, (prev_knjige_id, args.knjiga, args.od, args.do))
 
         upisano = 0
         for recenica_id, pozicija, prevodi_recenica_id, model, score, ts, sudija, finalni, prevod in pobjednici:

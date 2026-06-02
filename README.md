@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V2
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 30. maj 2026. (sesija 32)  
+**Poslednje ažuriranje:** 2. jun 2026. (sesija 38)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — test pipeline operativan, GA implementiran
 
@@ -536,7 +536,7 @@ venv/bin/python src/ga_save_winners.py --test_id test_018 --lang it
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*
-*Flavio & Claude · Buchenberg · V2 · 30. maj 2026.*
+*Flavio & Claude · Buchenberg · V2 · 2. jun 2026.*
 
 ---
 
@@ -624,4 +624,34 @@ venv/bin/python src/bb_05_export.py --knjiga 1 --jezici hr it
 - **NLLB kažnjen od sudije** — bukvalni prevodi imaju visok cosinus score ali nizak sudija_avg
 - **gemma3 i ministral dominiraju** po sudija ocjeni, posebno za IT
 - **Cosinus score i sudija su komplementarni** — treba kombinovati
+- **temp=0.8 generalno bolji** od 0.5 i 0.1, ali nema univerzalne temperature — ovisi o jeziku i dijelu teksta
+- **DE specifičnost** — jedini jezik gdje ministral vodi; IT jedini gdje temp=0.1 osvaja 50%+ rečenica
+
+### Formula pobjednika (sesija 38)
+
+
+
+Sudija nosi 60% težine. Fallback na samo kompozitni kada .
+
+### Denormalizovani viewovi (sesija 38)
+
+
+
+### Kako dodati novi jezik, model, temperaturu, embedder
+
+**Novi jezik:**
+
+
+**Novi model i temperatura:**
+
+> ⚠️ Skripta traži model po naziv + temperatura kombinaciji. Ako temperatura nije u bazi — greška 
+
+**Novi embedder:**
+
+Dodati logiku učitavanja u .
+
+### Poznati bugovi (riješeni)
+
+- ** DELETE bug** (sesija 38) — DELETE bez range filtera brisao sve pobjednike za jezik. Fix: DELETE sada filtrira po .
+- ** retry** (sesija 38) — Ollama Cloud nestabilan. Dodata retry logika: 3 pokušaja, 30s čekanje.
 
