@@ -1,6 +1,7 @@
 """
 bb_04_pobjednik.py
-Za svaku rečenicu bira pobjednika po najvišem score-u i upisuje u bb_prev_knjige / bb_prev_recenica.
+Za svaku rečenicu bira pobjednika po najvišem kompozitnom scoreu
+(score + translation_score) / 2 i upisuje u bb_prev_knjige / bb_prev_recenica.
 
 Primjer:
     venv/bin/python src/bb_04_pobjednik.py \
@@ -8,7 +9,6 @@ Primjer:
 """
 
 import os
-import sys
 import argparse
 import psycopg2
 from dotenv import load_dotenv
@@ -76,6 +76,8 @@ def main():
                 pr.id      AS prevodi_recenica_id,
                 m.naziv    AS model,
                 pr.score,
+                pr.translation_score,
+                (pr.score + pr.translation_score) / 2 AS kompozitni,
                 pr.prevod
             FROM bb_recenice r
             JOIN bb_prevodi_knjige pk ON pk.knjiga_id = r.knjiga_id
@@ -86,13 +88,15 @@ def main():
             WHERE r.knjiga_id = %s
               AND r.pozicija BETWEEN %s AND %s
               AND j.kod = %s
-              AND pr.score = (
-                  SELECT MAX(pr2.score)
+              AND pr.translation_score IS NOT NULL
+              AND (pr.score + pr.translation_score) / 2 = (
+                  SELECT MAX((pr2.score + pr2.translation_score) / 2)
                   FROM bb_prevodi_knjige pk2
                   JOIN bb_prevodi_recenica pr2 ON pr2.prevodi_knjige_id = pk2.id
                   WHERE pk2.knjiga_id = r.knjiga_id
                     AND pk2.jezik_id  = j.id
                     AND pr2.recenica_id = r.id
+                    AND pr2.translation_score IS NOT NULL
               )
             ORDER BY r.pozicija, m.naziv
         """, (args.knjiga, args.od, args.do, kod))
@@ -101,14 +105,14 @@ def main():
         print(f"  Pobjednika: {len(pobjednici)}")
 
         upisano = 0
-        for recenica_id, pozicija, prevodi_recenica_id, model, score, prevod in pobjednici:
+        for recenica_id, pozicija, prevodi_recenica_id, model, score, ts, kompozitni, prevod in pobjednici:
             cur.execute("""
                 INSERT INTO bb_prev_recenica (prev_knjige_id, prevodi_recenica_id)
                 VALUES (%s, %s)
                 ON CONFLICT (prev_knjige_id, prevodi_recenica_id) DO NOTHING
             """, (prev_knjige_id, prevodi_recenica_id))
             upisano += cur.rowcount
-            print(f"  s{pozicija}: {model} score={score:.4f} | {prevod[:60]}...")
+            print(f"  s{pozicija}: {model} back={score:.4f} ts={ts:.4f} komp={kompozitni:.4f} | {prevod[:60]}...")
 
         conn.commit()
         print(f"  Upisano novih: {upisano}")
