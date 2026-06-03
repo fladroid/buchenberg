@@ -1,0 +1,43 @@
+The Hound of the Baskervilles [IT]
+============================================================
+
+[s1] Il Mastino dei Baskerville
+[s2] di Sir Arthur Conan Doyle
+[s3] Capitolo 1 Mr. Sherlock Holmes
+[s4] Il signor Sherlock Holmes, che di solito era molto in ritardo la mattina, a eccezione di quelle non infrequenti occasioni in cui restava sveglio tutta la notte, era seduto a tavola per la colazione.
+[s5] Mi fermai sul tappeto del camino e raccolsi il bastone che il nostro visitatore aveva lasciato la sera precedente.
+[s6] Era un pezzo di legno fine e spesso, a testa bulbosa, del tipo noto come “avvocato di Penang”.
+[s7] Proprio sotto la testa c'era una larga fascia d'argento larga quasi un pollice.
+[s8] "A James Mortimer, M.R.C.S., dai suoi amici della C.C.H.", era inciso sopra, con la data "1884".
+[s9] Era proprio un bastone come quelli che un tempo portavano i medici di famiglia di vecchia scuola—dignitoso, robusto e rassicurante.
+[s10] "Be’, Watson, che ne pensi?"
+[s11] Holmes era seduto con la schiena verso di me, e io non gli avevo dato alcun segno della mia occupazione.
+[s12] Come facevi a sapere cosa stavo facendo?
+[s13] "Credo che tu abbia gli occhi dietro la nuca."
+[s14] "Ho, almeno, una caffettiera d'argento ben lucidata davanti a me," rispose lui.
+[s15] "Ma dimmi, Watson, che cosa ne pensi del bastone del nostro visitatore?"
+[s16] Dato che siamo stati così sfortunati da perderlo e non abbiamo idea del suo incarico, questo souvenir accidentale diventa importante.
+[s17] "Fammi ricostruire quell'uomo attraverso un esame di esso."
+[s18] "Penso", dissi, seguendo per quanto potevo i metodi del mio compagno, "che il dottor Mortimer sia un medico anziano e di successo, molto stimato, poiché coloro che lo conoscono gli hanno dato questo segno di apprezzamento."
+[s19] "Bene!" disse Holmes.
+[s20] "Eccellente!"
+[s21] "Penso anche che la probabilità sia a favore del fatto che sia un medico di campagna che fa gran parte delle sue visite a piedi."
+[s22] "Perché dici così?"
+[s23] "Perché questo bastone, sebbene originariamente molto elegante, è stato così maltrattato che non riesco a immaginare un medico di città che lo porti."
+[s24] "Il rivestimento di ferro spesso è consumato, quindi è evidente che ha camminato molto con esso."
+[s25] "Perfettamente corretto!" disse Holmes.
+[s26] "E poi ci sono gli 'amici del C.C.H.'. Immagino che si tratti di qualche 'Something Hunt', la caccia locale ai cui membri avrà probabilmente prestato assistenza chirurgica, e che in cambio gli abbia fatto un piccolo omaggio."
+[s27] "Davvero, Watson, ti superi," disse Holmes, spostando indietro la sedia e accendendo una sigaretta.
+[s28] "Devo ammettere che in tutti i resoconti che hai voluto dare dei miei modesti successi, hai abitualmente sottovalutato le tue capacità."
+[s29] "Forse non sei tu stesso luminoso, ma sei un conduttore di luce."
+[s30] "Alcune persone, senza possedere genio, hanno un notevole potere di stimolarlo."
+[s31] "Confesso, caro amico, che sono molto in debito con te."
+[s32] Non aveva mai detto nulla di simile prima d'ora, e devo ammettere che le sue parole mi diedero un piacere intenso, poiché ero stato spesso piccato dalla sua indifferenza verso la mia ammirazione e verso i tentativi che avevo fatto di dare pubblicità ai suoi metodi.
+[s33] Ero orgoglioso, inoltre, di pensare di aver padroneggiato il suo sistema al punto da applicarlo in un modo che avesse ottenuto la sua approvazione.
+[s34] Ora prese il bastone dalle mie mani ed esaminò per qualche minuto con i suoi occhi nudi.
+[s35] Poi, con un'espressione di interesse, posò la sigaretta e, portando il bastone alla finestra, lo osservò di nuovo con una lente convessa.
+[s36] "Interessante, sebbene elementare," disse mentre tornava nel suo angolo preferito del divano.
+[s37] "Ci sono certamente uno o due indizi sul bastone."
+[s38] "Ci dà la base per diverse deduzioni."
+[s39] "È sfuggito qualcosa a me?"
+[s40] "Chiesi con una certa importanza."

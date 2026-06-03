@@ -28,6 +28,12 @@ KNJIGE = [
         "gutenberg_id": "2852",
         "html":         "books/hound_of_the_baskervilles/raw/hound.html",
     },
+    {
+        "naziv":        "The Big Four",
+        "autor":        "Agatha Christie",
+        "gutenberg_id": "70114",
+        "html":         "books/the_big_four.html",
+    },
 ]
 
 TOC_TITLES = {"CONTENTS", "TABLE OF CONTENTS"}
@@ -89,7 +95,7 @@ def main():
         cur.execute("""
             INSERT INTO bb_knjige (naziv, autor, gutenberg_id)
             VALUES (%s, %s, %s)
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (gutenberg_id) DO NOTHING
             RETURNING id
         """, (knjiga["naziv"], knjiga["autor"], knjiga["gutenberg_id"]))
 

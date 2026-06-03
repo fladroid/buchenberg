@@ -1,0 +1,43 @@
+The Hound of the Baskervilles [HR]
+============================================================
+
+[s1] Pseći pas Baskervila
+[s2] od Sir Arthura Conana Doylea
+[s3] Poglavlje 1 Gospodin Sherlock Holmes
+[s4] Gospodin Sherlock Holmes, koji je obično bio kasnio ujutro, osim na one neprestano česte prilike kada je bio noću budan, sjedio je za doručnim stolom.
+[s5] Stajao sam na tepihu ispred kamina i uzeo štap koji je naš posjetitelj ostavio prethodne noći.
+[s6] Bio je to kvalitetan, debeo komad drveta s glavom u obliku čupla, od onih koji su poznati kao "Penang lawyer".
+[s7] Tijesno ispod glave bila je široka srebrna traka, široka gotovo centimetar.
+[s8] "Jamesu Mortimeru, M.R.C.S., od njegovih prijatelja iz C.C.H.", bilo je ugravirano na njemu, uz datum "1884.".
+[s9] To je bio baš takav štap kakav je nosio stari obiteljski liječnik – dostojanstven, čvrst i utješan.
+[s10] „Dobro, Watsonu, što misliš o tome?“
+[s11] Holmes je sjedio s leđima okrenutim prema meni, a ja mu nisam dao nijednog znaka o mojoj zaposlenosti.
+[s12] „Kako si znao što radim?
+[s13] Vjerujem da imaš oči na stražnjem dijelu glave.“
+[s14] "Imam, barem, dobro ispoliranu posudu za kavu od posrebrjenog metala ispred sebe", rekao je.
+[s15] „Ali, reci mi, Watsonu, što misliš o štapu našeg posjetitelja?
+[s16] Budući da smo bili tako nesretni da smo ga propustili i nemamo pojma zašto je došao, ova slučajna suvenir postaje važna.
+[s17] Pusti me da čujem kako rekonstruiraš čovjeka analizirajući ga.“
+[s18] "Mislim", rekao sam, prateći koliko god mogao metode svog suputnika, "da je dr. Mortimer uspješan, stariji liječnik, uvažen, jer mu oni koji ga poznaju daju ovakav znak priznanja."
+[s19] "Dobro!", rekao je Holmes.
+[s20] "Odlično!"
+[s21] "Mislim također da je vjerojatno da je on seoski liječnik koji većinu svojih posjeta obavlja pješice."
+[s22] Zašto tako?
+[s23] "Zato što je ovaj štap, iako je prvotno bio vrlo elegantan, toliko istrošen da teško mogu zamisliti da ga nosi neki gradski liječnik."
+[s24] Debeli željezni čep je istrošen, što pokazuje da je s njom hodao mnogo.
+[s25] "Potpuno ispravno!" rekao je Holmes.
+[s26] "A zatim postoji još i 'prijatelji C.C.H.-a'. Pretpostavljam da se radi o nekom lovu, lokalnom lovu članovima kojih je vjerojatno pružio kiruršku pomoć, a koji mu je zauzvrat dao mali dar."
+[s27] "Stvarno, Watson, nadmašuješ samog sebe," rekao je Holmes, odgurujući stolicu i paleći cigaretu.
+[s28] Moram priznati da u svim izjavama koje ste tako ljubazno dali o mojim malim dostignućima obično ste podcjenjivali svoje sposobnosti.
+[s29] Možda vi sami niste sjajan, ali ste vodič svjetlosti.
+[s30] "Neki ljudi, bez genija, imaju iznimnu sposobnost poticanja istog."
+[s31] Priznajem, dragi moj, da sam vam vrlo dužan.
+[s32] Nikada prije nije rekao toliko, i moram priznati da su mi njegove riječi donijele veliko zadovoljstvo, jer me često uznemiravala njegova ravnodušnost prema mom divljenju i pokušajima da njegove metode učinim javno poznatima.
+[s33] Bio sam ponosan i mislio da sam dovoljno ovladao njegovim sustavom da ga primijenim na način koji mu je zaslužio odobravanje.
+[s34] Sada je uzeo palicu iz mojih ruku i nekoliko minuta je ispitao golim okom.
+[s35] Zatim, s izrazom zanimanja, položio je cigaretu, odnio štap do prozora i ponovno ga ispitao konveksnom lećom.
+[s36] "Zanimljivo, iako elementarno," rekao je vraćajući se u svoj omiljeni kutak kauča.
+[s37] "Na štapu definitivno postoje jedna ili dvije indikacije."
+[s38] On nam daje osnovu za nekoliko zaključaka.
+[s39] "Jesam li nešto propustio?"
+[s40] pitao sam s nekim samodopadom.

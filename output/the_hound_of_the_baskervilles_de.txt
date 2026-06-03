@@ -1,0 +1,43 @@
+The Hound of the Baskervilles [DE]
+============================================================
+
+[s1] Die Hunde des Baskerville
+[s2] von Sir Arthur Conan Doyle
+[s3] Kapitel 1 Mr. Sherlock Holmes
+[s4] Herr Sherlock Holmes, der morgens meist sehr spät aufstand, außer bei jenen nicht seltenen Gelegenheiten, wenn er die ganze Nacht wach war, saß am Frühstückstisch.
+[s5] Ich stand auf dem Fußabtreter und hob den Stock auf, den unser Besucher in der Nacht zuvor zurückgelassen hatte.
+[s6] Es war ein feines, dickes Stück Holz mit einem knollenförmigen Kopf, von der Sorte, die als „Penang-Anwalt“ bekannt ist.
+[s7] Direkt unter dem Kopf befand sich ein breiter Silberring von fast einem Zoll Breite.
+[s8] „An James Mortimer, M.R.C.S., von seinen Freunden des C.C.H.“, war darauf eingraviert, zusammen mit dem Datum „1884“.
+[s9] Es war gerade ein solcher Stock, wie ihn der alteingesessene Familienarzt früher mit sich führte – würdevoll, solide und beruhigend.
+[s10] „Nun, Watson, was schlägst du daraus?“
+[s11] Holmes saß mir den Rücken zugewandt, und ich hatte ihm kein Zeichen meiner Beschäftigung gegeben.
+[s12] „Wie wusstest du, was ich tue?
+[s13] Ich glaube, du hast Augen im Hinterkopf.“
+[s14] "Ich habe, zumindest, eine gut polierte, versilberte Kaffeekanne vor mir," sagte er.
+[s15] „Aber sag mir, Watson, was schlägst du aus dem Stock unseres Besuchers?
+[s16] Da wir so unglücklich waren, ihn zu verpassen, und keine Ahnung von seinem Auftrag haben, wird dieses zufällige Andenken von Bedeutung.
+[s17] Lass mich hören, wie du den Mann durch eine Untersuchung davon rekonstruierst.“
+[s18] „Ich denke“, sagte ich und folgte so gut ich konnte den Methoden meines Begleiters, „dass Dr. Mortimer ein erfolgreicher, älterer Mediziner ist, der hoch geschätzt wird, da jene, die ihn kennen, ihm dieses Zeichen ihrer Wertschätzung überreichten.“
+[s19] "Gut!", sagte Holmes.
+[s20] „Ausgezeichnet!“
+[s21] „Ich glaube auch, dass die Wahrscheinlichkeit dafür spricht, dass er ein Landarzt ist, der einen Großteil seiner Besuche zu Fuß erledigt.“
+[s22] „Warum denn?“
+[s23] „Weil dieser Stock, obwohl er ursprünglich ein sehr eleganter war, so mitgenommen ist, dass ich mir kaum vorstellen kann, dass ein Stadtarzt ihn tragen würde.“
+[s24] „Die dicke Eisenzwinge ist abgenutzt, also ist es offensichtlich, dass er damit sehr viel gelaufen ist.“
+[s25] „Perfekt logisch!“, sagte Holmes.
+[s26] "Und dann gibt es noch die 'Freunde des C.C.H.'. Ich würde vermuten, dass es sich um die Something Hunt handelt, die lokale Jagd, deren Mitgliedern er möglicherweise chirurgische Hilfe geleistet hat und die ihn dafür mit einer kleinen Gabe bedacht hat."
+[s27] „Wirklich, Watson, Sie übertreffen sich selbst“, sagte Holmes und schob seinen Stuhl zurück, während er sich eine Zigarette anzündete.
+[s28] „Ich muss gestehen, dass du in all den Berichten, die du so freundlicherweise über meine eigenen kleinen Leistungen verfasst hast, deine eigenen Fähigkeiten gewohnheitsmäßig unterschätzt hast.“
+[s29] „Vielleicht sind Sie selbst nicht leuchtend, aber Sie sind ein Leiter des Lichts.“
+[s30] "Manche Menschen besitzen zwar keinen Genie, haben aber eine bemerkenswerte Fähigkeit, es zu stimulieren."
+[s31] „Ich gestehe, mein lieber Freund, dass ich Ihnen sehr viel verdanke.“
+[s32] Er hatte zuvor noch nie so viel gesagt, und ich muss zugeben, dass seine Worte mir große Freude bereiteten, da ich oft über seine Gleichgültigkeit gegenüber meiner Bewunderung und über seine Versuche, seine Methoden geheim zu halten, verärgert gewesen war.
+[s33] Ich war zudem stolz bei dem Gedanken, dass ich sein System so weit gemeistert hatte, es auf eine Weise anzuwenden, die seine Zustimmung fand.
+[s34] Nun nahm er den Stock aus meinen Händen und untersuchte ihn einige Minuten lang mit bloßem Auge.
+[s35] „Dann mit einem Ausdruck des Interesses legte er seine Zigarette beiseite, nahm den Stock zum Fenster und betrachtete ihn noch einmal durch eine konvexe Linse.“
+[s36] „Interessant, wenn auch elementar“, sagte er, während er in seine Lieblingseck des Sofas zurückkehrte.
+[s37] "Es gibt sicherlich ein oder zwei Hinweise auf dem Stock."
+[s38] „Er gibt uns die Grundlage für mehrere Schlussfolgerungen.“
+[s39] "Ist mir etwas entgangen?"
+[s40] fragte ich mit einer gewissen Wichtigkeit.
