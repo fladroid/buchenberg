@@ -125,3 +125,38 @@ Pobjednici: 4 sek, 160 upisano (8 × 20).
 
 - Commit: `session 40: HR s81-350 završen, 7 jezika prošireno na 100 rečenica, analiza temperatura po jezičnim grupama`
 
+
+---
+
+## Dodatak — Web stranica (Apache2)
+
+### Infrastruktura (zatečeno stanje)
+- Apache2 aktivan na `buchenberg.opik.net`, HTTPS s Let's Encrypt certifikatima
+- DocumentRoot: `/var/www/buchenberg/`
+- Stari fajlovi arhivirani u `/var/www/buchenberg/BBOLD/`
+
+### JSON export
+Nova skripta `src/bb_web_export.py` generira statičke JSON fajlove:
+- `data/books.json` — katalog knjiga i dostupnih prijevoda
+- `data/tr_{knjiga_id}_{lang}.json` — pobjednički prevodi po jeziku
+
+### Web stranica (`index.html`)
+Wikipedia-inspirisan dizajn. Funkcionalnosti:
+- Sidebar: odabir knjige → lista prijevoda sa zastavicama
+- Čitač: svaka rečenica u novom redu, superscript numeracija
+- Toggle: prikaz originalnog engleskog teksta lijevo, prijevod desno
+- Hover: koji model je pobijedio za tu rečenicu
+- Score info: avg translation_score i avg judge u toolbaru
+- Infobox: autor, jezik, broj rečenica, link na Project Gutenberg
+- **Multijezički UI**: EN/DE/IT/HR/SR — labeli u realnom vremenu
+
+### Srpska ćirilica
+Nova skripta `src/bb_sr_cirilica.py`:
+- Transliterira sve srpske prevode latinica → ćirilica u bazi
+- Idempotentna (tekst već u ćirilici se ne mijenja)
+- Digrame (lj→љ, nj→њ, dž→џ, dj→ђ) se obrađuju ispravno
+- 340 prevoda konvertovano
+- `--dry-run` mod za provjeru bez upisa
+
+### Git commit
+`b1c2160`: `session 40: web export skripta, SR cirilica transliteracija, Apache stranica`
