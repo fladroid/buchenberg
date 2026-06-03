@@ -267,7 +267,7 @@ def main():
     parser.add_argument("--od",       type=int,   required=True)
     parser.add_argument("--do",       type=int,   required=True)
     parser.add_argument("--model",    type=str,   required=True)
-    parser.add_argument("--temp",     type=float, default=0.0)
+    parser.add_argument("--temp",     type=float, nargs="+", default=[0.0])
     parser.add_argument("--embedder", type=str,   required=True)
     parser.add_argument("--jezici",   type=str,   nargs="+", required=True)
     args = parser.parse_args()
@@ -285,16 +285,6 @@ def main():
     conn = psycopg2.connect(**DB)
     cur  = conn.cursor()
 
-    cur.execute(
-        "SELECT id FROM bb_modeli WHERE naziv=%s AND ROUND(temperatura::numeric,4)=ROUND(%s::numeric,4)",
-        (args.model, args.temp)
-    )
-    row = cur.fetchone()
-    if not row:
-        print(f"Model '{args.model}' temp={args.temp} nije u bb_modeli!")
-        sys.exit(1)
-    model_id = row[0]
-
     cur.execute("SELECT id FROM bb_embeddings WHERE naziv=%s", (args.embedder,))
     row = cur.fetchone()
     if not row:
@@ -304,69 +294,82 @@ def main():
 
     recenice = get_recenice(cur, args.knjiga, args.od, args.do)
     print(f"Rečenica za obradu: {len(recenice)} (pozicije {args.od}–{args.do})")
-    print(f"Model: {args.model} | temp: {args.temp} | engine: {'NLLB' if is_nllb else 'Ollama'}")
 
-    for kod in args.jezici:
-        jezik_naziv = JEZIK_NAZIVI.get(kod)
-        if not jezik_naziv:
-            print(f"Nepoznat jezik: {kod}, preskačem.")
-            continue
-
-        if is_nllb and kod not in NLLB_LANG_MAP:
-            print(f"NLLB ne podržava jezik: {kod}, preskačem.")
-            continue
-
-        cur.execute("SELECT id FROM bb_jezik WHERE kod=%s", (kod,))
-        jezik_id = cur.fetchone()[0]
-
-        prevodi_knjige_id = get_or_create_prevodi_knjige(
-            cur, args.knjiga, jezik_id, model_id, embeddings_id
+    for temp in args.temp:
+        cur.execute(
+            "SELECT id FROM bb_modeli WHERE naziv=%s AND ROUND(temperatura::numeric,4)=ROUND(%s::numeric,4)",
+            (args.model, temp)
         )
-        conn.commit()
+        row = cur.fetchone()
+        if not row:
+            print(f"Model '{args.model}' temp={temp} nije u bb_modeli! Preskačem.")
+            continue
+        model_id = row[0]
 
-        print(f"\n── Jezik: {kod} ({jezik_naziv}), prevodi_knjige_id={prevodi_knjige_id} ──")
+        engine = "NLLB" if is_nllb else "Ollama"
+        print(f"\n═══ Model: {args.model} | temp: {temp} | engine: {engine} ═══")
 
-        todo = [(rid, poz, tekst) for rid, poz, tekst in recenice
-                if not already_done(cur, prevodi_knjige_id, rid)]
-        print(f"  Preostalo: {len(todo)} rečenica")
+        for kod in args.jezici:
+            jezik_naziv = JEZIK_NAZIVI.get(kod)
+            if not jezik_naziv:
+                print(f"Nepoznat jezik: {kod}, preskačem.")
+                continue
 
-        for i in range(0, len(todo), BATCH_SIZE):
-            chunk = todo[i:i + BATCH_SIZE]
-            tekstovi = [t for _, _, t in chunk]
+            if is_nllb and kod not in NLLB_LANG_MAP:
+                print(f"NLLB ne podržava jezik: {kod}, preskačem.")
+                continue
 
-            print(f"  Batch {i//BATCH_SIZE + 1}: pozicije {chunk[0][1]}–{chunk[-1][1]}")
+            cur.execute("SELECT id FROM bb_jezik WHERE kod=%s", (kod,))
+            jezik_id = cur.fetchone()[0]
 
-            if is_nllb:
-                nllb_tgt = NLLB_LANG_MAP[kod]
-                prevodi = nllb_batch(tekstovi, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
-                backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
-            else:
-                prevodi = prevedi_batch(tekstovi, jezik_naziv, args.model, args.temp)
-                if prevodi is None:
-                    print("    Fallback na single prevod...")
-                    prevodi = [prevedi_single(t, jezik_naziv, args.model, args.temp)
-                               for t in tekstovi]
-
-                backs = back_prevedi_batch(prevodi, jezik_naziv, args.model, args.temp)
-                if backs is None:
-                    print("    Fallback na single back-translation...")
-                    backs = [back_prevedi_single(p, jezik_naziv, args.model, args.temp)
-                             for p in prevodi]
-
-            en_vektori     = embedder.encode(tekstovi)
-            back_vektori   = embedder.encode(backs)
-            prevod_vektori = embedder.encode(prevodi)
-
-            for j, (rid, poz, tekst) in enumerate(chunk):
-                score             = cosine(en_vektori[j], back_vektori[j])
-                translation_score = cosine(en_vektori[j], prevod_vektori[j])
-                upisi_prevod(cur, prevodi_knjige_id, rid,
-                             prevodi[j], backs[j], score, translation_score)
-                print(f"    s{poz}: score={score:.4f} ts={translation_score:.4f}")
-
+            prevodi_knjige_id = get_or_create_prevodi_knjige(
+                cur, args.knjiga, jezik_id, model_id, embeddings_id
+            )
             conn.commit()
 
-        print(f"  Jezik {kod} gotov.")
+            print(f"\n── Jezik: {kod} ({jezik_naziv}), prevodi_knjige_id={prevodi_knjige_id} ──")
+
+            todo = [(rid, poz, tekst) for rid, poz, tekst in recenice
+                    if not already_done(cur, prevodi_knjige_id, rid)]
+            print(f"  Preostalo: {len(todo)} rečenica")
+
+            for i in range(0, len(todo), BATCH_SIZE):
+                chunk = todo[i:i + BATCH_SIZE]
+                tekstovi = [t for _, _, t in chunk]
+
+                print(f"  Batch {i//BATCH_SIZE + 1}: pozicije {chunk[0][1]}–{chunk[-1][1]}")
+
+                if is_nllb:
+                    nllb_tgt = NLLB_LANG_MAP[kod]
+                    prevodi = nllb_batch(tekstovi, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
+                    backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
+                else:
+                    prevodi = prevedi_batch(tekstovi, jezik_naziv, args.model, temp)
+                    if prevodi is None:
+                        print("    Fallback na single prevod...")
+                        prevodi = [prevedi_single(t, jezik_naziv, args.model, temp)
+                                   for t in tekstovi]
+
+                    backs = back_prevedi_batch(prevodi, jezik_naziv, args.model, temp)
+                    if backs is None:
+                        print("    Fallback na single back-translation...")
+                        backs = [back_prevedi_single(p, jezik_naziv, args.model, temp)
+                                 for p in prevodi]
+
+                en_vektori     = embedder.encode(tekstovi)
+                back_vektori   = embedder.encode(backs)
+                prevod_vektori = embedder.encode(prevodi)
+
+                for j, (rid, poz, tekst) in enumerate(chunk):
+                    score             = cosine(en_vektori[j], back_vektori[j])
+                    translation_score = cosine(en_vektori[j], prevod_vektori[j])
+                    upisi_prevod(cur, prevodi_knjige_id, rid,
+                                 prevodi[j], backs[j], score, translation_score)
+                    print(f"    s{poz}: score={score:.4f} ts={translation_score:.4f}")
+
+                conn.commit()
+
+            print(f"  Jezik {kod} gotov.")
 
     cur.close()
     conn.close()
