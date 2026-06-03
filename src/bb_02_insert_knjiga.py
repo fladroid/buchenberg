@@ -34,6 +34,12 @@ KNJIGE = [
         "gutenberg_id": "70114",
         "html":         "books/the_big_four.html",
     },
+    {
+        "naziv":        "Frankenstein; or, the Modern Prometheus",
+        "autor":        "Mary Wollstonecraft Shelley",
+        "gutenberg_id": "84",
+        "html":         "books/frankenstein.html",
+    },
 ]
 
 TOC_TITLES = {"CONTENTS", "TABLE OF CONTENTS"}
