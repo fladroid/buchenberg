@@ -3,8 +3,9 @@ bb_web_export.py
 Generira JSON fajlove za Buchenberg web stranicu.
 
 Output:
-    /var/www/buchenberg/data/books.json       — katalog knjiga i jezika
-    /var/www/buchenberg/data/tr_<lang>.json   — prevod po jeziku (svi pobjednici)
+    /var/www/buchenberg/data/books.json         — katalog knjiga i jezika
+    /var/www/buchenberg/data/orig_<id>.json     — sve originalne rečenice knjige
+    /var/www/buchenberg/data/tr_<id>_<lang>.json — prevod po jeziku (svi pobjednici)
 
 Primjer:
     venv/bin/python src/bb_web_export.py
@@ -17,7 +18,7 @@ import argparse
 import psycopg2
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv("/home/balsam/buchenberg/.env")
 
 DB = {
     "host":     os.getenv("DB_HOST", "balsam.dynu.net"),
@@ -59,7 +60,17 @@ def get_languages_for_book(cur, knjiga_id):
         JOIN bb_recenice r ON r.id = pr.recenica_id
         WHERE pk.knjiga_id = %s
         GROUP BY j.kod, j.naziv
-        ORDER BY prevedenih_recenica DESC, j.kod
+        ORDER BY j.kod
+    """, (knjiga_id,))
+    return cur.fetchall()
+
+
+def get_all_sentences(cur, knjiga_id):
+    cur.execute("""
+        SELECT pozicija, tekst
+        FROM bb_recenice
+        WHERE knjiga_id = %s
+        ORDER BY pozicija
     """, (knjiga_id,))
     return cur.fetchall()
 
@@ -76,8 +87,8 @@ def get_translations(cur, knjiga_id, lang_kod):
             ROUND(pr.translation_score::numeric, 4) AS ts,
             ROUND(pr.sudija_avg::numeric, 4)        AS judge_avg
         FROM bb_prev_knjige pk
-        JOIN bb_jezik j         ON j.id  = pk.jezik_id
-        JOIN bb_prev_recenica pvr ON pvr.prev_knjige_id = pk.id
+        JOIN bb_jezik j            ON j.id  = pk.jezik_id
+        JOIN bb_prev_recenica pvr  ON pvr.prev_knjige_id = pk.id
         JOIN bb_prevodi_recenica pr ON pr.id = pvr.prevodi_recenica_id
         JOIN bb_prevodi_knjige ppk  ON ppk.id = pr.prevodi_knjige_id
         JOIN bb_modeli m            ON m.id  = ppk.model_id
@@ -123,26 +134,61 @@ def main():
         json.dump(books_data, f, ensure_ascii=False, indent=2)
     print(f"books.json — {len(books_data)} knjiga(e)")
 
-    # --- tr_<lang>.json po knjizi i jeziku ---
+    # --- orig_<id>.json — sve originalne rečenice ---
+    for book_id, naziv, autor, gutenberg_id, ukupno in books:
+        rows = get_all_sentences(cur, book_id)
+        sentences = [{"pos": pos, "text": tekst} for pos, tekst in rows]
+        out = {
+            "book_id":          book_id,
+            "title":            naziv,
+            "author":           autor,
+            "gutenberg_id":     gutenberg_id,
+            "total_sentences":  ukupno,
+            "sentences":        sentences,
+        }
+        fname = f"orig_{book_id}.json"
+        fpath = os.path.join(args.output, fname)
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
+        print(f"  {fname} — {len(sentences)} rečenica")
+
+    # --- tr_<id>_<lang>.json po knjizi i jeziku ---
     for book_id, naziv, autor, _, _ in books:
         langs = get_languages_for_book(cur, book_id)
+        # dict originala za merge
+        all_sents = {pos: tekst for pos, tekst in get_all_sentences(cur, book_id)}
+
         for lang_kod, lang_naziv, prevedenih in langs:
             rows = get_translations(cur, book_id, lang_kod)
             if not rows:
                 continue
 
-            sentences = []
+            # index prevedenih rečenica
+            translated = {}
             for pozicija, original, translation, model, temperatura, back_score, ts, judge_avg in rows:
-                sentences.append({
+                translated[pozicija] = {
                     "pos":         pozicija,
                     "original":    original,
                     "translation": translation,
+                    "translated":  True,
                     "model":       model,
                     "temp":        float(temperatura) if temperatura is not None else None,
                     "back_score":  float(back_score)  if back_score  is not None else None,
                     "ts":          float(ts)           if ts          is not None else None,
                     "judge_avg":   float(judge_avg)    if judge_avg   is not None else None,
-                })
+                }
+
+            # sve rečenice knjige — prevedene + neprevedene
+            sentences = []
+            for pos in sorted(all_sents.keys()):
+                if pos in translated:
+                    sentences.append(translated[pos])
+                else:
+                    sentences.append({
+                        "pos":        pos,
+                        "original":   all_sents[pos],
+                        "translated": False,
+                    })
 
             out = {
                 "book_id":   book_id,
@@ -157,7 +203,7 @@ def main():
             fpath = os.path.join(args.output, fname)
             with open(fpath, "w", encoding="utf-8") as f:
                 json.dump(out, f, ensure_ascii=False, indent=2)
-            print(f"  {fname} — {len(sentences)} rečenica ({lang_naziv})")
+            print(f"  {fname} — {len(rows)} prevedenih / {len(sentences)} ukupno ({lang_naziv})")
 
     cur.close()
     conn.close()
