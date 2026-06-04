@@ -10,14 +10,12 @@ import sys
 import subprocess
 import requests
 import psycopg2
-import yaml
 from pathlib import Path
 from dotenv import load_dotenv
 
 BUCH_HOME = Path(__file__).resolve().parent.parent
 ENV_FILE  = BUCH_HOME / ".env"
 BUCH_ENV  = BUCH_HOME / "buch_env.sh"
-REGISTRY  = BUCH_HOME / "tests" / "test_registry.yaml"
 
 # ── Boje za terminal ────────────────────────────────────────────────
 OK  = "\033[92m✅\033[0m"
@@ -39,7 +37,7 @@ def check_env():
     hdr("1. .env fajl")
     required = [
         "OLLAMA_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL",
-        "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"
+        "DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD"
     ]
     if not ENV_FILE.exists():
         row(ERR, ".env fajl", f"NIJE PRONAĐEN: {ENV_FILE}")
@@ -65,53 +63,53 @@ def check_env():
 
     return all_ok
 
-# ── 2. PostgreSQL ────────────────────────────────────────────────────
+# ── 2. PostgreSQL — bb baza ──────────────────────────────────────────
 def check_postgres():
-    hdr("2. PostgreSQL")
+    hdr("2. PostgreSQL — bb baza")
     try:
         conn = psycopg2.connect(
             host=os.getenv("DB_HOST"), port=int(os.getenv("DB_PORT", 5432)),
-            dbname=os.getenv("DB_NAME"), user=os.getenv("DB_USER"),
+            dbname="bb", user=os.getenv("DB_USER"),
             password=os.getenv("DB_PASSWORD"), connect_timeout=5
         )
         cur = conn.cursor()
 
         cur.execute("SELECT version()")
         ver = cur.fetchone()[0].split(" on ")[0]
-        row(OK, "Konekcija", ver)
+        row(OK, "Konekcija (bb)", ver)
 
-        for tbl in ("books", "sentences", "test_results", "ga_results"):
+        # Osnovne tabele
+        for tbl in ("bb_knjige", "bb_recenice", "bb_prevodi_recenica", "bb_prev_recenica"):
             cur.execute(f"SELECT COUNT(*) FROM {tbl}")
             n = cur.fetchone()[0]
             row(OK, f"  {tbl}", f"{n:,} redova")
 
+        # Stanje prevoda po knjizi i jeziku
         cur.execute("""
-            SELECT DISTINCT test_id FROM test_results
-            ORDER BY test_id DESC LIMIT 3
+            SELECT k.naziv, j.kod,
+                   COUNT(DISTINCT pr.recenica_id) AS prev_rec,
+                   COUNT(DISTINCT po.prevodi_recenica_id) AS pobjednici
+            FROM bb_prevodi_knjige pk
+            JOIN bb_knjige k  ON k.id = pk.knjiga_id
+            JOIN bb_jezik  j  ON j.id = pk.jezik_id
+            JOIN bb_prevodi_recenica pr ON pr.prevodi_knjige_id = pk.id
+            LEFT JOIN bb_prev_knjige ppk ON ppk.knjiga_id = pk.knjiga_id AND ppk.jezik_id = pk.jezik_id LEFT JOIN bb_prev_recenica po ON po.prev_knjige_id = ppk.id
+            GROUP BY k.naziv, j.kod
+            ORDER BY k.naziv, j.kod
         """)
-        test_ids = [r[0] for r in cur.fetchall()]
+        rows_data = cur.fetchall()
 
-        if test_ids:
+        if rows_data:
             print(f"\n  {'─'*48}")
-            print(f"  Boje rečenica (zadnja 3 testa):")
-            for tid in reversed(test_ids):
-                cur.execute("""
-                    SELECT target_lang,
-                        SUM(CASE WHEN ms >= 0.90 THEN 1 ELSE 0 END) z,
-                        SUM(CASE WHEN ms >= 0.80 AND ms < 0.90 THEN 1 ELSE 0 END) y,
-                        SUM(CASE WHEN ms < 0.80 THEN 1 ELSE 0 END) r
-                    FROM (
-                        SELECT target_lang, MAX(translation_score) ms
-                        FROM test_results
-                        WHERE test_id = %s
-                        GROUP BY sentence_id, target_lang
-                    ) t GROUP BY target_lang ORDER BY target_lang
-                """, (tid,))
-                rows = cur.fetchall()
-                print(f"\n  [{tid}]")
-                print(f"  {'Lang':<6} {'🟢':>5} {'🟡':>5} {'🔴':>5}")
-                for lang, z, y, r in rows:
-                    print(f"  {lang:<6} {z:>5} {y:>5} {r:>5}")
+            print(f"  Stanje prevoda:")
+            print(f"  {'Knjiga':<36} {'Lang':>4} {'Prev':>6} {'Pobj':>6}")
+            print(f"  {'─'*56}")
+            prev_knjiga = None
+            for naziv, kod, prev_rec, pobjednici in rows_data:
+                knjiga_display = naziv[:34] if naziv != prev_knjiga else ""
+                prev_knjiga = naziv
+                pobj_str = str(pobjednici) if pobjednici else "-"
+                print(f"  {knjiga_display:<36} {kod:>4} {prev_rec:>6} {pobj_str:>6}")
 
         conn.close()
         return True
@@ -136,14 +134,15 @@ def check_ollama():
         return False
 
     used_models = {
-        "gemma3:12b":      "gemma / gemma_t05",
-        "ministral-3:14b": "ministral / ministral_t05",
+        "gemma3:12b":      "prevod",
+        "ministral-3:14b": "prevod",
+        "gemma4:31b":      "sudija",
     }
 
     print(f"\n  {'─'*48}")
     print(f"  Modeli koji se koriste u projektu:")
     all_ok = True
-    for model, methods in used_models.items():
+    for model, uloga in used_models.items():
         if model in available:
             try:
                 tr = requests.post(
@@ -153,11 +152,11 @@ def check_ollama():
                     timeout=30
                 )
                 reply = tr.json().get("message", {}).get("content", "")[:20].strip()
-                row(OK, f"{model}", f"→ '{reply}'  [{methods}]")
+                row(OK, f"{model}", f"→ '{reply}'  [{uloga}]")
             except Exception as e:
                 row(WARN, f"{model}", f"dostupan ali test poziv pao: {e}")
         else:
-            row(ERR, f"{model}", f"NIJE u listi!  [{methods}]")
+            row(ERR, f"{model}", f"NIJE u listi!  [{uloga}]")
             all_ok = False
 
     print(f"\n  {'─'*48}")
@@ -226,28 +225,9 @@ def check_venv():
         else:
             row(ERR, pkg, result.stderr.split("\n")[0][:50])
 
-# ── 6. test_registry.yaml ────────────────────────────────────────────
-def check_registry():
-    hdr("6. test_registry.yaml")
-    if not REGISTRY.exists():
-        row(ERR, "test_registry.yaml", "nije pronađen!")
-        return
-
-    with open(REGISTRY) as f:
-        registry = yaml.safe_load(f)
-
-    row(OK, "test_registry.yaml", f"{len(registry)} testova")
-    print(f"\n  {'Test':<12} {'Knjiga':<30} {'Jezici':<25} {'Metode'}")
-    print(f"  {'─'*90}")
-    for tid, cfg in sorted(registry.items()):
-        langs   = ", ".join(cfg.get("langs", []))
-        methods = ", ".join(cfg.get("methods", []))
-        book    = cfg.get("book", "")[:28]
-        print(f"  {tid:<12} {book:<30} {langs:<25} {methods}")
-
-# ── 7. Git status ────────────────────────────────────────────────────
+# ── 6. Git status ────────────────────────────────────────────────────
 def check_git():
-    hdr("7. Git status")
+    hdr("6. Git status")
     try:
         result = subprocess.run(
             ["git", "-C", str(BUCH_HOME), "status", "--short"],
@@ -283,7 +263,6 @@ if __name__ == "__main__":
         check_ollama()
     check_nllb()
     check_venv()
-    check_registry()
     check_git()
 
     print(f"\n{HDR}{'═'*52}{RST}")
