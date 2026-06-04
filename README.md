@@ -1,9 +1,9 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 4. jun 2026. (sesija 44)  
+**Poslednje ažuriranje:** 4. jun 2026. (sesija 45)  
 **Autor:** fladroid  
-**Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web prikaz
+**Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
 ---
 
@@ -327,6 +327,22 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 - **JSON data:** `/var/www/buchenberg/data/`
 - Apache2 odmah servira novi sadržaj — nema potrebe za restartem
 
+**Struktura web stranica (sesija 45):**
+
+| Fajl | Stranica | Opis |
+|------|----------|------|
+| `index.html` | Landing page | Opis projekta, naziv Buchenberg, live stat kartice, CTA linkovi |
+| `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
+| `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi (client-side) |
+| `books.html` | Lista knjiga | Kartice s lang badges; linkovi: Read, Gutenberg, NER (coming soon), Word cloud (coming soon) |
+| `reader.html` | Čitač | Stari čitač; prima `?book=ID` URL param za direktno otvaranje knjige |
+| `buchenberg.css` | Shared CSS | Dark mode, navigacija, sve dijeljene komponente |
+
+**Shared funkcionalnosti:**
+- Dark mode toggle (☀️/🌙) — persista u `localStorage`
+- UI jezik (EN/DE/IT/HR/SR) — persista u `localStorage`, dijeli se između stranica
+- `books.html` → "Read" dugme otvara `reader.html?book={id}`
+
 ### Struktura direktorijuma
 
 ```
@@ -404,15 +420,22 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Pipeline
 1. **Proširenje Hound** — svih 12 jezika na s101–s350
 2. **Proširenje PT (Big Four)** — s101–s350
-3. **Proširenje RO (Frankenstein)** — s101–s350
+3. **Proširenje RO+IT (Frankenstein)** — s101–s350
 4. **Novi jezici za sve knjige** — po workflow-u iz sesije 41
 5. **Export** — `bb_05_export.py` za jezike s dovoljno rečenica
 6. **SR ćirilica** — provjeriti da li se `bb_sr_cirilica.py` automatski poziva nakon `bb_04_pobjednik.py`
 7. **bb_web_export.py** — refaktorisati da koristi `v_pobjednici` view
 
+### Web portal
+8. **spaCy NER** — implementirati i aktivirati link na `books.html` (trenutno disabled)
+9. **Word cloud** — implementirati i aktivirati link na `books.html` (trenutno disabled)
+10. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
+11. **`stats.html`** — razmotriti dedicated `stats.json` koji generira `bb_web_export.py`
+
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 4. jun 2026.*
+*Flavio & Claude · Buchenberg · V3 · 4. jun 2026. (sesija 45)*
