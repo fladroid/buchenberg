@@ -116,6 +116,22 @@ def get_ner(cur, knjiga_id):
         entiteti[tip].append({"ime": ime_norm, "pojave": pojave})
     return entiteti
 
+
+def get_ner_veze(cur, knjiga_id, min_tezina=2):
+    cur.execute("""
+        SELECT e1.ime_norm, e2.ime_norm, COUNT(*) AS tezina
+        FROM bb_ner_recenica r1
+        JOIN bb_ner_recenica r2 ON r2.recenica_id = r1.recenica_id
+            AND r2.entitet_id > r1.entitet_id
+        JOIN bb_ner_entiteti e1 ON e1.id = r1.entitet_id
+        JOIN bb_ner_entiteti e2 ON e2.id = r2.entitet_id
+        WHERE e1.knjiga_id = %s AND e2.knjiga_id = %s
+        GROUP BY e1.ime_norm, e2.ime_norm
+        HAVING COUNT(*) >= %s
+        ORDER BY tezina DESC
+    """, (knjiga_id, knjiga_id, min_tezina))
+    return [{"od": od, "do": do, "tezina": int(t)} for od, do, t in cur.fetchall()]
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT,
@@ -226,7 +242,8 @@ def main():
     for book in books_data:
         knjiga_id = book["id"]
         ner = get_ner(cur, knjiga_id)
-        ner_out = {"knjiga_id": knjiga_id, "entiteti": ner}
+        veze = get_ner_veze(cur, knjiga_id, min_tezina=1)
+        ner_out = {"knjiga_id": knjiga_id, "entiteti": ner, "veze": veze}
         ner_path = os.path.join(args.output, f"ner_{knjiga_id}.json")
         with open(ner_path, "w", encoding="utf-8") as f:
             json.dump(ner_out, f, ensure_ascii=False, indent=2)
