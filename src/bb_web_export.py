@@ -100,6 +100,22 @@ def get_translations(cur, knjiga_id, lang_kod):
     return cur.fetchall()
 
 
+
+def get_ner(cur, knjiga_id):
+    cur.execute("""
+        SELECT tip, ime_norm, pojave
+        FROM bb_ner_entiteti
+        WHERE knjiga_id = %s
+        ORDER BY tip, pojave DESC
+    """, (knjiga_id,))
+    rows = cur.fetchall()
+    entiteti = {}
+    for tip, ime_norm, pojave in rows:
+        if tip not in entiteti:
+            entiteti[tip] = []
+        entiteti[tip].append({"ime": ime_norm, "pojave": pojave})
+    return entiteti
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT,
@@ -205,6 +221,17 @@ def main():
             with open(fpath, "w", encoding="utf-8") as f:
                 json.dump(out, f, ensure_ascii=False, indent=2)
             print(f"  {fname} — {len(rows)} prevedenih / {len(sentences)} ukupno ({lang_naziv})")
+
+    # NER export
+    for book in books_data:
+        knjiga_id = book["id"]
+        ner = get_ner(cur, knjiga_id)
+        ner_out = {"knjiga_id": knjiga_id, "entiteti": ner}
+        ner_path = os.path.join(args.output, f"ner_{knjiga_id}.json")
+        with open(ner_path, "w", encoding="utf-8") as f:
+            json.dump(ner_out, f, ensure_ascii=False, indent=2)
+        total = sum(len(v) for v in ner.values())
+        print(f"  ner_{knjiga_id}.json — {total} entiteta")
 
     cur.close()
     conn.close()
