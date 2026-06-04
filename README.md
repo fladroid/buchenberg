@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 3. jun 2026. (sesija 42)  
+**Poslednje ažuriranje:** 4. jun 2026. (sesija 44)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web prikaz
 
@@ -129,43 +129,38 @@ PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_03_prevod.py \
   --embedder "multilingual-e5-large" --jezici hr \
   > logs/naziv_hr_gemma3_08.log 2>&1 &
 
-# 2. gemma3@0.1 (cloud, nakon što Run 1 završi)
+# 2. gemma3@0.1 i 0.8 u jednom pozivu (cloud, nakon što Run 1 završi)
 PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_03_prevod.py \
-  --knjiga 1 --od 1 --do 100 --model "gemma3:12b" --temp 0.1 \
+  --knjiga 1 --od 1 --do 100 --model "gemma3:12b" --temp 0.8 0.1 \
   --embedder "multilingual-e5-large" --jezici hr \
-  > logs/naziv_hr_gemma3_01.log 2>&1 &
+  > logs/naziv_hr_gemma3.log 2>&1 &
 
-# 3. NLLB (lokalni, paralelno s Run 2)
+# 3. NLLB (lokalni, paralelno s cloud)
 PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_03_prevod.py \
   --knjiga 1 --od 1 --do 100 --model "nllb-600M" --temp 0.0 \
   --embedder "multilingual-e5-large" --jezici hr \
   > logs/naziv_hr_nllb.log 2>&1 &
 
-# 4. ministral@0.8 (cloud, nakon Run 2)
+# 4. ministral@0.8 i 0.1 u jednom pozivu (cloud, nakon gemma3)
 PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_03_prevod.py \
-  --knjiga 1 --od 1 --do 100 --model "ministral-3:14b" --temp 0.8 \
+  --knjiga 1 --od 1 --do 100 --model "ministral-3:14b" --temp 0.8 0.1 \
   --embedder "multilingual-e5-large" --jezici hr \
-  > logs/naziv_hr_ministral_08.log 2>&1 &
+  > logs/naziv_hr_ministral.log 2>&1 &
 
-# 5. ministral@0.1 (cloud, nakon Run 4)
-PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_03_prevod.py \
-  --knjiga 1 --od 1 --do 100 --model "ministral-3:14b" --temp 0.1 \
-  --embedder "multilingual-e5-large" --jezici hr \
-  > logs/naziv_hr_ministral_01.log 2>&1 &
-
-# 6. Sudija
+# 5. Sudija
 PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_08_sudija.py \
   --knjiga 1 --od 1 --do 100 --jezici hr \
   > logs/naziv_hr_sudija.log 2>&1 &
 
-# 7. Pobjednici
+# 6. Pobjednici
 venv/bin/python src/bb_04_pobjednik.py --knjiga 1 --od 1 --do 100 --jezici hr
 
-# 8. Web export
+# 7. Web export
 venv/bin/python src/bb_web_export.py
 ```
 
 > ⚠️ **Logovanje:** uvijek koristiti `PYTHONUNBUFFERED=1 nohup time` — trajanje mora biti vidljivo u logu.
+> ⚠️ **`--temp` prima listu:** `--temp 0.8 0.1` pokreće obje temperature u jednom pozivu (sesija 43).
 
 ### Batch + fallback pattern
 
@@ -206,6 +201,33 @@ if parts is None:
 | `sudija_avg` | (grammar + naturalness + fidelity) / 3 | LLM evaluacija |
 | `finalni_score` | 0.4 × kompozitni + 0.6 × sudija_avg | Kriterij pobjednika |
 
+### Viewovi — strategija denormalizacije
+
+**Princip:** Sve skripte, reportovi i web export koriste viewove umjesto direktnih JOINova nad tabelama. Kompleksna join logika je enkapsulirana na jednom mjestu — ispravka se radi samo u viewu.
+
+| View | Opis | Tipična upotreba |
+|------|------|-----------------|
+| `v_prevodi` | Svi prevodi iz `bb_prevodi_recenica` — flat prikaz s modelom, jezikom, embedderom, originalnom rečenicom i svim score-ovima | Analiza, debugging, poređenje modela |
+| `v_pobjednici` | Samo pobjedničke rečenice iz `bb_prev_recenica` — isti flat format | Web export, finalni reportovi, statistika |
+
+**Primjer upotrebe:**
+```sql
+-- Pobjednici za hrvatski, prvih 10 rečenica
+SELECT s_id, model, temperatura, prevod, finalni_score
+FROM v_pobjednici
+WHERE jezik = 'hr'
+ORDER BY s_id
+LIMIT 10;
+
+-- Statistika pobjednika po modelu i jeziku
+SELECT jezik, model, temperatura, COUNT(*) AS pobjede
+FROM v_pobjednici
+GROUP BY jezik, model, temperatura
+ORDER BY jezik, pobjede DESC;
+```
+
+> ⚠️ Novi reportovi i novi JSON exporti pišu se isključivo nad viewovima. Direktni JOINovi nad tabelama su dozvoljeni samo pri inicijalnoj izgradnji novih viewova.
+
 ---
 
 ## 6. Embedder
@@ -225,14 +247,14 @@ if parts is None:
 |---------|------|
 | `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
 | `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy); lista knjiga je hardcodovana u `KNJIGE` |
-| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB |
+| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu |
 | `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
-| `health_check.py` | Infrastrukturna provjera svih komponenti |
+| `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
 
 ### Kako dodati novu knjigu
 
@@ -268,12 +290,12 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 42)
+## 9. Stanje prevoda (na kraju sesije 44)
 
 | Knjiga | Jezik | Rečenice | Status |
 |--------|-------|----------|--------|
 | Hound (id=1) | hr, bs | 350 | ✅ prevod + sudija + pobjednici |
-| Hound (id=1) | af, de, es, fr, it, nl, sl, sr | 100 | ✅ prevod + sudija + pobjednici |
+| Hound (id=1) | af, de, es, fr, it, nl, sl, sr, pt, ro | 100 | ✅ prevod + sudija + pobjednici |
 | Big Four (id=5) | pt | 100 | ✅ prevod + sudija + pobjednici |
 | Frankenstein (id=8) | ro | 100 | ✅ prevod + sudija + pobjednici |
 
@@ -331,6 +353,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `bb_03_prevod.py` — ministral, 100 rec, 1 jezik | ~4 min |
 | `bb_03_prevod.py` — nllb, 100 rec, 1 jezik | ~5–10 min |
 | `bb_03_prevod.py` — gemma3, 350 rec, 1 jezik | ~22 min |
+| `bb_03_prevod.py` — gemma3, 100 rec, 2 jezika (--temp lista) | ~15 min |
 | `bb_08_sudija.py` — 100 rec, 1 jezik (500 ocjena) | ~5 min |
 | `bb_08_sudija.py` — 350 rec, 1 jezik | ~14 min |
 | Cloud ukupno (5 modela, 350 rec, 1 jezik) | ~70 min |
@@ -381,14 +404,15 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-1. **Proširenje Hound** — preostalih 7 jezika (af, de, es, fr, it, nl, sl, sr) na s101–s350
+1. **Proširenje Hound** — svih 12 jezika na s101–s350
 2. **Proširenje PT (Big Four)** — s101–s350
 3. **Proširenje RO (Frankenstein)** — s101–s350
 4. **Novi jezici za sve knjige** — po workflow-u iz sesije 41
 5. **Export** — `bb_05_export.py` za jezike s dovoljno rečenica
 6. **SR ćirilica** — provjeriti da li se `bb_sr_cirilica.py` automatski poziva nakon `bb_04_pobjednik.py`
+7. **bb_web_export.py** — refaktorisati da koristi `v_pobjednici` view
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 3. jun 2026.*
+*Flavio & Claude · Buchenberg · V3 · 4. jun 2026.*
