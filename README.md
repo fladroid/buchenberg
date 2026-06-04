@@ -252,7 +252,8 @@ ORDER BY jezik, pobjede DESC;
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg |
-| `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz |
+| `bb_09_ner.py` | NER pipeline: spaCy ekstrakcija + Gemma4 normalizacija + upis u bb_ner_entiteti/bb_ner_recenica |
+| `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version) |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
 | `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
 
@@ -334,8 +335,9 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `index.html` | Landing page | Opis projekta, naziv Buchenberg, live stat kartice, CTA linkovi |
 | `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
 | `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi (client-side) |
-| `books.html` | Lista knjiga | Kartice s lang badges; linkovi: Read, Gutenberg, NER (coming soon), Word cloud (coming soon) |
-| `reader.html` | Čitač | Stari čitač; prima `?book=ID` URL param za direktno otvaranje knjige |
+| `books.html` | Lista knjiga | Kartice s lang badges; linkovi: Read, Gutenberg, NER (→ nlp.html), Word cloud (modal) |
+| `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s highlight |
+| `reader.html` | Čitač | Prima `?book=ID` URL param za direktno otvaranje knjige |
 | `buchenberg.css` | Shared CSS | Dark mode, navigacija, sve dijeljene komponente |
 
 **Shared funkcionalnosti:**
@@ -430,7 +432,7 @@ Svaka sesija završava:
 7. **bb_web_export.py** — refaktorisati da koristi `v_pobjednici` view
 
 ### Web portal
-8. **spaCy NER** — implementirati i aktivirati link na `books.html` (trenutno disabled)
+8. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
 9. **Word cloud** — implementirati i aktivirati link na `books.html` (trenutno disabled)
 10. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
 11. **`stats.html`** — razmotriti dedicated `stats.json` koji generira `bb_web_export.py`
