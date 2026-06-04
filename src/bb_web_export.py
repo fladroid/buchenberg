@@ -13,6 +13,7 @@ Primjer:
 """
 
 import os
+import time
 import json
 import argparse
 import psycopg2
@@ -207,6 +208,12 @@ def main():
 
     cur.close()
     conn.close()
+    # version.json — cache busting
+    version_path = os.path.join(args.output, "version.json")
+    with open(version_path, "w", encoding="utf-8") as f:
+        json.dump({"v": int(time.time())}, f)
+    print(f"  version.json — cache busting (v={int(time.time())})")
+
     print("Gotovo.")
 
 
