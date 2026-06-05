@@ -147,15 +147,18 @@ PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_03_prevod.py \
   --embedder "multilingual-e5-large" --jezici hr \
   > logs/naziv_hr_ministral.log 2>&1 &
 
-# 5. Sudija
+# 5. bb_sr_cirilica (SAMO za srpski — pokrenuti nakon bb_03, prije sudije!)
+venv/bin/python src/bb_sr_cirilica.py
+
+# 6. Sudija
 PYTHONUNBUFFERED=1 nohup time venv/bin/python src/bb_08_sudija.py \
   --knjiga 1 --od 1 --do 100 --jezici hr \
   > logs/naziv_hr_sudija.log 2>&1 &
 
-# 6. Pobjednici
+# 7. Pobjednici
 venv/bin/python src/bb_04_pobjednik.py --knjiga 1 --od 1 --do 100 --jezici hr
 
-# 7. Web export
+# 8. Web export
 venv/bin/python src/bb_web_export.py
 ```
 
@@ -291,14 +294,17 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 44)
+## 9. Stanje prevoda (na kraju sesije 51)
 
 | Knjiga | Jezik | Rečenice | Status |
 |--------|-------|----------|--------|
-| Hound (id=1) | hr, bs | 350 | ✅ prevod + sudija + pobjednici |
-| Hound (id=1) | af, de, es, fr, it, nl, sl, sr, pt, ro | 100 | ✅ prevod + sudija + pobjednici |
-| Big Four (id=5) | pt | 100 | ✅ prevod + sudija + pobjednici |
-| Frankenstein (id=8) | ro | 100 | ✅ prevod + sudija + pobjednici |
+| Hound (id=1) | hr | 450 | ✅ prevod + sudija + pobjednici |
+| Hound (id=1) | bs | 350 | ✅ prevod + sudija + pobjednici |
+| Hound (id=1) | sr, it, de | 200 | ✅ prevod + sudija + pobjednici |
+| Hound (id=1) | af, es, fr, nl, sl, pt, ro | 100 | ✅ prevod + sudija + pobjednici |
+| Hound (id=1) | mk, bg | 50 | ✅ prevod + sudija + pobjednici |
+| Big Four (id=5) | pt, it | 100 | ✅ prevod + sudija + pobjednici |
+| Frankenstein (id=8) | ro, it | 100 | ✅ prevod + sudija + pobjednici |
 
 **Srpski (sr):** prevodi transliterirani u ćirilicu (`bb_sr_cirilica.py`).
 
@@ -423,21 +429,22 @@ Svaka sesija završava:
 ## 14. Sljedeći koraci
 
 ### Pipeline
-1. **Proširenje Hound** — svih 12 jezika na s101–s350
-2. **Proširenje PT (Big Four)** — s101–s350
-3. **Proširenje RO+IT (Frankenstein)** — s101–s350
-4. **Novi jezici za sve knjige** — po workflow-u iz sesije 41
-5. **Export** — `bb_05_export.py` za jezike s dovoljno rečenica
-6. **SR ćirilica** — provjeriti da li se `bb_sr_cirilica.py` automatski poziva nakon `bb_04_pobjednik.py`
+1. **Proširenje Hound hr/sr/it/de** — nastavak prema s350
+2. **Proširenje Hound ostalih 10 jezika** — s101–s350
+3. **Proširenje Hound mk/bg** — s51–s100
+4. **Proširenje Big Four PT/IT** — s101–s350
+5. **Proširenje Frankenstein RO/IT** — s101–s350
+6. **Export** — `bb_05_export.py` za jezike s dovoljno rečenica
 7. **bb_web_export.py** — refaktorisati da koristi `v_pobjednici` view
 
 ### Web portal
-8. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
-9. **Word cloud** — implementirati i aktivirati link na `books.html` (trenutno disabled)
-10. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
-11. **`stats.html`** — razmotriti dedicated `stats.json` koji generira `bb_web_export.py`
+8. **Web fajlovi u git** — `nlp.html`, `stats.html` dodati u repozitorijum
+9. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
+10. **Favicon** — buchenberg.opik.net
+11. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
+12. **`stats.html`** — razmotriti dedicated `stats.json` koji generira `bb_web_export.py`
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 4. jun 2026. (sesija 45)*
+*Flavio & Claude · Buchenberg · V3 · 5. jun 2026. (sesija 51)*
