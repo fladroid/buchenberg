@@ -119,18 +119,19 @@ def get_ner(cur, knjiga_id):
 
 def get_ner_veze(cur, knjiga_id, min_tezina=2):
     cur.execute("""
-        SELECT e1.ime_norm, e2.ime_norm, COUNT(*) AS tezina
+        SELECT e1.ime_norm, e1.tip, e2.ime_norm, e2.tip, COUNT(*) AS tezina
         FROM bb_ner_recenica r1
         JOIN bb_ner_recenica r2 ON r2.recenica_id = r1.recenica_id
             AND r2.entitet_id > r1.entitet_id
         JOIN bb_ner_entiteti e1 ON e1.id = r1.entitet_id
         JOIN bb_ner_entiteti e2 ON e2.id = r2.entitet_id
         WHERE e1.knjiga_id = %s AND e2.knjiga_id = %s
-        GROUP BY e1.ime_norm, e2.ime_norm
+        GROUP BY e1.ime_norm, e1.tip, e2.ime_norm, e2.tip
         HAVING COUNT(*) >= %s
         ORDER BY tezina DESC
     """, (knjiga_id, knjiga_id, min_tezina))
-    return [{"od": od, "do": do, "tezina": int(t)} for od, do, t in cur.fetchall()]
+    return [{"od": od, "od_tip": od_tip, "do": do, "do_tip": do_tip, "tezina": int(t)}
+            for od, od_tip, do, do_tip, t in cur.fetchall()]
 
 def main():
     parser = argparse.ArgumentParser()
