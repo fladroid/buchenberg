@@ -119,6 +119,12 @@ def main():
 
         print(f"\n══ Jezik: {kod} ({jezik_naziv}) ══")
 
+        if kod == 'sr':
+            print("  → Pokrećem bb_sr_cirilica.py (automatska transliteracija)...")
+            import subprocess, sys
+            subprocess.run([sys.executable, 'src/bb_sr_cirilica.py'], check=True)
+            print("  → Transliteracija završena.")
+
         cur.execute("""
             SELECT r.id, r.pozicija, r.tekst,
                    m.naziv AS model,
