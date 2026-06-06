@@ -100,3 +100,41 @@ Nepromijenjeno u odnosu na početak sesije 52 (overnight runovi Flavia):
 ---
 
 *Flavio & Claude · Buchenberg · Sesija 52 · 6. jun 2026.*
+
+---
+
+## Addendum — Čišćenje asimetrije (nastavak sesije)
+
+### Analiza duplikata po jeziku
+
+Detaljnom analizom utvrđeno:
+
+| Jezik | Problem | Opseg | Uzrok |
+|-------|---------|-------|-------|
+| de, fr | temp=0.5 (gemma3+ministral) | s1–s40 | Rani testni runovi |
+| de, fr | NLLB duplikati | s1–s80 | Rani run bez idempotentnosti |
+| de | gemma3@0.8 duplikati | s1–s40 | Rani run bez idempotentnosti |
+| de | ministral@0.8 duplikati | s1–s40 | Rani run bez idempotentnosti |
+
+### Koraci čišćenja
+
+1. Obrisani pobjednici i prevodi temp=0.5 za de i fr (12 pobjednika, 160 prevoda)
+2. Obrisani NLLB duplikati s1–s80 za de i fr (160 prevoda, 14 pobjednika)
+3. Ponovo pokrenuti NLLB za de s1–s40 i fr s1–s100
+4. Obrisani gemma3@0.8 i ministral@0.8 duplikati za de s1–s40 (80 prevoda)
+5. Reset sudija ocjena za de s1–s40 i fr s1–s100 (idempotentnost sudije zahtijeva sve modele neocijenjene)
+6. Pokrenuti sudija za de s1–s40 i fr s1–s100
+7. Pokrenuti pobjednici za de s1–s200 i fr s1–s100
+8. Web export
+
+### TODO — uslov sudije
+
+`bb_08_sudija.py` ima zastario uslov `len(prevodi) < 2` — treba promijeniti u `< 5` da zahtijeva sve modele. Ovo je uzrokovalo da sudija preskače rečenice gdje je samo NLLB bio bez ocjene.
+
+### Finalno stanje de i fr
+
+| Jezik | gemma3_08 | gemma3_01 | ministral_08 | ministral_01 | nllb | sudija | pobjednici |
+|-------|-----------|-----------|--------------|--------------|------|--------|-----------|
+| de | 200 | 200 | 200 | 200 | 3852 | 200 | 200 |
+| fr | 100 | 100 | 100 | 100 | 100 | 100 | 100 |
+
