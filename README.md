@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 4. jun 2026. (sesija 45)  
+**Poslednje ažuriranje:** 6. jun 2026. (sesija 52)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -212,6 +212,11 @@ if parts is None:
 |------|------|-----------------|
 | `v_prevodi` | Svi prevodi iz `bb_prevodi_recenica` — flat prikaz s modelom, jezikom, embedderom, originalnom rečenicom i svim score-ovima | Analiza, debugging, poređenje modela |
 | `v_pobjednici` | Samo pobjedničke rečenice iz `bb_prev_recenica` — isti flat format | Web export, finalni reportovi, statistika |
+| `v_knjige_recenice` | knjiga_id, knjiga_naziv, ukupno rečenica po knjizi | Statistika, join osnova |
+| `v_prevodi_po_modelu` | knjiga_id, jezik, model, temperatura, broj prevedenih rečenica | Analiza pokrivenosti po modelu |
+| `v_sudija_pokrivenost` | knjiga_id, jezik, broj rečenica s ocjenom sudije | Praćenje sudija pipeline-a |
+| `v_pobjednici_pokrivenost` | knjiga_id, jezik, broj pobjednika | Praćenje pobjednika |
+| `v_status_knjige` | Pivot po modelu/temperaturi — jedan red po knjiga×jezik, sve kolone pokrivenosti | **Dashboard — koristiti na početku svake sesije** |
 
 **Primjer upotrebe:**
 ```sql
@@ -294,17 +299,21 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 51)
+## 9. Stanje prevoda (na kraju sesije 52)
 
-| Knjiga | Jezik | Rečenice | Status |
-|--------|-------|----------|--------|
-| Hound (id=1) | hr | 450 | ✅ prevod + sudija + pobjednici |
-| Hound (id=1) | bs | 350 | ✅ prevod + sudija + pobjednici |
-| Hound (id=1) | sr, it, de | 200 | ✅ prevod + sudija + pobjednici |
-| Hound (id=1) | af, es, fr, nl, sl, pt, ro | 100 | ✅ prevod + sudija + pobjednici |
-| Hound (id=1) | mk, bg | 50 | ✅ prevod + sudija + pobjednici |
-| Big Four (id=5) | pt, it | 100 | ✅ prevod + sudija + pobjednici |
-| Frankenstein (id=8) | ro, it | 100 | ✅ prevod + sudija + pobjednici |
+> ⚠️ Koristiti `SELECT * FROM v_status_knjige;` za tačno stanje — health check je source of truth.
+
+| Knjiga | Jezik | Pobjednici | NLLB kompletno |
+|--------|-------|-----------|----------------|
+| Hound (id=1) | hr | 1800 | ✅ 3852 |
+| Hound (id=1) | sr | 300 | ✅ 3852 |
+| Hound (id=1) | bs | 350 | ✅ 3852 |
+| Hound (id=1) | it, de | 200 | ✅ 3852 |
+| Hound (id=1) | sl | 100 | ✅ 3852 |
+| Hound (id=1) | af, es, fr, nl, pt, ro | 100 | ❌ djelimično |
+| Hound (id=1) | mk, bg | 50 | ❌ djelimično |
+| Big Four (id=5) | pt, it | 100 | ❌ djelimično |
+| Frankenstein (id=8) | ro, it | 100 | ❌ djelimično |
 
 **Srpski (sr):** prevodi transliterirani u ćirilicu (`bb_sr_cirilica.py`).
 
@@ -447,4 +456,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 5. jun 2026. (sesija 51)*
+*Flavio & Claude · Buchenberg · V3 · 6. jun 2026. (sesija 52)*
