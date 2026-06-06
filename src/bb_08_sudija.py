@@ -104,6 +104,7 @@ def main():
     parser.add_argument("--od",     type=int, required=True)
     parser.add_argument("--do",     type=int, required=True)
     parser.add_argument("--jezici", type=str, nargs="+", required=True)
+    parser.add_argument("--force",  action="store_true", default=False)
     args = parser.parse_args()
 
     conn = psycopg2.connect(**DB)
@@ -142,9 +143,9 @@ def main():
               AND j.kod = %s
               AND m.naziv = ANY(%s)
               AND e.naziv = 'multilingual-e5-large'
-              AND pr.sudija_avg IS NULL
+              AND (pr.sudija_avg IS NULL OR %s)
             ORDER BY r.pozicija, m.naziv
-        """, (args.knjiga, args.od, args.do, kod, OCJENJIVANI_MODELI))
+        """, (args.knjiga, args.od, args.do, kod, OCJENJIVANI_MODELI, args.force))
 
         rows = cur.fetchall()
 
@@ -163,7 +164,7 @@ def main():
 
         for pozicija, data in sorted(recenice.items()):
             prevodi = data["prevodi"]
-            if len(prevodi) < 2:
+            if len(prevodi) < 5:
                 print(f"  s{pozicija}: premalo prevoda, preskačem.")
                 continue
 

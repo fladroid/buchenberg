@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 6. jun 2026. (sesija 52)  
+**Poslednje ažuriranje:** 6. jun 2026. (sesija 53)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -299,7 +299,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 52)
+## 9. Stanje prevoda (na kraju sesije 53)
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` za tačno stanje — health check je source of truth.
 
@@ -309,8 +309,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | Hound (id=1) | sr | 300 | ✅ 3852 |
 | Hound (id=1) | bs | 350 | ✅ 3852 |
 | Hound (id=1) | it, de | 200 | ✅ 3852 |
-| Hound (id=1) | sl | 100 | ✅ 3852 |
-| Hound (id=1) | af, es, fr, nl, pt, ro | 100 | ❌ djelimično |
+| Hound (id=1) | af, es, fr, nl, sl, pt, ro | 100 | ❌ djelimično |
 | Hound (id=1) | mk, bg | 50 | ❌ djelimično |
 | Big Four (id=5) | pt, it | 100 | ❌ djelimično |
 | Frankenstein (id=8) | ro, it | 100 | ❌ djelimično |
@@ -456,4 +455,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 6. jun 2026. (sesija 52)*
+*Flavio & Claude · Buchenberg · V3 · 6. jun 2026. (sesija 53)*
