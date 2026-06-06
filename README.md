@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 6. jun 2026. (sesija 53)  
+**Poslednje ažuriranje:** 6. jun 2026. (sesija 54)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -299,13 +299,13 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 53)
+## 9. Stanje prevoda (na kraju sesije 54)
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` za tačno stanje — health check je source of truth.
 
 | Knjiga | Jezik | Pobjednici | NLLB kompletno |
 |--------|-------|-----------|----------------|
-| Hound (id=1) | hr | 1800 | ✅ 3852 |
+| Hound (id=1) | hr | 2100 | ✅ 3852 |
 | Hound (id=1) | sr | 300 | ✅ 3852 |
 | Hound (id=1) | bs | 350 | ✅ 3852 |
 | Hound (id=1) | it, de | 200 | ✅ 3852 |
@@ -432,6 +432,8 @@ Svaka sesija završava:
 | Ollama Cloud retry nedostajao | 38 | 3 pokušaja, 30s čekanje |
 | `bb_knjige.gutenberg_id` bez UNIQUE constrainta — dupli insert prolazio tiho | 41 | `ALTER TABLE bb_knjige ADD CONSTRAINT bb_knjige_gutenberg_id_unique UNIQUE (gutenberg_id)` |
 
+| Orphan pobjednici u `bb_prev_recenica` — FK bez CASCADE — 11 redova pokazivalo na nepostojeće `bb_prevodi_recenica` | 54 | `DELETE FROM bb_prev_recenica WHERE prevodi_recenica_id NOT IN (SELECT id FROM bb_prevodi_recenica)` — obrisano 11 orphana; `ON DELETE CASCADE` odgođeno |
+
 ---
 
 ## 14. Sljedeći koraci
@@ -455,4 +457,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 6. jun 2026. (sesija 53)*
+*Flavio & Claude · Buchenberg · V3 · 6. jun 2026. (sesija 54)*
