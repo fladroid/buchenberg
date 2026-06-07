@@ -296,6 +296,12 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | 1 | The Hound of the Baskervilles | Arthur Conan Doyle | 2852 | 3.852 |
 | 5 | The Big Four | Agatha Christie | 70114 | 5.055 |
 | 8 | Frankenstein; or, the Modern Prometheus | Mary Wollstonecraft Shelley | 84 | 3.384 |
+| 12 | Moby Dick; Or, The Whale | Herman Melville | 2701 | 9.764 |
+| 17 | Romeo and Juliet | William Shakespeare | 1513 | 3.172 |
+| 18 | Alice's Adventures in Wonderland | Lewis Carroll | 11 | 1.535 |
+| 19 | The Strange Case of Dr. Jekyll and Mr. Hyde | Robert Louis Stevenson | 43 | 1.157 |
+| 20 | Dracula | Bram Stoker | 345 | 9.073 |
+| 21 | Flatland: A Romance of Many Dimensions | Edwin Abbott Abbott | 201 | 1.341 |
 
 ---
 
@@ -352,6 +358,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `books.html` | Lista knjiga | Kartice s lang badges; linkovi: Read, Gutenberg, NER (→ nlp.html), Word cloud (modal) |
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s highlight |
 | `reader.html` | Čitač | Prima `?book=ID` URL param za direktno otvaranje knjige |
+| `learn.html` | Language Learning | Fill-in-the-blank igra za učenje jezika iz Buchenberg korpusa; odabir knjige, jezika, smjera (učim strani/učim EN), težine (1-3 blanka); multiple choice + tipkanje + hint sistem |
 | `buchenberg.css` | Shared CSS | Dark mode, navigacija, sve dijeljene komponente |
 
 **Shared funkcionalnosti:**
