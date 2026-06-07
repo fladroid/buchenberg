@@ -355,10 +355,10 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `index.html` | Landing page | Opis projekta, naziv Buchenberg, live stat kartice, CTA linkovi |
 | `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
 | `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi (client-side) |
-| `books.html` | Lista knjiga | Kartice s lang badges; linkovi: Read, Gutenberg, NER (→ nlp.html), Word cloud (modal) |
+| `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NER, Word cloud |
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s highlight |
 | `reader.html` | Čitač | Prima `?book=ID` URL param za direktno otvaranje knjige |
-| `learn.html` | Language Learning | Fill-in-the-blank igra za učenje jezika iz Buchenberg korpusa; odabir knjige, jezika, smjera (učim strani/učim EN), težine (1-3 blanka); multiple choice + tipkanje + hint sistem |
+| `learn.html` | Language Learning | Dvije igre: (1) Fill-in-the-blank — odabir knjige/jezika/smjera/težine, MC + tipkanje + hint; (2) Sentence Match — sparivanje EN i prevedenih rečenica u dvije kolone |
 | `buchenberg.css` | Shared CSS | Dark mode, navigacija, sve dijeljene komponente |
 
 **Shared funkcionalnosti:**
