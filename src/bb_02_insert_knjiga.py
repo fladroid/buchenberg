@@ -40,6 +40,42 @@ KNJIGE = [
         "gutenberg_id": "84",
         "html":         "books/frankenstein.html",
     },
+    {
+        "naziv":        "Moby Dick; Or, The Whale",
+        "autor":        "Herman Melville",
+        "gutenberg_id": "2701",
+        "html":         "books/moby_dick/pg2701-images.html",
+    },
+    {
+        "naziv":        "Romeo and Juliet",
+        "autor":        "William Shakespeare",
+        "gutenberg_id": "1513",
+        "html":         "books/book_1513/pg1513-images.html",
+    },
+    {
+        "naziv":        "Alice's Adventures in Wonderland",
+        "autor":        "Lewis Carroll",
+        "gutenberg_id": "11",
+        "html":         "books/book_11/pg11-images.html",
+    },
+    {
+        "naziv":        "The Strange Case of Dr. Jekyll and Mr. Hyde",
+        "autor":        "Robert Louis Stevenson",
+        "gutenberg_id": "43",
+        "html":         "books/book_43/pg43-images.html",
+    },
+    {
+        "naziv":        "Dracula",
+        "autor":        "Bram Stoker",
+        "gutenberg_id": "345",
+        "html":         "books/book_345/pg345-images.html",
+    },
+    {
+        "naziv":        "Flatland: A Romance of Many Dimensions",
+        "autor":        "Edwin Abbott Abbott",
+        "gutenberg_id": "201",
+        "html":         "books/book_201/pg201-images.html",
+    },
 ]
 
 TOC_TITLES = {"CONTENTS", "TABLE OF CONTENTS"}
