@@ -30,7 +30,7 @@ if [[ -z "$KNJIGA" || -z "$JEZICI" || -z "$OD" || -z "$DO" ]]; then
     exit 1
 fi
 
-EMBEDDER="paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDER="multilingual-e5-large"
 LOG_DIR="logs"
 mkdir -p "$LOG_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
