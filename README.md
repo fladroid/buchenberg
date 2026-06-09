@@ -261,6 +261,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg |
 | `bb_09_ner.py` | NER pipeline: spaCy ekstrakcija + Gemma4 normalizacija + upis u bb_ner_entiteti/bb_ner_recenica |
+| `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+IT+DE embeddinga za geometry.html; pokreće se ručno (~160s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version) |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
 | `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
