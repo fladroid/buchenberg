@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 9. jun 2026. (sesija 61)  
+**Poslednje ažuriranje:** 10. jun 2026. (sesija 64)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -428,7 +428,8 @@ Važi za: `foxuno:run_command`, `balsam:run_command`, git operacije, izmjene faj
 Svaka sesija završava:
 1. `session_NN.md` — artefakt u chatu → Flavio OK → save na server
 2. README update ako je potrebno
-3. `git add -A && git commit -m "..." && git push`
+3. Bump `BB_VERSION` i `BB_VERSION_DATE` u `/var/www/buchenberg/nav.js`
+4. `git add -A && git commit -m "..." && git push`
 
 ---
 
@@ -461,11 +462,9 @@ Svaka sesija završava:
 10. **Favicon** — buchenberg.opik.net
 11. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
 12. **`stats.html`** — razmotriti dedicated `stats.json` koji generira `bb_web_export.py`
-13. **geometry.html — kartica "The Library and the Compass"** — embedding prostor kao Borgesova Babelska biblioteka s navigacijom (s63)
-14. **about.html — sekcija "Lineage"** — D3 timeline od Tractatusa do Buchenberga: Wittgenstein, Borges, Chomsky, Firth, ALPAC, word2vec, Attention, NLLB (s63)
-15. **geometry.html — kartica "Meaning as Use"** — UMAP klasteri kao Wittgensteinove porodične sličnosti (s63)
+13. **about.html — prijevod Lineage sekcije i LLM/NLLB objašnjenja** na ostale UI jezike (s64 — sadržaj je EN)
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 6. jun 2026. (sesija 54)*
+*Flavio & Claude · Buchenberg · V3 · 10. jun 2026. (sesija 64)*
