@@ -461,6 +461,9 @@ Svaka sesija završava:
 10. **Favicon** — buchenberg.opik.net
 11. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
 12. **`stats.html`** — razmotriti dedicated `stats.json` koji generira `bb_web_export.py`
+13. **geometry.html — kartica "The Library and the Compass"** — embedding prostor kao Borgesova Babelska biblioteka s navigacijom (s63)
+14. **about.html — sekcija "Lineage"** — D3 timeline od Tractatusa do Buchenberga: Wittgenstein, Borges, Chomsky, Firth, ALPAC, word2vec, Attention, NLLB (s63)
+15. **geometry.html — kartica "Meaning as Use"** — UMAP klasteri kao Wittgensteinove porodične sličnosti (s63)
 
 ---
 
