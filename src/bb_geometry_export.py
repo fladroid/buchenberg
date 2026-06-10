@@ -31,7 +31,7 @@ DB = {
 }
 
 KNJIGA_ID  = 1
-JEZICI     = ["hr", "it", "de"]
+JEZICI     = ["hr", "sr", "it", "de"]
 EMBEDDER   = "multilingual-e5-large"
 EMBEDDER_PATH_MAP = {
     "multilingual-e5-large": "intfloat/multilingual-e5-large",
