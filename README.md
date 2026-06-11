@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 10. jun 2026. (sesija 65)  
+**Poslednje ažuriranje:** 11. jun 2026. (sesija 69)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -55,6 +55,14 @@ Sudija nosi 60% težine — kvalitativna ocjena važnija od čistog cosinus scor
 Prevod knjiga sa isteklom licencom sa **Project Gutenberg** na više jezika, koristeći isključivo open source i besplatne alate.
 
 **Važna napomena:** *Važniji je put od cilja.* Pipeline koji gradimo je generički i primenljiv daleko šire od samog prevoda knjiga.
+
+### Authorship & Collaboration
+
+Buchenberg is conceived, designed and maintained by **Flavio** (fladroid). The project's philosophy, methodology, architecture and all final design decisions are his — and remain his sole responsibility.
+
+The project is built in ongoing collaboration with **[Claude](https://claude.ai)** (Anthropic) — not as a code-completion tool, but as a working partner across more than 60 documented sessions: implementation, debugging, analysis, and the conceptual dialogue that shaped pages like *Geometry of Meaning* and *Art*. Every session is recorded in `docs/sessions/`, where both names appear — a deliberate choice, in the spirit of this project's X-Ray attitude: the process of building should be as transparent as the thing built.
+
+*Flavio & Claude · Buchenberg · 2026*
 
 ---
 
@@ -469,4 +477,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 11. jun 2026. (sesija 68)*
+*Flavio & Claude · Buchenberg · V3 · 11. jun 2026. (sesija 69)*
