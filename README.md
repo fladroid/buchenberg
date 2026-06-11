@@ -359,7 +359,9 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NER, Word cloud |
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
 | `reader.html` | Čitač | Prima `?book=ID` URL param za direktno otvaranje knjige |
-| `learn.html` | Language Learning | Dvije igre: (1) Fill-in-the-blank — odabir knjige/jezika/smjera/težine, MC + tipkanje + hint; (2) Sentence Match — sparivanje EN i prevedenih rečenica u dvije kolone |
+| `learn.html` | Language Learning | Landing overview s 4 game kartice; 4 igre: Fill in the Blank (MC + tipkanje, hint lang za EN), Sentence Match, Memory (trunkiranje 80 znakova), Scrambled (Hold to Peek hint) |
+| `geometry.html` | Geometry of Meaning | D3 UMAP scatter embeddinga (EN+HR+SR+IT+DE), Transformers.js cosine similarity, SVG angle vizualizacija, A/B corpus selektor |
+| `art.html` | Art | Sinestezija teza (Abbott/Borges/Wittgenstein/Kandinski-Skrjabin lineage); The Tapestry — score heatmap cijele knjige (rečenica=piksel, apsolutna/relativna skala, model mode) |
 | `buchenberg.css` | Shared CSS | Dark mode, navigacija, sve dijeljene komponente |
 
 **Shared funkcionalnosti:**
@@ -467,4 +469,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 10. jun 2026. (sesija 65)*
+*Flavio & Claude · Buchenberg · V3 · 11. jun 2026. (sesija 68)*
