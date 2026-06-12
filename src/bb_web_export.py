@@ -86,7 +86,12 @@ def get_translations(cur, knjiga_id, lang_kod):
             m.temperatura       AS temperatura,
             ROUND(pr.score::numeric, 4)             AS back_score,
             ROUND(pr.translation_score::numeric, 4) AS ts,
-            ROUND(pr.sudija_avg::numeric, 4)        AS judge_avg
+            ROUND(pr.sudija_avg::numeric, 4)        AS judge_avg,
+            pr.back_translation,
+            ROUND(pr.naturalness_score::numeric, 4) AS naturalness_score,
+            ROUND(pr.sudija_grammar::numeric, 4)    AS sudija_grammar,
+            ROUND(pr.sudija_naturalness::numeric, 4) AS sudija_naturalness,
+            ROUND(pr.sudija_fidelity::numeric, 4)   AS sudija_fidelity
         FROM bb_prev_knjige pk
         JOIN bb_jezik j            ON j.id  = pk.jezik_id
         JOIN bb_prev_recenica pvr  ON pvr.prev_knjige_id = pk.id
@@ -199,7 +204,7 @@ def main():
 
             # index prevedenih rečenica
             translated = {}
-            for pozicija, original, translation, model, temperatura, back_score, ts, judge_avg in rows:
+            for pozicija, original, translation, model, temperatura, back_score, ts, judge_avg, back_translation, naturalness_score, sudija_grammar, sudija_naturalness, sudija_fidelity in rows:
                 translated[pozicija] = {
                     "pos":         pozicija,
                     "original":    original,
@@ -209,7 +214,12 @@ def main():
                     "temp":        float(temperatura) if temperatura is not None else None,
                     "back_score":  float(back_score)  if back_score  is not None else None,
                     "ts":          float(ts)           if ts          is not None else None,
-                    "judge_avg":   float(judge_avg)    if judge_avg   is not None else None,
+                    "judge_avg":        float(judge_avg)          if judge_avg          is not None else None,
+                    "back_translation": back_translation                       if back_translation    is not None else None,
+                    "naturalness":      float(naturalness_score)               if naturalness_score   is not None else None,
+                    "sudija_grammar":   float(sudija_grammar)                  if sudija_grammar      is not None else None,
+                    "sudija_natural":   float(sudija_naturalness)              if sudija_naturalness  is not None else None,
+                    "sudija_fidelity":  float(sudija_fidelity)                 if sudija_fidelity     is not None else None,
                 }
 
             # sve rečenice knjige — prevedene + neprevedene

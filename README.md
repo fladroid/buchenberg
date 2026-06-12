@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 11. jun 2026. (sesija 69)  
+**Poslednje ažuriranje:** 12. jun 2026. (sesija 72)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -122,6 +122,7 @@ Povratak na osnovu (sesija 34): čista shema, nova baza `bb`, bez GA, bez NLP en
 
 ```
 bb_03_prevod.py    → prevod + back-translation + cosine score (5 modela)
+bb_06_enkodiranje.py → enkodira prevode → upisuje prevod_vektor
 bb_08_sudija.py    → Gemma4 blind evaluacija (grammar/naturalness/fidelity)
 bb_04_pobjednik.py → izbor pobjednika po finalnom scoreu
 bb_05_export.py    → export u output/naziv_knjige_lang.txt
@@ -477,4 +478,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 11. jun 2026. (sesija 69)*
+*Flavio & Claude · Buchenberg · V3 · 12. jun 2026. (sesija 72)*
