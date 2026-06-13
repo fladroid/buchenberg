@@ -357,6 +357,10 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 - **DocumentRoot:** `/var/www/buchenberg/`
 - **JSON data:** `/var/www/buchenberg/data/`
 - Apache2 odmah servira novi sadržaj — nema potrebe za restartem
+- **Git repo:** `fladroid/buchenweb` — odvojen od buchenberg; inicijalni commit s73
+- **Workflow izmjena:** `cd /var/www/buchenberg && git add . && git commit -m "opis" && git push`
+
+> ⚠️ `buchenberg` i `buchenweb` su dva odvojena git repozitorijuma. Web izmjene se commituju isključivo iz `/var/www/buchenberg/`.
 
 **Struktura web stranica (sesija 45):**
 
@@ -468,7 +472,6 @@ Svaka sesija završava:
 7. **bb_web_export.py** — refaktorisati da koristi `v_pobjednici` view
 
 ### Web portal
-8. **Web fajlovi u git** — `nlp.html`, `stats.html` dodati u repozitorijum
 9. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
 10. **Favicon** — buchenberg.opik.net
 11. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
@@ -478,4 +481,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 12. jun 2026. (sesija 72)*
+*Flavio & Claude · Buchenberg · V3 · 13. jun 2026. (sesija 73)*
