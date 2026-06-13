@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 12. jun 2026. (sesija 72)  
+**Poslednje ažuriranje:** 13. jun 2026. (sesija 75)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -60,7 +60,7 @@ Prevod knjiga sa isteklom licencom sa **Project Gutenberg** na više jezika, kor
 
 Buchenberg is conceived, designed and maintained by **Flavio** (fladroid). The project's philosophy, methodology, architecture and all final design decisions are his — and remain his sole responsibility.
 
-The project is built in ongoing collaboration with **[Claude](https://claude.ai)** (Anthropic) — not as a code-completion tool, but as a working partner across more than 60 documented sessions: implementation, debugging, analysis, and the conceptual dialogue that shaped pages like *Geometry of Meaning* and *Art*. Every session is recorded in `docs/sessions/`, where both names appear — a deliberate choice, in the spirit of this project's X-Ray attitude: the process of building should be as transparent as the thing built.
+The project is built in ongoing collaboration with **[Claude](https://claude.ai)** (Anthropic) — not as a code-completion tool, but as a working partner across more than 70 documented sessions: implementation, debugging, analysis, and the conceptual dialogue that shaped pages like *Geometry of Meaning* and *Art*. Every session is recorded in `docs/sessions/`, where both names appear — a deliberate choice, in the spirit of this project's X-Ray attitude: the process of building should be as transparent as the thing built.
 
 *Flavio & Claude · Buchenberg · 2026*
 
@@ -373,8 +373,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
 | `reader.html` | Čitač | Prima `?book=ID` URL param za direktno otvaranje knjige |
 | `learn.html` | Language Learning | Landing overview s 4 game kartice; 4 igre: Fill in the Blank (MC + tipkanje, hint lang za EN), Sentence Match, Memory (trunkiranje 80 znakova), Scrambled (Hold to Peek hint) |
-| `geometry.html` | Geometry of Meaning | D3 UMAP scatter embeddinga (EN+HR+SR+IT+DE), Transformers.js cosine similarity, SVG angle vizualizacija, A/B corpus selektor |
-| `art.html` | Art | Sinestezija teza (Abbott/Borges/Wittgenstein/Kandinski-Skrjabin lineage); The Tapestry — score heatmap cijele knjige (rečenica=piksel, apsolutna/relativna skala, model mode) |
+| `geometry.html` | Geometry of Meaning | D3 UMAP scatter embeddinga (EN+HR+SR+IT+DE), grid pozadina, D3 zoom (scaleExtent 1–12, reset dugme), Transformers.js cosine similarity, SVG angle vizualizacija s gridom (220×220), centriran rezultat, A/B corpus selektor |
+| `art.html` | Art | Sinestezija teza (Abbott/Borges/Wittgenstein/Kandinski-Skrjabin lineage); The Tapestry — score heatmap (samo prevedene rečenice, tamni okvir, centriran zadnji red, apsolutna/relativna skala, model mode); Sentence Fingerprints |
 | `buchenberg.css` | Shared CSS | Dark mode, navigacija, sve dijeljene komponente |
 
 **Shared funkcionalnosti:**
@@ -481,4 +481,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 13. jun 2026. (sesija 73)*
+*Flavio & Claude · Buchenberg · V3 · 13. jun 2026. (sesija 75)*
