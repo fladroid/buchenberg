@@ -98,9 +98,9 @@ def main():
     conn = psycopg2.connect(**DB)
     cur  = conn.cursor()
 
-    # Dohvati sve srpske prevode (prevod i back_translation)
+    # Dohvati sve srpske prevode (samo prevod — back_translation se ne dira)
     cur.execute("""
-        SELECT pr.id, pr.prevod, pr.back_translation
+        SELECT pr.id, pr.prevod
         FROM bb_prevodi_recenica pr
         JOIN bb_prevodi_knjige ppk ON ppk.id = pr.prevodi_knjige_id
         JOIN bb_jezik j ON j.id = ppk.jezik_id
@@ -114,11 +114,10 @@ def main():
     izmjena = 0
     primjeri = 0
 
-    for row_id, prevod, back_tr in rows:
+    for row_id, prevod in rows:
         novi_prevod = transliteriraj(prevod)
-        novi_back   = transliteriraj(back_tr) if back_tr else None
 
-        if novi_prevod == prevod and novi_back == back_tr:
+        if novi_prevod == prevod:
             continue  # nije se promijenilo
 
         izmjena += 1
@@ -133,9 +132,9 @@ def main():
         if not args.dry_run:
             cur.execute("""
                 UPDATE bb_prevodi_recenica
-                SET prevod = %s, back_translation = %s
+                SET prevod = %s
                 WHERE id = %s
-            """, (novi_prevod, novi_back, row_id))
+            """, (novi_prevod, row_id))
 
     if args.dry_run:
         print(f"\nDry-run: {izmjena} prevoda bi bilo izmijenjeno.")
