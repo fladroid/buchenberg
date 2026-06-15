@@ -245,9 +245,49 @@ def check_git():
             ["git", "-C", str(BUCH_HOME), "log", "--oneline", "-3"],
             capture_output=True, text=True, timeout=10
         )
-        print(f"\n  Zadnja 3 commita:")
+        print(f"\n  Zadnja 3 commita (buchenberg):")
         for l in result2.stdout.strip().splitlines():
             print(f"    {l}")
+
+        # buchenweb repo
+        WEB_HOME = "/var/www/buchenberg"
+        print()
+        result3 = subprocess.run(
+            ["git", "-C", WEB_HOME, "status", "--short"],
+            capture_output=True, text=True, timeout=10
+        )
+        web_lines = result3.stdout.strip().splitlines()
+        if not web_lines:
+            row(OK, "buchenweb working tree", "čist")
+        else:
+            row(WARN, "buchenweb uncommitted", f"{len(web_lines)} fajlova")
+            for l in web_lines:
+                print(f"       {l}")
+
+        result4 = subprocess.run(
+            ["git", "-C", WEB_HOME, "log", "--oneline", "-3"],
+            capture_output=True, text=True, timeout=10
+        )
+        print(f"\n  Zadnja 3 commita (buchenweb):")
+        for l in result4.stdout.strip().splitlines():
+            print(f"    {l}")
+
+        # Upozori ako buchenweb zaostaje za buchenberg
+        buch_head = subprocess.run(
+            ["git", "-C", str(BUCH_HOME), "log", "--oneline", "-1"],
+            capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+        web_head = subprocess.run(
+            ["git", "-C", WEB_HOME, "log", "--oneline", "-1"],
+            capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+        buch_sess = buch_head.split()[1] if len(buch_head.split()) > 1 else "?"
+        web_sess  = web_head.split()[1]  if len(web_head.split())  > 1 else "?"
+        if buch_sess != web_sess:
+            row(WARN, "buchenweb zaostaje", f"buchenberg={buch_sess}, buchenweb={web_sess}")
+        else:
+            row(OK, "buchenweb sinhronizovan", f"{web_sess}")
+
     except Exception as e:
         row(ERR, "Git", str(e))
 
