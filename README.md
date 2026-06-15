@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 14. jun 2026. (sesija 79)  
+**Poslednje ažuriranje:** 15. jun 2026. (sesija 82)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -373,7 +373,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
 | `reader.html` | Čitač | Prima `?book=ID` URL param za direktno otvaranje knjige |
 | `learn.html` | Language Learning | Landing overview s 4 game kartice; 4 igre: Fill in the Blank (MC + tipkanje, hint lang za EN), Sentence Match, Memory (trunkiranje 80 znakova), Scrambled (Hold to Peek hint) |
-| `geometry.html` | Geometry of Meaning | D3 UMAP scatter embeddinga (EN+HR+SR+IT+DE), grid pozadina, D3 zoom (scaleExtent 1–12, reset dugme), Transformers.js cosine similarity, SVG angle vizualizacija s gridom (220×220), centriran rezultat, A/B corpus selektor |
+| `geometry.html` | Geometry of Meaning | D3 UMAP scatter embeddinga (EN+HR+SR+IT+DE), grid pozadina, D3 zoom (scaleExtent 1–12, reset dugme), Transformers.js cosine similarity, SVG angle vizualizacija s gridom (220×220), centriran rezultat, A/B corpus selektor; i18n ✅ (s82) |
 | `art.html` | Art | Sinestezija teza (Abbott/Borges/Wittgenstein/Kandinski-Skrjabin lineage); The Tapestry — score heatmap (samo prevedene rečenice, tamni okvir, centriran zadnji red, apsolutna/relativna skala, model mode); Sentence Fingerprints |
 | `buchenberg.css` | Shared CSS | Dark mode, navigacija, sve dijeljene komponente |
 
