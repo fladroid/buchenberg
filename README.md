@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 15. jun 2026. (sesija 82)  
+**Poslednje ažuriranje:** 16. jun 2026. (sesija 87)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -273,6 +273,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version) |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
+| `bb_xray_export.py` | Generira X-Ray JSON fajlove (`data/xray_<id>_<lang>.json`) — svih 5 kandidata po rečenici s kompletnim scoreovima; pokrenuti nakon `bb_web_export.py` |
 | `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
 
 ### Kako dodati novu knjigu
@@ -315,7 +316,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 85)
+## 9. Stanje prevoda (na kraju sesije 87)
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` za tačno stanje — health check je source of truth.
 
@@ -382,7 +383,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi (client-side) |
 | `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NER, Word cloud |
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
-| `reader.html` | Čitač | Prima `?book=ID` URL param za direktno otvaranje knjige |
+| `reader.html` | Čitač | Prima `?book=ID` URL param; X-Ray Full mod — paginacija po 25 rečenica, svih 5 kandidata s kompletnim scoreovima i back translationom |
 | `learn.html` | Language Learning | Landing overview s 4 game kartice; 4 igre: Fill in the Blank (MC + tipkanje, hint lang za EN), Sentence Match, Memory (trunkiranje 80 znakova), Scrambled (Hold to Peek hint) |
 | `geometry.html` | Geometry of Meaning | D3 UMAP scatter embeddinga (EN+HR+SR+IT+DE), grid pozadina, D3 zoom (scaleExtent 1–12, reset dugme), Transformers.js cosine similarity, SVG angle vizualizacija s gridom (220×220), centriran rezultat, A/B corpus selektor; i18n ✅ (s82) |
 | `art.html` | Art | Sinestezija teza (Abbott/Borges/Wittgenstein/Kandinski-Skrjabin lineage); The Tapestry — score heatmap (samo prevedene rečenice, tamni okvir, centriran zadnji red, apsolutna/relativna skala, model mode); Sentence Fingerprints |
@@ -475,6 +476,7 @@ Svaka sesija završava:
 
 ### Web portal
 1. **`learn.html` i18n**
+2. **X-Ray JSON export** — pokrenuti `bb_xray_export.py` za sve knjige i jezike koji imaju pobjednike (trenutno samo `xray_1_hr.json` postoji)
 2. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
 3. **Favicon** — buchenberg.opik.net
 4. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
@@ -483,4 +485,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 13. jun 2026. (sesija 75)*
+*Flavio & Claude · Buchenberg · V3 · 16. jun 2026. (sesija 87)*
