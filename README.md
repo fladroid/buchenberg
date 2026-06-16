@@ -315,22 +315,33 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 54)
+## 9. Stanje prevoda (na kraju sesije 85)
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` za tačno stanje — health check je source of truth.
 
-| Knjiga | Jezik | Pobjednici | NLLB kompletno |
-|--------|-------|-----------|----------------|
-| Hound (id=1) | hr | 2100 | ✅ 3852 |
-| Hound (id=1) | sr | 300 | ✅ 3852 |
-| Hound (id=1) | bs | 350 | ✅ 3852 |
-| Hound (id=1) | it, de | 200 | ✅ 3852 |
-| Hound (id=1) | af, es, fr, nl, sl, pt, ro | 100 | ❌ djelimično |
-| Hound (id=1) | mk, bg | 50 | ❌ djelimično |
-| Big Four (id=5) | pt, it | 100 | ❌ djelimično |
-| Frankenstein (id=8) | ro, it | 100 | ❌ djelimično |
+| Knjiga | id | Jezik | Prevodi | Pobjednici |
+|--------|-----|-------|---------|-----------|
+| Hound | 1 | hr | 3852 | 3852 ✅ |
+| Hound | 1 | sr | 3852 | 300 |
+| Hound | 1 | bs | 3852 | 350 |
+| Hound | 1 | de, it, af, bg, es, fr, mk, nl, pt, ro, sl | 3852 | 200 |
+| Flatland | 21 | sr | 1341 | 1000 |
+| Flatland | 21 | de, it | 1341 | 500 |
+| Flatland | 21 | hr | 1341 | 200 |
+| Moby Dick | 12 | hr, sr, it, de | 1500 | 150 |
+| Romeo and Juliet | 17 | hr, sr, it, de | 1500 | 150 |
+| Alice | 18 | hr, sr, it, de | 1500 | 150 |
+| Dracula | 20 | hr, sr, it, de | 1500 | 150 |
+| Jekyll & Hyde | 19 | hr, sr, it, de | 1157 | 150 |
+| Frankenstein | 8 | hr, sr, it, de | 260 | 150 |
+| Frankenstein | 8 | ro | 300 | 100 |
+| Big Four | 5 | hr, it, de | 260 | 150 |
+| Big Four | 5 | sr | 260 | 200 |
+| Big Four | 5 | pt | 300 | 100 |
 
-**Srpski (sr):** prevodi transliterirani u ćirilicu (`bb_sr_cirilica.py`).
+**Napomena:** Jezici bez pobjednika (af, bg, bs, es, fr, mk, nl, pt, ro, sl za većinu knjiga) imaju samo NLLB prevode — namjerna taktika (pre-fetch), nisu anomalija.
+
+**Srpski (sr):** prevodi transliterirani u ćirilicu (`bb_sr_cirilica.py`). `back_translation` se ne dira (fix s84).
 
 ---
 
@@ -462,21 +473,12 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Pipeline
-1. **Proširenje Hound hr/sr/it/de** — nastavak prema s350
-2. **Proširenje Hound ostalih 10 jezika** — s101–s350
-3. **Proširenje Hound mk/bg** — s51–s100
-4. **Proširenje Big Four PT/IT** — s101–s350
-5. **Proširenje Frankenstein RO/IT** — s101–s350
-6. **Export** — `bb_05_export.py` za jezike s dovoljno rečenica
-7. **bb_web_export.py** — refaktorisati da koristi `v_pobjednici` view
-
 ### Web portal
-9. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
-10. **Favicon** — buchenberg.opik.net
-11. **`about.html`** — prevesti sadržaj na ostale jezike (trenutno samo EN)
-12. **`stats.html`** — razmotriti dedicated `stats.json` koji generira `bb_web_export.py`
-13. **about.html — prijevod Lineage sekcije i LLM/NLLB objašnjenja** na ostale UI jezike (s64 — sadržaj je EN)
+1. **`learn.html` i18n**
+2. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
+3. **Favicon** — buchenberg.opik.net
+4. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
+5. **Cache-Control za JS/CSS**
 
 ---
 
