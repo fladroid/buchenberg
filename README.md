@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 16. jun 2026. (sesija 87)  
+**Poslednje ažuriranje:** 17. jun 2026. (sesija 88)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -475,7 +475,8 @@ Svaka sesija završava:
 ## 14. Sljedeći koraci
 
 ### Web portal
-1. **`learn.html` i18n**
+1. **SR ekavica fix** — nastavak po stranicama (Geometry, Learn, NLP, Reader)
+2. **`learn.html` i18n**
 2. **X-Ray JSON export** — pokrenuti `bb_xray_export.py` za sve knjige i jezike koji imaju pobjednike (trenutno samo `xray_1_hr.json` postoji)
 2. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
 3. **Favicon** — buchenberg.opik.net
@@ -485,4 +486,4 @@ Svaka sesija završava:
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 16. jun 2026. (sesija 87)*
+*Flavio & Claude · Buchenberg · V3 · 17. jun 2026. (sesija 88)*
