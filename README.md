@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 17. jun 2026. (sesija 88)  
+**Poslednje ažuriranje:** 19. jun 2026. (sesija 90)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -475,15 +475,20 @@ Svaka sesija završava:
 ## 14. Sljedeći koraci
 
 ### Web portal
-1. **SR ekavica fix** — nastavak po stranicama (Geometry, Learn, NLP, Reader)
-2. **`learn.html` i18n**
-2. **X-Ray JSON export** — pokrenuti `bb_xray_export.py` za sve knjige i jezike koji imaju pobjednike (trenutno samo `xray_1_hr.json` postoji)
-2. **NLP proširenje** — Relation Extraction via Gemma4 (semantičke veze između entiteta)
-3. **Favicon** — buchenberg.opik.net
-4. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
-5. **Cache-Control za JS/CSS**
+1. **Favicon** — buchenberg.opik.net
+2. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
+3. **Cache-Control za JS/CSS**
+
+### Odloženo / u razmatranju
+- **NLP — Relation Extraction** (s90 koncept, "leži"): tretirati kao summarization-klasu problema, ne co-occurrence. Grounding-by-evidence kao princip; provjera kroz embedding kosinus (ne LLM tumačenje). Ideja: **rasplet detektivskog romana kao ulaz** — autorov vlastiti opis relacija na kraju knjige kao upit + semantička pretraga unazad za potkrepu; daje i zlatni standard za evaluaciju. Žanrovski uslovljeno (Hound, Big Four imaju rasplet). Detalji: `docs/sessions/session_90.md`.
+
+### Završeno (s90)
+- ✅ **Key Concepts proširenje** — svih 9 stranica (index, about, geometry, art, nlp, stats, learn, reader, books); books → Wikipedia link po knjizi; `concepts.json` sad pod gitom (izuzet iz `.gitignore`)
+- ✅ **SR ekavica fix** — sve stranice (reader nema SR teksta)
+- ✅ **X-Ray JSON export** — `bb_xray_export.py` pokrenut za sve knjige × jezike (126 JSON fajlova)
+- ✅ **learn.html i18n** (s85)
 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 17. jun 2026. (sesija 88)*
+*Flavio & Claude · Buchenberg · V3 · 19. jun 2026. (sesija 90)*

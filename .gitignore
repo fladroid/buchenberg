@@ -16,3 +16,5 @@ logs/
 books/
 data/
 *.bak
+fla*
+nohup.out

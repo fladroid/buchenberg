@@ -1,5 +1,0 @@
-+ nohup time /home/balsam/buchenberg/venv/bin/python /home/balsam/buchenberg/src/bb_03_prevod.py --knjiga 17 --od 1 --do 200 --model nllb-600M --temp 0.0 --embedder multilingual-e5-large --jezici af bs es fr nl
-+ nohup time /home/balsam/buchenberg/venv/bin/python /home/balsam/buchenberg/src/bb_03_prevod.py --knjiga 17 --od 1 --do 200 --model nllb-600M --temp 0.0 --embedder multilingual-e5-large --jezici pt ro sl bg mk
-+ nohup time /home/balsam/buchenberg/venv/bin/python /home/balsam/buchenberg/src/bb_03_prevod.py --knjiga 8 --od 1 --do 200 --model nllb-600M --temp 0.0 --embedder multilingual-e5-large --jezici af bs es fr nl
-+ nohup time /home/balsam/buchenberg/venv/bin/python /home/balsam/buchenberg/src/bb_03_prevod.py --knjiga 8 --od 1 --do 200 --model nllb-600M --temp 0.0 --embedder multilingual-e5-large --jezici pt ro sl bg mk
-+ nohup time /home/balsam/buchenberg/venv/bin/python /home/balsam/buchenberg/src/bb_03_prevod.py --knjiga 5 --od 1 --do 200 --model nllb-600M --temp 0.0 --embedder multilingual-e5-large --jezici af bs es fr nl
