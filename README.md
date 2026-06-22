@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 22. jun 2026. (sesija 92)  
+**Poslednje ažuriranje:** 22. jun 2026. (sesija 93)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -476,14 +476,13 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Performanse — PRIMARNO (s92)
-**NLLB tuning — usko grlo je runtime, ne model.** Trenutno `nllb-200-distilled-600M` vrti kao vanilla FP32 PyTorch na 4 CPU jezgra, dvaput po rečenici (forward + back-translation). Plan (isti model):
-1. **CTranslate2 int8** — jednokratna konverzija (`ct2-transformers-converter --model facebook/nllb-200-distilled-600M --quantization int8 --output_dir models/nllb-600M-ct2-int8`), 2–4× CPU ubrzanje. `model.generate` → `Translator.translate_batch`, HF tokenizer ostaje, greedy + `repetition_penalty=1.3` se čuvaju.
-2. **Izolacija iza flega** — `nllb-ct2` put paralelno s postojećim FP32 (FP32 netaknut), pa benchmark 100 rečenica FP32 vs int8 (brzina + output drift) → odluka.
-3. **Length bucketing** (besplatno, nula promjene izlaza) — sortirati `todo` po dužini prije batchiranja.
-4. Alternativa: torch dynamic int8 (`quantize_dynamic`, ~1.5–2×, bez nove zavisnosti).
-
-> ⚠️ Prije tuninga prekinuti aktivne runove. int8 mijenja numeriku → izlaz gotovo identičan, ne bit-for-bit (bezopasno: NLLB je 1 od 5 kandidata). Detalji: `docs/sessions/session_92.md`.
+### Performanse — NLLB CTranslate2 int8 — URAĐENO (s93)
+NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Neoverse-N1 (ARM); NLLB više nije usko grlo lanca.
+- **Motor:** `NLLB_ENGINE` env — `ct2` (default) ili `fp32` (fallback). Params: `NLLB_CT2_DIR`, `NLLB_CT2_BATCH=200`, `NLLB_CT2_MAXBATCH=14`, `NLLB_CT2_INTER=4`, `NLLB_CT2_INTRA=1`.
+- **Upotreba:** `run_pipeline.sh` nepromijenjen (default ct2, automatski brz). Stari put: `NLLB_ENGINE=fp32 bash ./run_pipeline.sh ...`.
+- **Model:** `models/nllb-600M-ct2-int8/` (594 MB, gitignored). Regeneracija: `ct2-transformers-converter --model facebook/nllb-200-distilled-600M --quantization int8 --output_dir models/nllb-600M-ct2-int8`.
+- **Drift:** int8 mijenja ~50% izlaza kozmetički (red riječi/sinonimi, jednak kvalitet); NLLB je 1 od 5 kandidata, deterministički (greedy). Detalji: `docs/sessions/session_93.md`.
+- **Preostalo opciono:** length bucketing (besplatno, nula drifta) — sad manje hitno.
 
 ### Web portal
 1. **Favicon** — buchenberg.opik.net
