@@ -44,6 +44,16 @@ OLLAMA_URL  = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_KEY  = os.getenv("OLLAMA_API_KEY", "")
 BATCH_SIZE  = 20
 
+# NLLB engine: "fp32" = HF transformers (default), "ct2" = CTranslate2 int8 (brze na CPU)
+NLLB_ENGINE       = os.getenv("NLLB_ENGINE", "ct2").lower()
+NLLB_CT2_DIR      = os.getenv("NLLB_CT2_DIR",
+                              os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                           "models", "nllb-600M-ct2-int8"))
+NLLB_CT2_BATCH    = int(os.getenv("NLLB_CT2_BATCH", "200"))
+NLLB_CT2_MAXBATCH = int(os.getenv("NLLB_CT2_MAXBATCH", "14"))
+NLLB_CT2_INTER    = int(os.getenv("NLLB_CT2_INTER", "4"))
+NLLB_CT2_INTRA    = int(os.getenv("NLLB_CT2_INTRA", "1"))
+
 # Mapping: naziv u bb_embeddings → HuggingFace model path
 EMBEDDER_PATH_MAP = {
     "multilingual-e5-large": "intfloat/multilingual-e5-large",
@@ -90,14 +100,45 @@ JEZIK_NAZIVI = {
 # ── NLLB ────────────────────────────────────────────────────────────────────
 
 def load_nllb():
-    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-    print(f"Učitavam NLLB model: {NLLB_MODEL_NAME}")
+    from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(NLLB_MODEL_NAME)
-    model     = AutoModelForSeq2SeqLM.from_pretrained(NLLB_MODEL_NAME)
+    if NLLB_ENGINE == "ct2":
+        import ctranslate2
+        print(f"Učitavam NLLB (CTranslate2 int8): {NLLB_CT2_DIR}")
+        model = ctranslate2.Translator(NLLB_CT2_DIR, device="cpu",
+                                       intra_threads=NLLB_CT2_INTRA,
+                                       inter_threads=NLLB_CT2_INTER,
+                                       compute_type="int8")
+    else:
+        from transformers import AutoModelForSeq2SeqLM
+        print(f"Učitavam NLLB (FP32 HF): {NLLB_MODEL_NAME}")
+        model = AutoModelForSeq2SeqLM.from_pretrained(NLLB_MODEL_NAME)
     return tokenizer, model
 
 
+def _nllb_batch_ct2(texts, tokenizer, translator, src_lang, tgt_lang):
+    tokenizer.src_lang = src_lang
+    src = [tokenizer.convert_ids_to_tokens(tokenizer.encode(t)) for t in texts]
+    res = translator.translate_batch(
+        src,
+        target_prefix=[[tgt_lang]] * len(texts),
+        beam_size=1,
+        repetition_penalty=1.3,
+        max_decoding_length=512,
+        max_batch_size=NLLB_CT2_MAXBATCH,
+    )
+    out = []
+    for r in res:
+        h = r.hypotheses[0]
+        if h and h[0] == tgt_lang:
+            h = h[1:]
+        out.append(tokenizer.decode(tokenizer.convert_tokens_to_ids(h), skip_special_tokens=True))
+    return out
+
+
 def nllb_batch(texts, tokenizer, model, src_lang, tgt_lang):
+    if NLLB_ENGINE == "ct2":
+        return _nllb_batch_ct2(texts, tokenizer, model, src_lang, tgt_lang)
     tokenizer.src_lang = src_lang
     inputs = tokenizer(
         texts,
@@ -333,11 +374,12 @@ def main():
                     if not already_done(cur, prevodi_knjige_id, rid)]
             print(f"  Preostalo: {len(todo)} rečenica")
 
-            for i in range(0, len(todo), BATCH_SIZE):
-                chunk = todo[i:i + BATCH_SIZE]
+            step = NLLB_CT2_BATCH if (is_nllb and NLLB_ENGINE == "ct2") else BATCH_SIZE
+            for i in range(0, len(todo), step):
+                chunk = todo[i:i + step]
                 tekstovi = [t for _, _, t in chunk]
 
-                print(f"  Batch {i//BATCH_SIZE + 1}: pozicije {chunk[0][1]}–{chunk[-1][1]}")
+                print(f"  Batch {i//step + 1}: pozicije {chunk[0][1]}–{chunk[-1][1]}")
 
                 if is_nllb:
                     nllb_tgt = NLLB_LANG_MAP[kod]

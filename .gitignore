@@ -18,3 +18,5 @@ data/
 *.bak
 fla*
 nohup.out
+models/
+bench_nllb.py
