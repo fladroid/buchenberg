@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 19. jun 2026. (sesija 90)  
+**Poslednje ažuriranje:** 22. jun 2026. (sesija 92)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -316,9 +316,11 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 ---
 
-## 9. Stanje prevoda (na kraju sesije 87)
+## 9. Stanje prevoda
 
-> ⚠️ Koristiti `SELECT * FROM v_status_knjige;` za tačno stanje — health check je source of truth.
+> ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
+>
+> **s92 snapshot (22. jun 2026, pipeline aktivno radi):** 38.333 rečenice · 444.560 prevoda · 79.294 pobjednika. Core-4 (de/hr/it/sr) kompletni za Hound/Dracula/Flatland/Frankenstein/Jekyll/Big Four/Alice; Romeo i Moby Dick skoro.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -473,6 +475,15 @@ Svaka sesija završava:
 ---
 
 ## 14. Sljedeći koraci
+
+### Performanse — PRIMARNO (s92)
+**NLLB tuning — usko grlo je runtime, ne model.** Trenutno `nllb-200-distilled-600M` vrti kao vanilla FP32 PyTorch na 4 CPU jezgra, dvaput po rečenici (forward + back-translation). Plan (isti model):
+1. **CTranslate2 int8** — jednokratna konverzija (`ct2-transformers-converter --model facebook/nllb-200-distilled-600M --quantization int8 --output_dir models/nllb-600M-ct2-int8`), 2–4× CPU ubrzanje. `model.generate` → `Translator.translate_batch`, HF tokenizer ostaje, greedy + `repetition_penalty=1.3` se čuvaju.
+2. **Izolacija iza flega** — `nllb-ct2` put paralelno s postojećim FP32 (FP32 netaknut), pa benchmark 100 rečenica FP32 vs int8 (brzina + output drift) → odluka.
+3. **Length bucketing** (besplatno, nula promjene izlaza) — sortirati `todo` po dužini prije batchiranja.
+4. Alternativa: torch dynamic int8 (`quantize_dynamic`, ~1.5–2×, bez nove zavisnosti).
+
+> ⚠️ Prije tuninga prekinuti aktivne runove. int8 mijenja numeriku → izlaz gotovo identičan, ne bit-for-bit (bezopasno: NLLB je 1 od 5 kandidata). Detalji: `docs/sessions/session_92.md`.
 
 ### Web portal
 1. **Favicon** — buchenberg.opik.net
