@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 22. jun 2026. (sesija 93)  
+**Poslednje ažuriranje:** 23. jun 2026. (sesija 94)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -320,7 +320,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
-> **s92 snapshot (22. jun 2026, pipeline aktivno radi):** 38.333 rečenice · 444.560 prevoda · 79.294 pobjednika. Core-4 (de/hr/it/sr) kompletni za Hound/Dracula/Flatland/Frankenstein/Jekyll/Big Four/Alice; Romeo i Moby Dick skoro.
+> **s94 snapshot (23. jun 2026):** 38.333 rečenice · 521.274 prevoda · 94.894 pobjednika. Pipeline jako mleo između s92–s94.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -383,7 +383,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | `index.html` | Landing page | Opis projekta, naziv Buchenberg, live stat kartice, CTA linkovi |
 | `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
 | `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi (client-side) |
-| `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NER, Word cloud |
+| `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NLP, Word cloud |
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
 | `reader.html` | Čitač | Prima `?book=ID` URL param; X-Ray Full mod — paginacija po 25 rečenica, svih 5 kandidata s kompletnim scoreovima i back translationom |
 | `learn.html` | Language Learning | Landing overview s 4 game kartice; 4 igre: Fill in the Blank (MC + tipkanje, hint lang za EN), Sentence Match, Memory (trunkiranje 80 znakova), Scrambled (Hold to Peek hint) |
