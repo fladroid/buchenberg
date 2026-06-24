@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 23. jun 2026. (sesija 94)  
+**Poslednje ažuriranje:** 24. jun 2026. (sesija 95)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -320,7 +320,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
-> **s94 snapshot (23. jun 2026):** 38.333 rečenice · 521.274 prevoda · 94.894 pobjednika. Pipeline jako mleo između s92–s94.
+> **s95 snapshot (24. jun 2026):** 38.333 rečenice · 570.111 prevoda · 105.514 pobjednika. Alice i Jekyll&Hyde kompletni na svih 14 jezika.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -485,7 +485,7 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 - **Preostalo opciono:** length bucketing (besplatno, nula drifta) — sad manje hitno.
 
 ### Web portal
-1. **Favicon** — buchenberg.opik.net
+1. ✅ **Favicon** (s95) — Flatland heksagon, light/high-contrast (crno na sivom); `favicon.svg` + link kroz nav.js (`document.write`, svih 9 stranica). Footer tagline: `Buchenberg · an X-Ray project · open-source MT pipeline`.
 2. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
 3. **Cache-Control za JS/CSS**
 
