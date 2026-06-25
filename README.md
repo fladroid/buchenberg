@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 24. jun 2026. (sesija 95)  
+**Poslednje ažuriranje:** 25. jun 2026. (sesija 96)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -320,7 +320,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
-> **s95 snapshot (24. jun 2026):** 38.333 rečenice · 570.111 prevoda · 105.514 pobjednika. Alice i Jekyll&Hyde kompletni na svih 14 jezika.
+> **s96 snapshot (25. jun 2026):** 38.333 rečenice · 623.710 prevoda · 116.674 pobjednika. Alice, Flatland i Jekyll&Hyde kompletni na svih 14 jezika.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -484,9 +484,15 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 - **Drift:** int8 mijenja ~50% izlaza kozmetički (red riječi/sinonimi, jednak kvalitet); NLLB je 1 od 5 kandidata, deterministički (greedy). Detalji: `docs/sessions/session_93.md`.
 - **Preostalo opciono:** length bucketing (besplatno, nula drifta) — sad manje hitno.
 
+### Performanse — DB optimizacija (NOVO, s96 dijagnoza)
+`health_check.py` (i agregacije nad `bb_prevodi_recenica`, ~624k redova) usko grlo kako korpus raste — **baza, ne CPU** (Flaviova dijagnoza). Kandidati: indeksi za COUNT/GROUP BY po (knjiga, jezik); materijalizovani view za stanje prevoda; izbjeći seq scan. Nije hitno, ali raste s korpusom.
+
 ### Web portal
 1. ✅ **Favicon** (s95) — Flatland heksagon, light/high-contrast (crno na sivom); `favicon.svg` + link kroz nav.js (`document.write`, svih 9 stranica). Footer tagline: `Buchenberg · an X-Ray project · open-source MT pipeline`.
-2. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
+2. ✅ **MT Lab identitet** (s96) — `<title>Buchenberg — MT lab</title>` + `.bb-hero-lab` red "Machine Translation Lab" ispod home loga (Xpong RL Lab paralela, nepreveden EN).
+3. ✅ **Home hero ikona** (s96) — heksagon `favicon.svg` (64×64) lijevo od loga; `.bb-hero-logo` flex-centriran.
+4. ✅ **X-Ray Key Concepts kartice** (s96) — index/about/stats: 🩻 X-ray style art (`X-ray_style_art`) + 🎸 Rock Art and the X-Ray Style (`Rock_Art_and_the_X-Ray_Style`). Lineage iz X-Ray pamfleta. "Key Concepts" naslov se ne prevodi.
+5. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
 3. **Cache-Control za JS/CSS**
 
 ### Odloženo / u razmatranju
