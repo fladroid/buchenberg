@@ -365,6 +365,23 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 - `balsam:run_command` — SQL operacije (`docker exec pgdb psql`)
 - **Ne miješati** — SQL komande idu isključivo na balsam
 
+### Docker host (strato) — pgAdmin / pgdb
+
+> 📌 **Saznanje s98:** `balsam:run_command` se izvršava na **strato hostu** (`hostname`=strato) kao user `balsam`. To je isti fizički host gdje žive Docker kontejneri. Kontejnere starta user `vespa` iz `/home/vespa/docker/pg/docker-compose.yml`. **I `balsam` i `vespa` su u `docker` grupi** → dijele docker socket; `balsam` user može `docker ps/logs/exec/stats` (read-only dijagnostika) **bez sudo**, bez obzira ko je startao kontejner.
+
+| Kontejner | Servis (YAML) | Port | Uloga |
+|-----------|---------------|------|-------|
+| `pgdb` | `db` (postgres:17) | 5432→5432 | **Produkcijska baza bb — NE dirati pri pgAdmin intervencijama** |
+| `pgad` | `pgadmin` (dpage/pgadmin4) | 8080→80 | pgAdmin web UI |
+
+- **pgAdmin pristup:** https://viapola.dynu.net → Apache reverse proxy (443) → `127.0.0.1:8080` → `pgad`.
+- **Podjela privilegija:** Claude = samo user `balsam` (read-only docker dijagnostika). Flavio = sudo + `vespa` komande (`docker compose` recreate, izmjene compose fajla, Apache logovi).
+- **Privilegija ≠ postojanje:** prazan `ls /home/vespa/...` kao balsam = nemam pravo gledati tuđi home, NE "ne postoji".
+
+**pgAdmin FD-exhaustion obrazac (s98):** gunicorn worker (`-w 1 --threads 25`) s niskim soft `nofile`=1024 vremenom napuni file descriptore → `OSError: [Errno 24]` → worker se zaglavi (živ proces, 0% CPU, ne odgovara; "funkcionalno mrtav"). Dijagnostički potpis: `curl 127.0.0.1:8080` timeout + log staje na "Worker exiting / Errno 24" + `ps -eo etime` pokazuje stare procese (npr. 18d, restart ih nije pomjerio).
+- **Privremena popravka (Opcija 1):** `docker rm -f pgad && docker compose up -d pgadmin` (volume `pgad_data` ostaje → konekcije sačuvane). `restart` i `--force-recreate` ne pomažu (zaglavljen kontejner, conflict na imenu).
+- **Trajna popravka (Opcija 2, odgođeno):** dodati `ulimits: nofile: {soft: 65536, hard: 65536}` u `pgadmin` servis + `docker compose up -d pgadmin`.
+
 ### Web prikaz
 
 - **URL:** https://buchenberg.opik.net
