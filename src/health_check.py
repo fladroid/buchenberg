@@ -86,15 +86,27 @@ def check_postgres():
 
         # Stanje prevoda po knjizi i jeziku
         cur.execute("""
+            WITH prev AS (
+                SELECT pk.knjiga_id, pk.jezik_id,
+                       COUNT(DISTINCT pr.recenica_id) AS prev_rec
+                FROM bb_prevodi_knjige pk
+                JOIN bb_prevodi_recenica pr ON pr.prevodi_knjige_id = pk.id
+                GROUP BY pk.knjiga_id, pk.jezik_id
+            ),
+            pobj AS (
+                SELECT ppk.knjiga_id, ppk.jezik_id,
+                       COUNT(*) AS pobjednici
+                FROM bb_prev_knjige ppk
+                JOIN bb_prev_recenica po ON po.prev_knjige_id = ppk.id
+                GROUP BY ppk.knjiga_id, ppk.jezik_id
+            )
             SELECT k.naziv, j.kod,
-                   COUNT(DISTINCT pr.recenica_id) AS prev_rec,
-                   COUNT(DISTINCT po.prevodi_recenica_id) AS pobjednici
-            FROM bb_prevodi_knjige pk
-            JOIN bb_knjige k  ON k.id = pk.knjiga_id
-            JOIN bb_jezik  j  ON j.id = pk.jezik_id
-            JOIN bb_prevodi_recenica pr ON pr.prevodi_knjige_id = pk.id
-            LEFT JOIN bb_prev_knjige ppk ON ppk.knjiga_id = pk.knjiga_id AND ppk.jezik_id = pk.jezik_id LEFT JOIN bb_prev_recenica po ON po.prev_knjige_id = ppk.id
-            GROUP BY k.naziv, j.kod
+                   COALESCE(prev.prev_rec, 0)   AS prev_rec,
+                   COALESCE(pobj.pobjednici, 0) AS pobjednici
+            FROM prev
+            JOIN bb_knjige k ON k.id = prev.knjiga_id
+            JOIN bb_jezik  j ON j.id = prev.jezik_id
+            LEFT JOIN pobj ON pobj.knjiga_id = prev.knjiga_id AND pobj.jezik_id = prev.jezik_id
             ORDER BY k.naziv, j.kod
         """)
         rows_data = cur.fetchall()

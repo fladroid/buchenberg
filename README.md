@@ -320,7 +320,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
-> **s96 snapshot (25. jun 2026):** 38.333 rečenice · 623.710 prevoda · 116.674 pobjednika. Alice, Flatland i Jekyll&Hyde kompletni na svih 14 jezika.
+> **s97 snapshot (26. jun 2026):** 38.333 rečenice · 701.730 prevoda · 133.074 pobjednika. Alice, Flatland, Jekyll&Hyde i Big Four kompletni na svih 14 jezika.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -484,8 +484,13 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 - **Drift:** int8 mijenja ~50% izlaza kozmetički (red riječi/sinonimi, jednak kvalitet); NLLB je 1 od 5 kandidata, deterministički (greedy). Detalji: `docs/sessions/session_93.md`.
 - **Preostalo opciono:** length bucketing (besplatno, nula drifta) — sad manje hitno.
 
-### Performanse — DB optimizacija (NOVO, s96 dijagnoza)
-`health_check.py` (i agregacije nad `bb_prevodi_recenica`, ~624k redova) usko grlo kako korpus raste — **baza, ne CPU** (Flaviova dijagnoza). Kandidati: indeksi za COUNT/GROUP BY po (knjiga, jezik); materijalizovani view za stanje prevoda; izbjeći seq scan. Nije hitno, ali raste s korpusom.
+### Performanse — DB optimizacija health_check — URAĐENO (s97)
+`health_check.py` "Stanje prevoda" query bio usko grlo: **7:02 elapsed, 5% CPU** (čeka bazu, ne računa). Dijagnoza `time` + `EXPLAIN`: ne CPU, ne promet, ne autovacuum — **loš oblik upita**.
+- **Uzrok:** fan-out — prevodi (`pr`) × pobjednici (`po`) po knjiga×jezik grupi u istom SELECT-u → ~750M redova (`EXPLAIN`: `rows=753.023.732`). `COUNT(DISTINCT)` postojao da poništi taj double-counting. Klasičan anti-pattern.
+- **Popravka:** razdvojene agregacije — `prev` CTE (`COUNT(DISTINCT recenica_id)`) i `pobj` CTE (goli `COUNT(*)`, nema fan-outa), spojene `LEFT JOIN` po knjiga×jezik. Bez sheme, bez indeksa.
+- **Rezultat:** query 7min → **1.26s** (~335×); cijeli health check **7:02 → 0:23**, CPU 5% → 88%. `diff` stari vs novi izlaz **bit-identičan** (126 redova).
+- **Lekcija (prvi SQL-tuning slučaj projekta):** 90% loših DB performansi = korisnički SQL. `time` (wall-clock vs CPU%) je prva dijagnoza: 5% = čeka I/O, 88% = računa. Fan-out + `COUNT(DISTINCT)` = signal za razdvajanje agregacija.
+- **Preostalo opciono:** `work_mem` bump (prev-sort sad 15MB na disk → RAM, <1s); provjeriti isti pattern u stats backendu / `bb_web_export`.
 
 ### Web portal
 1. ✅ **Favicon** (s95) — Flatland heksagon, light/high-contrast (crno na sivom); `favicon.svg` + link kroz nav.js (`document.write`, svih 9 stranica). Footer tagline: `Buchenberg · an X-Ray project · open-source MT pipeline`.
