@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 25. jun 2026. (sesija 96)  
+**Poslednje ažuriranje:** 27. jun 2026. (sesija 99)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -320,7 +320,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
-> **s97 snapshot (26. jun 2026):** 38.333 rečenice · 701.730 prevoda · 133.074 pobjednika. Alice, Flatland, Jekyll&Hyde i Big Four kompletni na svih 14 jezika.
+> **s99 snapshot (27. jun 2026):** 38.333 rečenice · 803.090 prevoda · 157.070 pobjednika. Alice, Flatland, Jekyll&Hyde kompletni (prev=pobj) na svih 14 jezika; Big Four i core-4 (de/hr/it/sr) puni po knjigama.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -399,7 +399,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 |------|----------|------|
 | `index.html` | Landing page | Opis projekta, naziv Buchenberg, live stat kartice, CTA linkovi |
 | `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
-| `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi (client-side) |
+| `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi. **DB-side agregacija (s99):** čita gotov `data/stats.json` (~15 KB, generiše `bb_web_export.py:get_stats()`) umjesto 126 `tr_*.json` (~165 MB) client-side |
 | `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NLP, Word cloud |
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
 | `reader.html` | Čitač | Prima `?book=ID` URL param; X-Ray Full mod — paginacija po 25 rečenica, svih 5 kandidata s kompletnim scoreovima i back translationom |
@@ -507,7 +507,14 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 - **Popravka:** razdvojene agregacije — `prev` CTE (`COUNT(DISTINCT recenica_id)`) i `pobj` CTE (goli `COUNT(*)`, nema fan-outa), spojene `LEFT JOIN` po knjiga×jezik. Bez sheme, bez indeksa.
 - **Rezultat:** query 7min → **1.26s** (~335×); cijeli health check **7:02 → 0:23**, CPU 5% → 88%. `diff` stari vs novi izlaz **bit-identičan** (126 redova).
 - **Lekcija (prvi SQL-tuning slučaj projekta):** 90% loših DB performansi = korisnički SQL. `time` (wall-clock vs CPU%) je prva dijagnoza: 5% = čeka I/O, 88% = računa. Fan-out + `COUNT(DISTINCT)` = signal za razdvajanje agregacija.
-- **Preostalo opciono:** `work_mem` bump (prev-sort sad 15MB na disk → RAM, <1s); provjeriti isti pattern u stats backendu / `bb_web_export`.
+- **Preostalo opciono:** `work_mem` bump (prev-sort sad 15MB na disk → RAM, <1s).
+
+### Performanse — stats.html DB-side agregacija — URAĐENO (s99)
+`stats.html` je serijski fetchao **126 `tr_*.json` (~165 MB)** i 4× petljao kroz sve u browseru (dizajn iz prve verzije s par jezika; sad 803k redova). Stranici trebaju samo agregati (~par KB) — browser je vukao 165 MB da izračuna par KB.
+- **Popravka:** `bb_web_export.py:get_stats()` — 4 `GROUP BY` (summary, winner-dist, coverage, score-by-lang) nad zajedničkim JOIN lancem + `bb_knjige`; generiše `data/stats.json`. `stats.html:loadStats()` čita **1 fajl** umjesto 126, mapira na iste `_winnerRows/_coverageRows/_scoreRows` (render netaknut). + loading state + ojačan error catch.
+- **Rezultat:** **165 MB → 14.6 KB** (~11.000×), 126 fetch → 1. SQL <0.5s po agregatu (mjereno `\timing`). Stranica učitava trenutno (bilo: sekunde praznine).
+- **Lekcija:** isti X-Ray obrazac kao s97 — pomakni posao gdje je jeftin. Mjeri prije izbora rješenja (`du -ch tr_*.json` = 165 MB dao dijagnozu jednim potezom).
+- **Preostalo opciono:** isti pattern provjeriti u nlp.html backendu; `stats_loading` i18n ključ (sad fallback "Loading…").
 
 ### Web portal
 1. ✅ **Favicon** (s95) — Flatland heksagon, light/high-contrast (crno na sivom); `favicon.svg` + link kroz nav.js (`document.write`, svih 9 stranica). Footer tagline: `Buchenberg · an X-Ray project · open-source MT pipeline`.
@@ -529,4 +536,4 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 19. jun 2026. (sesija 90)*
+*Flavio & Claude · Buchenberg · V3 · 27. jun 2026. (sesija 99)*

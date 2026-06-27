@@ -138,6 +138,72 @@ def get_ner_veze(cur, knjiga_id, min_tezina=2):
     return [{"od": od, "od_tip": od_tip, "do": do, "do_tip": do_tip, "tezina": int(t)}
             for od, od_tip, do, do_tip, t in cur.fetchall()]
 
+def get_stats(cur):
+    """Agregati za stats.html — izracunati u bazi (jednom pri exportu), ne u browseru.
+    Zamjena za stari client-side obracun nad 126 tr_*.json fajlova (~165 MB)."""
+    base_from = """
+        FROM bb_prev_recenica pr
+        JOIN bb_prevodi_recenica pvr ON pr.prevodi_recenica_id = pvr.id
+        JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
+        JOIN bb_jezik j ON pk.jezik_id = j.id
+        JOIN bb_modeli m ON pk.model_id = m.id
+        JOIN bb_recenice r ON pvr.recenica_id = r.id
+        JOIN bb_knjige kn ON r.knjiga_id = kn.id
+    """
+
+    cur.execute("""
+        SELECT COUNT(*) AS pobj,
+               COUNT(DISTINCT kn.id) AS knjige,
+               COUNT(DISTINCT (kn.id, j.kod)) AS knjlang,
+               ROUND(AVG(pvr.translation_score)::numeric, 4) AS avg_ts
+    """ + base_from)
+    pobj, knjige, knjlang, avg_ts = cur.fetchone()
+    summary = {
+        "total_winners":   int(pobj),
+        "total_books":     int(knjige),
+        "total_booklangs": int(knjlang),
+        "avg_ts":          float(avg_ts) if avg_ts is not None else None,
+    }
+
+    cur.execute("""
+        SELECT m.naziv, m.temperatura, COUNT(*) AS cnt
+    """ + base_from + """
+        GROUP BY m.naziv, m.temperatura
+        ORDER BY cnt DESC
+    """)
+    winners = [{"model": model, "temp": float(temp) if temp is not None else None, "count": int(cnt)}
+               for model, temp, cnt in cur.fetchall()]
+
+    cur.execute("""
+        SELECT kn.naziv, j.kod, COUNT(*) AS cnt
+    """ + base_from + """
+        GROUP BY kn.naziv, j.kod
+        ORDER BY kn.naziv, j.kod
+    """)
+    coverage = [{"book": book, "lang": lang, "translated": int(cnt)}
+                for book, lang, cnt in cur.fetchall()]
+
+    cur.execute("""
+        SELECT j.kod,
+               COUNT(*) AS n,
+               ROUND(AVG(pvr.translation_score)::numeric, 4) AS avg_ts,
+               ROUND(AVG(pvr.sudija_avg)::numeric, 4) AS avg_judge
+    """ + base_from + """
+        GROUP BY j.kod
+        ORDER BY j.kod
+    """)
+    scores = [{"lang": lang, "n": int(n),
+               "avg_ts": float(avg_ts) if avg_ts is not None else None,
+               "avg_judge": float(avg_j) if avg_j is not None else None}
+              for lang, n, avg_ts, avg_j in cur.fetchall()]
+
+    return {
+        "summary":  summary,
+        "winners":  winners,
+        "coverage": coverage,
+        "scores":   scores,
+    }
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=str, default=DEFAULT_OUTPUT,
@@ -260,6 +326,15 @@ def main():
             json.dump(ner_out, f, ensure_ascii=False, indent=2)
         total = sum(len(v) for v in ner.values())
         print(f"  ner_{knjiga_id}.json — {total} entiteta")
+
+    # --- stats.json — agregati za stats.html (DB-side, zamjena za 165 MB client-side) ---
+    stats_data = get_stats(cur)
+    stats_path = os.path.join(args.output, "stats.json")
+    with open(stats_path, "w", encoding="utf-8") as f:
+        json.dump(stats_data, f, ensure_ascii=False, indent=2)
+    print(f"  stats.json — {stats_data['summary']['total_winners']} pobjednika agregirano "
+          f"({len(stats_data['winners'])} modela, {len(stats_data['coverage'])} knjiga×jezik, "
+          f"{len(stats_data['scores'])} jezika)")
 
     cur.close()
     conn.close()
