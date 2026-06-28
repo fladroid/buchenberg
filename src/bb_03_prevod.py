@@ -296,6 +296,34 @@ def upisi_prevod(cur, prevodi_knjige_id, recenica_id, prevod, back_translation, 
     """, (prevodi_knjige_id, recenica_id, prevod, back_translation, score, translation_score))
 
 
+def prevedi_refine_single(tekst, jezik_naziv, model, temp, seed):
+    prompt = (
+        f"Translate the following English text to {jezik_naziv}.\n"
+        f"A reference translation is provided. Produce a BETTER translation — "
+        f"more accurate and more natural. Keep the reference only if it is already optimal.\n"
+        f"Output only the translation, nothing else.\n\n"
+        f"English: {tekst}\n"
+        f"Reference {jezik_naziv}: {seed}"
+    )
+    return ollama_chat(model, temp, [{"role": "user", "content": prompt}])
+
+
+def get_seed_map(cur, kod, rids):
+    if not rids:
+        return {}
+    cur.execute("""
+        SELECT pvr.recenica_id, pvr.prevod
+        FROM bb_prev_recenica pr
+        JOIN bb_prevodi_recenica pvr ON pr.prevodi_recenica_id = pvr.id
+        JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
+        JOIN bb_jezik j ON pk.jezik_id = j.id
+        JOIN bb_modeli m ON pk.model_id = m.id
+        WHERE pvr.recenica_id = ANY(%s) AND j.kod = %s
+          AND m.naziv NOT LIKE %s
+    """, (rids, kod, '%-refine'))
+    return {r[0]: r[1] for r in cur.fetchall()}
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 def main():
@@ -311,9 +339,15 @@ def main():
     parser.add_argument("--temp",     type=float, nargs="+", default=[0.0])
     parser.add_argument("--embedder", type=str,   required=True)
     parser.add_argument("--jezici",   type=str,   nargs="+", required=True)
+    parser.add_argument("--refine", action="store_true",
+                        help="Refine mod: pobjednik kao hint (temp 0.8, single)")
     args = parser.parse_args()
 
     is_nllb = (args.model == "nllb-600M")
+    is_refine = args.refine
+    ollama_naziv = args.model.replace("-refine", "")
+    if is_refine:
+        args.temp = [0.8]
 
     embedder_path = EMBEDDER_PATH_MAP.get(args.embedder, args.embedder)
     print(f"Učitavam embedder: {args.embedder} ({embedder_path})")
@@ -374,6 +408,12 @@ def main():
                     if not already_done(cur, prevodi_knjige_id, rid)]
             print(f"  Preostalo: {len(todo)} rečenica")
 
+            seed_map = {}
+            if is_refine:
+                seed_map = get_seed_map(cur, kod, [rid for rid, _, _ in todo])
+                todo = [x for x in todo if x[0] in seed_map]
+                print(f"  Refine: {len(todo)} rečenica sa seedom")
+
             step = NLLB_CT2_BATCH if (is_nllb and NLLB_ENGINE == "ct2") else BATCH_SIZE
             for i in range(0, len(todo), step):
                 chunk = todo[i:i + step]
@@ -385,6 +425,11 @@ def main():
                     nllb_tgt = NLLB_LANG_MAP[kod]
                     prevodi = nllb_batch(tekstovi, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
                     backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
+                elif is_refine:
+                    prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid])
+                               for rid, poz, t in chunk]
+                    backs   = [back_prevedi_single(p, jezik_naziv, ollama_naziv, temp)
+                               for p in prevodi]
                 else:
                     prevodi = prevedi_batch(tekstovi, jezik_naziv, args.model, temp)
                     if prevodi is None:

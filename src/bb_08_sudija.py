@@ -34,7 +34,8 @@ OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
 SUDIJA_MODEL = "gemma4:31b"
 SUDIJA_TEMP  = 0.0
 
-OCJENJIVANI_MODELI = ["gemma3:12b", "ministral-3:14b", "nllb-600M"]
+OCJENJIVANI_MODELI = ["gemma3:12b", "ministral-3:14b", "nllb-600M",
+                      "gemma3:12b-refine", "ministral-3:14b-refine"]
 
 PROMPT_TEMPLATE = """You are evaluating {lang} translations of an English sentence.
 Rate each translation on a scale 0.0–1.0 for three criteria:
@@ -164,7 +165,7 @@ def main():
 
         for pozicija, data in sorted(recenice.items()):
             prevodi = data["prevodi"]
-            if len(prevodi) < 5:
+            if len(prevodi) < 1:
                 print(f"  s{pozicija}: premalo prevoda, preskačem.")
                 continue
 

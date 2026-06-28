@@ -320,7 +320,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
-> **s99 snapshot (27. jun 2026):** 38.333 rečenice · 803.090 prevoda · 157.070 pobjednika. Alice, Flatland, Jekyll&Hyde kompletni (prev=pobj) na svih 14 jezika; Big Four i core-4 (de/hr/it/sr) puni po knjigama.
+> **s100 snapshot (28. jun 2026):** 38.333 rečenice · 888.390 prevoda · 174.270 pobjednika. Alice, Flatland, Jekyll&Hyde kompletni (prev=pobj) na svih 14 jezika; Big Four i core-4 (de/hr/it/sr) puni po knjigama. (Uključuje ~400 self-refine prevoda J&H hr — vidi s100.)
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -492,6 +492,11 @@ Svaka sesija završava:
 ---
 
 ## 14. Sljedeći koraci
+
+### Self-refine eksperiment — NEGATIVAN nalaz (s100)
+Hipoteza: dati pobjednika kao hint pri ponovnom prevodu (self-refine / MoA interakcija) poboljšava prevod. **Rezultat: ne radi na jakim seedovima.** Test J&H hr s1-100: refine head-to-head vs svoj seed = **0/100** (nikad bolji; avg delta -0.076). Win-rate 36/100 bio je artefakt selekcije iz šireg bazena, ne stvarno poboljšanje — head-to-head otkrio konfaund. Uzrok: seed je već pobjednik od 5 modela (blizu plafona), "popravi ovo" perturbuje optimalni anchor -> regresija. Infrastruktura (`bb_03 --refine`, `run_refine.sh`, pseudo-modeli `*-refine` id 12/13, `bb_08` fix) ostaje za buduće hipoteze. Detalji: `docs/sessions/session_100.md`.
+Otvoreno: (a) selektivni re-translate na SLABIM seedovima (apsolutni prag <0.85, jedini netestiran režim); (b) refaktor `OCJENJIVANI_MODELI` -> kolona `grupa` u bb_modeli.
+
 
 ### Performanse — NLLB CTranslate2 int8 — URAĐENO (s93)
 NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Neoverse-N1 (ARM); NLLB više nije usko grlo lanca.
