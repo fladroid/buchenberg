@@ -154,15 +154,42 @@ def get_stats(cur):
     cur.execute("""
         SELECT COUNT(*) AS pobj,
                COUNT(DISTINCT kn.id) AS knjige,
+               COUNT(DISTINCT j.kod) AS jezici,
                COUNT(DISTINCT (kn.id, j.kod)) AS knjlang,
                ROUND(AVG(pvr.translation_score)::numeric, 4) AS avg_ts
     """ + base_from)
-    pobj, knjige, knjlang, avg_ts = cur.fetchone()
+    pobj, knjige, jezici, knjlang, avg_ts = cur.fetchone()
+
+    # Lijevak korpusa: izvorne recenice -> kandidati -> izabrani prevodi.
+    # Brojevi su zivi (server = izvor istine); generisu se pri exportu.
+    cur.execute("SELECT COUNT(*) FROM bb_recenice")
+    total_sentences = int(cur.fetchone()[0])
+
+    cur.execute("SELECT COUNT(*) FROM bb_prevodi_recenica")
+    total_candidates = int(cur.fetchone()[0])
+
+    # Recenice s pobjednikom u SVIM jezicima (dinamicki broj jezika, ne konstanta 14).
+    cur.execute("""
+        SELECT COUNT(*) FROM (
+            SELECT pvr.recenica_id
+            FROM bb_prev_recenica pr
+            JOIN bb_prevodi_recenica pvr ON pr.prevodi_recenica_id = pvr.id
+            JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
+            GROUP BY pvr.recenica_id
+            HAVING COUNT(DISTINCT pk.jezik_id) = (SELECT COUNT(*) FROM bb_jezik)
+        ) t
+    """)
+    full_all_langs = int(cur.fetchone()[0])
+
     summary = {
-        "total_winners":   int(pobj),
-        "total_books":     int(knjige),
-        "total_booklangs": int(knjlang),
-        "avg_ts":          float(avg_ts) if avg_ts is not None else None,
+        "total_sentences":  total_sentences,
+        "total_candidates": total_candidates,
+        "total_winners":    int(pobj),
+        "full_all_langs":   full_all_langs,
+        "total_books":      int(knjige),
+        "total_languages":  int(jezici),
+        "total_booklangs":  int(knjlang),
+        "avg_ts":           float(avg_ts) if avg_ts is not None else None,
     }
 
     cur.execute("""
