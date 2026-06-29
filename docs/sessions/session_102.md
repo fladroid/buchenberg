@@ -51,3 +51,19 @@
 
 ---
 *Flavio & Claude · Buchenberg · Session 102 · 29. jun 2026.*
+
+## Dodatak — pokretanje self-refine (run_refine.sh)
+
+**Ispravan poziv** (jedan jezik ili lista, jedna knjiga):
+```bash
+cd /home/balsam/buchenberg && PYTHONUNBUFFERED=1 nohup bash ./run_refine.sh \
+  --knjiga 21 --jezici "pt ro" --od 1 --do 100 \
+  > logs/refine_k21_ptro.log 2>&1 & echo "PID: $!"
+```
+- BEZ vanjskog `time` — skript ima `time` interno na svakom koraku (gemma3-refine → ministral-refine → sudija → pobjednik).
+- Skript usporedo piše vlastiti timestamped log preko `tee` (`logs/refine_kNN_YYYYMMDD_HHMMSS.log`); vanjski `> ... 2>&1` je samo nohup kopija.
+- `run_refine.sh` parsira `--knjiga --jezici --od --do`; `$JEZICI` ide nequoted u `--jezici $JEZICI` (lista "de hr it sr" se pravilno razdvaja). 2 modela (gemma3-refine, ministral-refine) @0.8, single, bez NLLB. `set -e`.
+
+**Lekcija — dvostruki start (haos 09:04/09:07):** pokrenut DVAPUT (vjerovatno dupli enter/paste u terminalu), ne greška skripta. Dva refine procesa paralelno na isti cilj (k19 de/hr/it/sr) → oba zovu istu gemma3-refine na Ollama Cloud (jedna sesija!) + pišu isti (knjiga,jezik,model,opseg). Posljedica BLAGA jer `bb_03 --refine` ima ON CONFLICT zaštitu (provjereno: `n == distinct_rec` svuda, nula duplikata) i inkrementalni režim (`Preostalo: 0` → preskače već urađeno). Čišćenje: `pkill -f "bb_03_prevod.py.*refine"` + `pkill -f "run_refine.sh"` (NE dira base prevode — komande im ne sadrže "refine"). **Pravilo: jedan start, sačekaj "PID:", ne ponavljaj. Ne dva refine procesa istovremeno (Cloud = jedna sesija).**
+
+**Verifikovano uživo:** jednojezični (af k19) i dvojezični (pt ro k21) pozivi rade besprijekorno — `Refine: N rečenica sa seedom` potvrđuje da refine nalazi pobjednika kao hint; inkrementalni preskok radi (af-gemma3-refine već postojao → `Preostalo: 0`, 13s; af-ministral-refine novo → 100 sa seedom). Flatland pt ima pobjednike za s1–100 (seed postoji).
