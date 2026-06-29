@@ -1,7 +1,7 @@
 """
 bb_xray_export.py
 Generira X-Ray JSON fajlove za Buchenberg web stranicu.
-Za svaku rečenicu exporta SVIH 5 kandidata (ne samo pobjednika).
+Za svaku rečenicu exporta SVE kandidate (5 baznih + eventualni self-refine), ne samo pobjednika.
 
 Output:
     /var/www/buchenberg/data/xray_<id>_<lang>.json

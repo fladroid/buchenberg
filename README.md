@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 29. jun 2026. (sesija 101)  
+**Poslednje ažuriranje:** 29. jun 2026. (sesija 102)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -323,6 +323,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s100 snapshot (28. jun 2026):** 38.333 rečenice · 888.390 prevoda · 174.270 pobjednika. Alice, Flatland, Jekyll&Hyde kompletni (prev=pobj) na svih 14 jezika; Big Four i core-4 (de/hr/it/sr) puni po knjigama. (Uključuje ~400 self-refine prevoda J&H hr — vidi s100.)
 >
 > **s101 snapshot (29. jun 2026):** 38.333 rečenice · ~954k prevoda · ~187k pobjednika · 9.633 rečenice s pobjednikom na svih 14 jezika. Brojevi živi iz baze (`stats.json`).
+>
+> **s102 snapshot (29. jun 2026):** 38.333 rečenice · 962.570 prevoda · 189.870 pobjednika. Self-refine učinjen vidljivim kao X-Ray eksponat u readeru (legenda objašnjava `-refine` varijante; svih 7 kandidata po rečenici gdje refine postoji — J&H hr s1–100). Refine ostaje pun takmičar: pobjednik se bira iz bazena od 7, ništa se ne filtrira ni prepisuje (odluka s102).
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -543,4 +545,4 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 29. jun 2026. (sesija 101)*
+*Flavio & Claude · Buchenberg · V3 · 29. jun 2026. (sesija 102)*
