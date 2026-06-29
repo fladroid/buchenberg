@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 27. jun 2026. (sesija 99)  
+**Poslednje ažuriranje:** 29. jun 2026. (sesija 101)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -321,6 +321,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
 > **s100 snapshot (28. jun 2026):** 38.333 rečenice · 888.390 prevoda · 174.270 pobjednika. Alice, Flatland, Jekyll&Hyde kompletni (prev=pobj) na svih 14 jezika; Big Four i core-4 (de/hr/it/sr) puni po knjigama. (Uključuje ~400 self-refine prevoda J&H hr — vidi s100.)
+>
+> **s101 snapshot (29. jun 2026):** 38.333 rečenice · ~954k prevoda · ~187k pobjednika · 9.633 rečenice s pobjednikom na svih 14 jezika. Brojevi živi iz baze (`stats.json`).
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -397,9 +399,9 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 
 | Fajl | Stranica | Opis |
 |------|----------|------|
-| `index.html` | Landing page | Opis projekta, naziv Buchenberg, live stat kartice, CTA linkovi |
+| `index.html` | Landing page | Čist pitch: hero (heksagon + MT Lab), Key Concepts kartice, How it works (3 stuba), open-source nota. Current status (kartice + funnel) preseljen na stats.html (s101). |
 | `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
-| `stats.html` | X-Ray Stats | Agregatne statistike: winner distribution, coverage, avg scoreovi. **DB-side agregacija (s99):** čita gotov `data/stats.json` (~15 KB, generiše `bb_web_export.py:get_stats()`) umjesto 126 `tr_*.json` (~165 MB) client-side |
+| `stats.html` | X-Ray Stats | Corpus funnel (38k rečenice → kandidati → izabrani prevodi + full-14), definiciona nota ("kako čitati brojeve": prevod=rečenica-jezik par, engine vs konfiguracija, NLLB=dedicated MT), 5 summary kartica (uklj. 14 jezika i 126 kombinacija), winner distribution, coverage, avg scoreovi. **DB-side agregacija (s99):** čita `data/stats.json` (generiše `bb_web_export.py:get_stats()` — od s101 +total_sentences/total_candidates/total_languages/full_all_langs). |
 | `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NLP, Word cloud |
 | `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
 | `reader.html` | Čitač | Prima `?book=ID` URL param; X-Ray Full mod — paginacija po 25 rečenica, svih 5 kandidata s kompletnim scoreovima i back translationom |
@@ -541,4 +543,4 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 27. jun 2026. (sesija 99)*
+*Flavio & Claude · Buchenberg · V3 · 29. jun 2026. (sesija 101)*
