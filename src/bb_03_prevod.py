@@ -163,7 +163,8 @@ def nllb_single(text, tokenizer, model, src_lang, tgt_lang):
 
 # ── Ollama ──────────────────────────────────────────────────────────────────
 
-def ollama_chat(model, temperature, messages):
+def ollama_chat(model, temperature, messages, max_retries=3, wait=30):
+    import time
     headers = {"Content-Type": "application/json"}
     if OLLAMA_KEY:
         headers["Authorization"] = f"Bearer {OLLAMA_KEY}"
@@ -173,9 +174,19 @@ def ollama_chat(model, temperature, messages):
         "stream": False,
         "options": {"temperature": temperature},
     }
-    r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, headers=headers, timeout=120)
-    r.raise_for_status()
-    return r.json()["message"]["content"].strip()
+    for attempt in range(max_retries):
+        try:
+            r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, headers=headers, timeout=120)
+            r.raise_for_status()
+            return r.json()["message"]["content"].strip()
+        except (requests.exceptions.HTTPError,
+                requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectionError) as e:
+            if attempt < max_retries - 1:
+                print(f"  Greška ({e}), čekam {wait}s pa ponavljam (pokušaj {attempt+1}/{max_retries})...", flush=True)
+                time.sleep(wait)
+            else:
+                raise
 
 
 def prevedi_batch(tekstovi, jezik_naziv, model, temp):
@@ -319,8 +330,7 @@ def get_seed_map(cur, kod, rids):
         JOIN bb_jezik j ON pk.jezik_id = j.id
         JOIN bb_modeli m ON pk.model_id = m.id
         WHERE pvr.recenica_id = ANY(%s) AND j.kod = %s
-          AND m.naziv NOT LIKE %s
-    """, (rids, kod, '%-refine'))
+    """, (rids, kod))
     return {r[0]: r[1] for r in cur.fetchall()}
 
 

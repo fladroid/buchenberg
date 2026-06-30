@@ -198,8 +198,32 @@ def get_stats(cur):
         GROUP BY m.naziv, m.temperatura
         ORDER BY cnt DESC
     """)
-    winners = [{"model": model, "temp": float(temp) if temp is not None else None, "count": int(cnt)}
-               for model, temp, cnt in cur.fetchall()]
+    win_rows = cur.fetchall()
+
+    # Nazivnik za win-rate: koliko je puta svaki (model, temp) bio KANDIDAT
+    # (svi prevodi, ne samo pobjednici). Odvojen izvor od base_from (koji ide
+    # kroz pobjednike) -> nema fan-outa, dva nezavisna agregata spojena u Pythonu.
+    cur.execute("""
+        SELECT m.naziv, m.temperatura, COUNT(*) AS cnt
+        FROM bb_prevodi_recenica pvr
+        JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
+        JOIN bb_modeli m ON pk.model_id = m.id
+        GROUP BY m.naziv, m.temperatura
+    """)
+    cand_map = {(model, float(temp) if temp is not None else None): int(cnt)
+                for model, temp, cnt in cur.fetchall()}
+
+    winners = []
+    for model, temp, cnt in win_rows:
+        tkey = float(temp) if temp is not None else None
+        cand = cand_map.get((model, tkey), 0)
+        winners.append({
+            "model": model,
+            "temp": tkey,
+            "count": int(cnt),
+            "candidates": cand,
+            "win_rate": round(100.0 * int(cnt) / cand, 1) if cand else None,
+        })
 
     cur.execute("""
         SELECT kn.naziv, j.kod, COUNT(*) AS cnt
