@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 29. jun 2026. (sesija 102)  
+**Poslednje ažuriranje:** 30. jun 2026. (sesija 103)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -325,6 +325,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s101 snapshot (29. jun 2026):** 38.333 rečenice · ~954k prevoda · ~187k pobjednika · 9.633 rečenice s pobjednikom na svih 14 jezika. Brojevi živi iz baze (`stats.json`).
 >
 > **s102 snapshot (29. jun 2026):** 38.333 rečenice · 962.570 prevoda · 189.870 pobjednika. Self-refine učinjen vidljivim kao X-Ray eksponat u readeru (legenda objašnjava `-refine` varijante; svih 7 kandidata po rečenici gdje refine postoji — J&H hr s1–100). Refine ostaje pun takmičar: pobjednik se bira iz bazena od 7, ništa se ne filtrira ni prepisuje (odluka s102).
+>
+> **s103 snapshot (30. jun 2026):** 38.333 rečenice · 1.006.510 prevoda · 195.070 pobjednika. Flaviov full refine run — self-refine na SVIM knjigama, prvih 100 rečenica, svih 14 jezika, oba refine modela (gemma3-refine 12.060 / ministral-refine 12.080 prevoda). Refine pobjede: gemma3-refine 2.406 (20.0%), ministral-refine 1.420 (11.8%) — UPOZORENJE: win-rate je selekcijski artefakt (refine biran iz bazena od 7), NE dokaz nadmašivanja sopstvenog seeda (head-to-head ostaje korektna mjera, vidi docs/ANALIZA.md). 8 nepotpunih ćelija (seed-missing, Flavio koriguje).
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -545,4 +547,4 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 29. jun 2026. (sesija 102)*
+*Flavio & Claude · Buchenberg · V3 · 30. jun 2026. (sesija 103)*
