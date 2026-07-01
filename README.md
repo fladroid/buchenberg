@@ -201,7 +201,7 @@ if parts is None:
 | `bb_prevodi_recenica` | Prevod + back_translation + score + translation_score + prevod_vektor + sudija ocjene |
 | `bb_prev_knjige` | Finalni prevod knjige UNIQUE(knjiga, jezik) |
 | `bb_prev_recenica` | FK na ukupnog pobjednika u bb_prevodi_recenica |
-| `bb_prev_recenica_faza` | Fazni pobjednik po (rečenica, faza) — UNIQUE(prev_knjige, prevodi_recenica, faza). Izolovana od bb_04. |
+| `bb_prev_recenica_faza` | Fazni pobjednik po (rečenica, faza) — UNIQUE(prev_knjige, prevodi_recenica, faza). Puni ga bb_04 (faza-blok, DELETE+INSERT po opsegu, od s106). |
 | `bb_rag_korpus` | RAG korpus (odgođeno) |
 
 ### Metrike kvaliteta
@@ -332,6 +332,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s104 snapshot (30. jun 2026):** 38.333 rečenice · ~1.007.450 prevoda · 195.070 pobjednika (živo iz baze; raste). Refine rupe ZATVORENE — 252/252 ćelije pune (gemma3-refine 12.600 / ministral-refine 12.600). Refine pobjede: 2.487 + 1.465 = 3.952 (win-rate 15.7% — i dalje SELEKCIJSKI ARTEFAKT, vidi ANALIZA.md). **Uzrok rupa NIJE bio seed-missing nego seed-is-refine** (get_seed_map filtrirao \`NOT LIKE '%-refine'\` -> rečenice gdje je refine već pobijedio ispadale van; fix: anchoraj na trenutnog pobjednika ma koji bio). MiniLM legacy OBRISAN (120 redova, 22 ćelije) -> embedder sad jedinstven (e5-large). bb_03 retry fix (Ollama timeout). **NOVO: pobjednik po fazama** — \`bb_faze\` tabela + \`bb_modeli.faza_id\` (faza=svojstvo modela; base/refine). Redizajn pobjednika + rekonstrukcija faze-1 = sljedeća sesija.
 >
 > **s105 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika. Hound (id 1) potpuno preveden → četvrta potpuna knjiga (uz Alice, Flatland, J&H). **Rekonstrukcija faznog pobjednika ZAVRŠENA** (horizont #1 iz s104): nova tabela `bb_prev_recenica_faza` — faza 1 = 204.793 (svi pobjednici), faza 2 = 12.600 (refine opseg ≤100), ukupno 217.393. Faza-1 pobjednik na 3.952 refine-prepisanih mjesta eksplicitno vraćen (argmax nad baznima, determinističan tie-break). bb_prev_recenica netaknut. Sljedeće: bb_04 da sam puni faznu tabelu ubuduće.
+>
+> **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|

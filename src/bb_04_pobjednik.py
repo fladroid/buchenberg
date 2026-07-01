@@ -164,6 +164,65 @@ def main():
         conn.commit()
         print(f"  Upisano: {upisano}")
 
+        # ── Fazni pobjednik → bb_prev_recenica_faza ──
+        # Isti skup kandidata, ali pobjednik po (rečenica × faza).
+        # faza = svojstvo modela (bb_modeli.faza_id); NULL faze (sudija/mrtvi) isključene.
+        cur.execute("""
+            SELECT DISTINCT ON (r.pozicija, m.faza_id)
+                pr.id AS prevodi_recenica_id,
+                m.faza_id
+            FROM bb_recenice r
+            JOIN bb_prevodi_knjige pk ON pk.knjiga_id = r.knjiga_id
+            JOIN bb_prevodi_recenica pr ON pr.prevodi_knjige_id = pk.id
+                                      AND pr.recenica_id = r.id
+            JOIN bb_modeli m ON pk.model_id = m.id
+            JOIN bb_jezik j  ON pk.jezik_id = j.id
+            JOIN bb_embeddings e ON pk.embeddings_id = e.id
+            WHERE r.knjiga_id = %s
+              AND r.pozicija BETWEEN %s AND %s
+              AND j.kod = %s
+              AND e.naziv = 'multilingual-e5-large'
+              AND pr.translation_score IS NOT NULL
+              AND m.faza_id IS NOT NULL
+            ORDER BY r.pozicija, m.faza_id,
+                     (CASE
+                          WHEN pr.sudija_avg IS NOT NULL THEN
+                              %s * (pr.score + pr.translation_score) / 2.0
+                              + %s * pr.sudija_avg
+                          ELSE
+                              (pr.score + pr.translation_score) / 2.0
+                      END) DESC,
+                     m.naziv ASC, m.temperatura DESC, pr.id ASC
+        """, (args.knjiga, args.od, args.do, kod, W_KOMPOZITNI, W_SUDIJA))
+
+        fazni = cur.fetchall()
+
+        # Reset faznih pobjednika samo za trenutni raspon rečenica
+        cur.execute("""
+            DELETE FROM bb_prev_recenica_faza
+            WHERE prev_knjige_id = %s
+            AND prevodi_recenica_id IN (
+                SELECT id FROM bb_prevodi_recenica
+                WHERE recenica_id IN (
+                    SELECT id FROM bb_recenice
+                    WHERE knjiga_id = %s AND pozicija BETWEEN %s AND %s
+                )
+            )
+        """, (prev_knjige_id, args.knjiga, args.od, args.do))
+
+        upisano_faza = 0
+        for prevodi_recenica_id, faza_id in fazni:
+            cur.execute("""
+                INSERT INTO bb_prev_recenica_faza
+                    (prev_knjige_id, prevodi_recenica_id, faza_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT DO NOTHING
+            """, (prev_knjige_id, prevodi_recenica_id, faza_id))
+            upisano_faza += cur.rowcount
+
+        conn.commit()
+        print(f"  Upisano faza: {upisano_faza}")
+
     cur.close()
     conn.close()
     print("\nGotovo.")
