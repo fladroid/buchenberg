@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 30. jun 2026. (sesija 104)  
+**Poslednje ažuriranje:** 2. jul 2026. (sesija 108)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -60,7 +60,7 @@ Prevod knjiga sa isteklom licencom sa **Project Gutenberg** na više jezika, kor
 
 Buchenberg is conceived, designed and maintained by **Flavio** (fladroid). The project's philosophy, methodology, architecture and all final design decisions are his — and remain his sole responsibility.
 
-The project is built in ongoing collaboration with **[Claude](https://claude.ai)** (Anthropic) — not as a code-completion tool, but as a working partner across more than 70 documented sessions: implementation, debugging, analysis, and the conceptual dialogue that shaped pages like *Geometry of Meaning* and *Art*. Every session is recorded in `docs/sessions/`, where both names appear — a deliberate choice, in the spirit of this project's X-Ray attitude: the process of building should be as transparent as the thing built.
+The project is built in ongoing collaboration with **[Claude](https://claude.ai)** (Anthropic) — not as a code-completion tool, but as a working partner across more than 100 documented sessions: implementation, debugging, analysis, and the conceptual dialogue that shaped pages like *Geometry of Meaning* and *Art*. Every session is recorded in `docs/sessions/`, where both names appear — a deliberate choice, in the spirit of this project's X-Ray attitude: the process of building should be as transparent as the thing built.
 
 *Flavio & Claude · Buchenberg · 2026*
 
@@ -347,6 +347,10 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s105 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika. Hound (id 1) potpuno preveden → četvrta potpuna knjiga (uz Alice, Flatland, J&H). **Rekonstrukcija faznog pobjednika ZAVRŠENA** (horizont #1 iz s104): nova tabela `bb_prev_recenica_faza` — faza 1 = 204.793 (svi pobjednici), faza 2 = 12.600 (refine opseg ≤100), ukupno 217.393. Faza-1 pobjednik na 3.952 refine-prepisanih mjesta eksplicitno vraćen (argmax nad baznima, determinističan tie-break). bb_prev_recenica netaknut. Sljedeće: bb_04 da sam puni faznu tabelu ubuduće.
 >
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
+>
+> **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+> **s108 snapshot (2. jul 2026):** Web prezentacija self-refine na Home. „How it works" dobio fazu 2: drugi pasus (anchored mutation) + kartica 🧬 Self-refinement + winner „across both phases"; prevedeno na svih 5 UI jezika. Grid 2+2. Key Concepts: dodata **Mutation** (`Mutation_(evolutionary_algorithm)`); self-refine nema Wikipedia članak → izostavljen (odluka: samo postojeći EN wiki članci). **buchenweb DIRNUT prvi put od s102 → BB_VERSION s108.4.** Korpus strukturno nepromijenjen (živ rast tokom sesije — Flaviovi procesi). README: higijena (header/authorship/§9 s107 red, 10 `.bak` obrisano) + novi §10 how-to.
 
 | Knjiga | id | Jezik | Prevodi | Pobjednici |
 |--------|-----|-------|---------|-----------|
@@ -438,6 +442,32 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 - Dark mode toggle (☀️/🌙) — persista u `localStorage`
 - UI jezik (EN/DE/IT/HR/SR) — persista u `localStorage`, dijeli se između stranica
 - `books.html` → "Read" dugme otvara `reader.html?book={id}`
+
+### Web how-to: i18n prevod i Key Concepts kartice
+
+Dva mjesta gdje se najčešće zastaje — trajna referenca (raskriveno s108).
+
+#### Višejezični UI prevod (i18n)
+
+Tekst NIJE u HTML hardkodu — hardkod je samo **no-JS fallback**. Izvor istine je i18n rječnik u `nav.js`:
+- **5 jezičkih blokova:** `en`, `de`, `it`, `hr`, `sr` (`LANG_LABELS = {en,de,it,hr,sr}`).
+- **Ključevi po stranici, s prefiksom:** `index_*`, `about_*`, `geo_*`, `art_*`, …
+- **Apply-kod je u samoj stranici** (`<page>.html`, inline `<script>`), NE u nav.js: `const x = t('kljuc'); if (x && x !== 'kljuc') document.getElementById('id').innerHTML = x;` (ili `.textContent`). Na **svakom** jeziku, uključujući EN, JS prepisuje hardkod rječničkom vrijednošću.
+
+**Dodati/izmijeniti prevedeni tekst — checklist:**
+1. Dodaj ključ u **svih 5** jezičkih blokova u `nav.js` (`index_novi:\`...\`,`).
+2. Dodaj apply-liniju u `<page>.html` inline script: `t('novi')` → `getElementById('novi-id')`.
+3. Element u HTML-u mora imati taj `id`.
+
+> Preskočiš (1) → tekst ostaje hardkod-EN na svim jezicima. Preskočiš (2) → rječnik se ne primjenjuje. Oba su tiha (bez greške).
+
+#### Key Concepts kartice
+
+- Fajl: `data/concepts.json`, grupisano **po stranici** (`index`, `about`, `geometry`, …).
+- Kartica: `{icon, name, description, wiki}`. `name` **kratko** (bez zagrada); `wiki` **pun slug** s zagradama (npr. `Mutation_(evolutionary_algorithm)`, `Attention_(machine_learning)`).
+- Link se auto-gradi: `https://en.wikipedia.org/wiki/{wiki}`. Fetch s `?t=Date.now()` (cache-bust).
+- **Pravilo: samo članci koji STVARNO postoje na engleskoj Wikipediji** (odluka). Ako pojam nema wiki članak (npr. self-refinement), kartica se NE dodaje — pojam se može spomenuti u `description` srodne kartice.
+- Poslije izmjene **validiraj JSON** (`json.load`) — slomljen JSON ruši sve Key Concepts kartice.
 
 ### Struktura direktorijuma
 
@@ -567,4 +597,4 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 2. jul 2026. (sesija 107)*
+*Flavio & Claude · Buchenberg · V3 · 2. jul 2026. (sesija 108)*
