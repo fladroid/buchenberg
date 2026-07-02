@@ -228,6 +228,19 @@ if parts is None:
 | `v_pobjednici_pokrivenost` | knjiga_id, jezik, broj pobjednika | Praćenje pobjednika |
 | `v_status_knjige` | Pivot po modelu/temperaturi — jedan red po knjiga×jezik, sve kolone pokrivenosti | **Dashboard — koristiti na početku svake sesije** |
 
+#### `_full` sloj (s107) — maksimalna denormalizacija
+
+**Arhitektura:** `v_prevodi_full` je **majka svih analitičkih viewova** — svi budući brojači i namjenski viewovi izvode se iz nje (kreiraju i brišu po potrebi). Stari viewovi gore ostaju netaknuti. Konvencija: sufiks `_full`; svaka kolona nosi prefiks izvora (`knjiga_`, `recenica_`, `jezik_`, `model_`, `faza_`, `embeddings_`) — porijeklo čitljivo iz imena.
+
+| View | Opis |
+|------|------|
+| `v_corpus` | Domen: `bb_knjige` × `bb_recenice`, svaki ID + njegove vrijednosti. Namjerno IZ BAZNIH TABELA, ne iz majke — 46,6% rečenica još nema nijedan prevod, corpus iz majke bio bi krnji i pomičan. |
+| `v_prevodi_full` | **MAJKA**: v_corpus + `bb_prevodi_recenica` + jezik/model/faza (LEFT)/embedder — svi kandidati, sve ocjene, `kompozitni` + `finalni_score` (kanonska formula). Jedini izuzetak od "sve kolone": `prevod_vektor` (1024-dim). |
+| `v_pobjednici_full` | Apsolutni pobjednici: `bb_prev_recenica` (pokazivač) → JOIN majka (`pf.*`). |
+| `v_pobjednici_faza_full` | Fazni pobjednici: `bb_prev_recenica_faza` + `takmicenje_faza_*` iz pokazivača → JOIN majka. Invarijanta (provjerena, 0 prekršaja): `takmicenje_faza_id = faza_id`. |
+
+`v_corpus` = domen ("šta postoji za prevesti"); `v_prevodi_full` = činjenice ("šta smo uradili"); razlika = napredak (neprevedeno).
+
 **Primjer upotrebe:**
 ```sql
 -- Pobjednici za hrvatski, prvih 10 rečenica
@@ -554,4 +567,4 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 30. jun 2026. (sesija 104)*
+*Flavio & Claude · Buchenberg · V3 · 2. jul 2026. (sesija 107)*
