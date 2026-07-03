@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 2. jul 2026. (sesija 108)  
+**Poslednje ažuriranje:** 3. jul 2026. (sesija 109)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -88,8 +88,8 @@ The project is built in ongoing collaboration with **[Claude](https://claude.ai)
 
 | Model | Engine | Temperatura | Napomena |
 |-------|--------|-------------|---------|
-| `gemma3:12b` | Ollama Cloud | 0.1 / 0.8 | Dominira za južnoslavenske i RO |
-| `ministral-3:14b` | Ollama Cloud | 0.1 / 0.8 | Jak na germanskim i romanskim; jedini gdje DE dominira |
+| `gemma3:12b` | Ollama Cloud | 0.1 / 0.8 | Dominira za južnoslavenske i RO. ⚠️ Ollama retire 15.jul 2026 (s109) |
+| `ministral-3:14b` | Ollama Cloud | 0.1 / 0.8 | Jak na germanskim i romanskim; jedini gdje DE dominira. ⚠️ Ollama retire 15.jul 2026 (s109) |
 | `nllb-600M` | Lokalno (CPU) | 0.0 | Deterministički; dobar za kratke rečenice |
 | `gemma4:31b` | Ollama Cloud | 0.0 | Samo sudija — ne prevodi |
 
@@ -289,6 +289,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
 | `bb_xray_export.py` | Generira X-Ray JSON fajlove (`data/xray_<id>_<lang>.json`) — svih 5 kandidata po rečenici s kompletnim scoreovima; pokrenuti nakon `bb_web_export.py` |
 | `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
+| `sandbox_model_probe.py` | READ-ONLY sonda ponašanja Ollama modela (s109). Prima `--models` listu, `--jezik`, `--no-think`. Mjeri: čistoća izlaza, thinking+eval_count+sec (trošak), temp reakcija, batch N/N, round-trip. Baseline (gemma3/ministral)=etalon. Ne dira bazu/pipeline. Vidi §15. |
 
 ### Kako dodati novu knjigu
 
@@ -349,6 +350,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+> **s109 snapshot (3. jul 2026):** ~1,187M prevoda / ~230k pobjednika (health-check početak s109; procesi trče — živi broj iz baze). Ollama najavila retire gemma3:12b + ministral-3:14b za 15.jul. Izgrađena `sandbox_model_probe.py` (read-only sonda ponašanja modela). Otkriće: **thinking (ne veličina) je glavni množilac troška** — gpt-oss:20b 251tok/nemotron:30b 907tok vs etaloni 12-15tok; `think:false` poštuje nemotron (907→10) ali NE gpt-oss (zaglavljen). Unutar-familije gemma3:27b/ministral:8b = jeftin drop-in (9-11tok, ponašanje kao etaloni). Odluka: produkcijski test para **gemma3:27b + ministral-3:8b** (sljedeća sesija, kroz sudiju). Baza/web netaknuti → BB_VERSION s108.4.
 >
 > **s108 snapshot (2. jul 2026):** Web prezentacija self-refine na Home. „How it works" dobio fazu 2: drugi pasus (anchored mutation) + kartica 🧬 Self-refinement + winner „across both phases"; prevedeno na svih 5 UI jezika. Grid 2+2. Key Concepts: dodata **Mutation** (`Mutation_(evolutionary_algorithm)`); self-refine nema Wikipedia članak → izostavljen (odluka: samo postojeći EN wiki članci). **buchenweb DIRNUT prvi put od s102 → BB_VERSION s108.4.** Korpus strukturno nepromijenjen (živ rast tokom sesije — Flaviovi procesi). README: higijena (header/authorship/§9 s107 red, 10 `.bak` obrisano) + novi §10 how-to.
 
@@ -596,5 +599,47 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 
 ---
 
+## 15. Ollama Cloud API — how-to (raskriveno s109)
+
+Mjesta gdje uvijek zapnemo pri radu s Ollamom. Trajna referenca.
+
+### Autentikacija — ključ iz koda, ne ručno
+`.env` sadrži `OLLAMA_API_KEY` i `OLLAMA_BASE_URL`. Skripta MORA sama učitati:
+```python
+from dotenv import load_dotenv
+load_dotenv()   # prije svakog os.getenv("OLLAMA_API_KEY")
+```
+> ⚠️ Bez `load_dotenv()` ključ je prazan → **401 Unauthorized na SVE modele** (i one koji rade). Simptom prevari — izgleda kao da model ne radi, a problem je prazan ključ. (Bug s109.)
+> Za ručni curl: `. /home/balsam/buchenberg/.env &&` PRIJE poziva (`source` ne radi u sh, koristi `.`).
+
+### Poziv (chat) — isti obrazac kao bb_03 ollama_chat
+```bash
+. /home/balsam/buchenberg/.env && curl -s https://api.ollama.com/api/chat \
+  -H "Authorization: Bearer $OLLAMA_API_KEY" \
+  -d '{"model":"MODEL","stream":false,"options":{"temperature":0.1},
+       "messages":[{"role":"user","content":"..."}]}'
+```
+Prevod je u `message.content`. `stream:false` obavezno (inače NDJSON striming).
+
+### Detalji modela — /api/show (veličina, kvant, kontekst, capabilities)
+```bash
+. /home/balsam/buchenberg/.env && curl -s https://api.ollama.com/api/show \
+  -H "Authorization: Bearer $OLLAMA_API_KEY" -d '{"model":"MODEL"}'
+```
+Vraća `details.parameter_size`, `quantization_level`, `model_info.<fam>.context_length`, `capabilities` (npr. `thinking`, `vision`, `tools`). Tako se veličina/tip PROVJERAVA, ne pretpostavlja.
+
+### Thinking modeli — presudno za trošak
+Neki modeli (capability `thinking`: gpt-oss, nemotron, deepseek, glm, qwen3.5…) generišu reasoning.
+- Ollama ga stavlja u ODVOJEN `message.thinking` field — `message.content` ostaje čist prevod. **Pipeline (`ollama_chat` čita samo content) radi bez izmjene.**
+- ALI thinking troši tokene: gpt-oss:20b ~250, nemotron:30b ~900 vs etaloni ~12 po prevodu. **Thinking, ne veličina, je glavni množilac troška/vremena.**
+- `"think": false` u telu zahtjeva GASI reasoning — ali **poštuje se po modelu**: nemotron sluša (907→10 tok), gpt-oss ignoriše (ostaje zaglavljen). Provjeri sondom, ne pretpostavljaj.
+- Gašenje thinkinga može sniziti kvalitet (nemotron bez thinkinga → slabiji prevod). Trade-off mjeri sudija.
+
+### Prije usvajanja novog modela — pusti sondu
+`venv/bin/python src/sandbox_model_probe.py --models "MODEL" --jezik hr`
+Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. Kvalitet ide zasebno kroz pravi `bb_03`+`bb_08` na malom opsegu. Registracija u `bb_modeli` (naziv+temperatura+faza_id) je preduslov za pravi run.
+
+---
+
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 2. jul 2026. (sesija 108)*
+*Flavio & Claude · Buchenberg · V3 · 3. jul 2026. (sesija 109)*
