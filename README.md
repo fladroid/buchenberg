@@ -93,6 +93,8 @@ The project is built in ongoing collaboration with **[Claude](https://claude.ai)
 | `nllb-600M` | Lokalno (CPU) | 0.0 | Deterministički; dobar za kratke rečenice |
 | `gemma4:31b` | Ollama Cloud | 0.0 | Samo sudija — ne prevodi |
 
+**Kandidati za zamjenu (registrovani s110, test u toku):** `gemma3:27b`, `ministral-3:8b` (id 14–17, faza_id=1). Test na Dracula/bs (42 rečenice) statistički neodlučiv — odluka o zamjeni OTVORENA, vidi §9 s110.
+
 ### Temperatura pattern po jezičnoj grupi
 
 Utvrđen empirijski na uzorku s1–s350 (HR, BS) i s1–s100 (ostali):
@@ -283,6 +285,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg |
+| `bb_08_sudija1.py` | Test-kopija `bb_08_sudija.py` (s110) — `OCJENJIVANI_MODELI` proširen za gemma3:27b/ministral-3:8b; koristiti SAMO za test opsege dok se ne donese odluka o zamjeni |
 | `bb_09_ner.py` | NER pipeline: spaCy ekstrakcija + Gemma4 normalizacija + upis u bb_ner_entiteti/bb_ner_recenica |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version) |
@@ -312,6 +315,7 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 ```
 
 > ⚠️ `bb_03_prevod.py` traži model po `naziv + temperatura` kombinaciji. Ako kombinacija nije u bazi — greška.
+> ⚠️ Pri kopiranju `faza_id` iz postojećeg modela (`INSERT...SELECT...WHERE temperatura=X`) UVIJEK `ROUND(temperatura::numeric,4)=X` i u SELECT-izvoru — bez toga float precision tiho vraća `INSERT 0 0`, bez greške. Otkriveno s110.
 
 ---
 
@@ -350,6 +354,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+> **s110 snapshot (4. jul 2026):** gemma3:27b + ministral-3:8b registrovani (id 14–17). Test Dracula/bs, 42 rečenice, swap-dizajn: prosjek finalni_score stari>novi u obje porodice, ali statistički neodlučivo (t<2, n=42); head-to-head skoro 50/50. Odluka o zamjeni OTVORENA. Otkriven i zaobiđen hardkod OCJENJIVANI_MODELI u bb_08_sudija.py (test-kopija bb_08_sudija1.py). Baza vraćena u prvobitno stanje za test-opsege. Web netaknut → BB_VERSION s108.4.
 >
 > **s109 snapshot (3. jul 2026):** ~1,187M prevoda / ~230k pobjednika (health-check početak s109; procesi trče — živi broj iz baze). Ollama najavila retire gemma3:12b + ministral-3:14b za 15.jul. Izgrađena `sandbox_model_probe.py` (read-only sonda ponašanja modela). Otkriće: **thinking (ne veličina) je glavni množilac troška** — gpt-oss:20b 251tok/nemotron:30b 907tok vs etaloni 12-15tok; `think:false` poštuje nemotron (907→10) ali NE gpt-oss (zaglavljen). Unutar-familije gemma3:27b/ministral:8b = jeftin drop-in (9-11tok, ponašanje kao etaloni). Odluka: produkcijski test para **gemma3:27b + ministral-3:8b** (sljedeća sesija, kroz sudiju). Baza/web netaknuti → BB_VERSION s108.4.
 >
@@ -552,6 +558,9 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Zamjena modela (gemma3:27b + ministral-3:8b) — ODLUKA OTVORENA (s110)
+Test na Dracula/bs (42 rečenice, swap-dizajn A/B/C): prosjek finalni_score stari>novi u obje porodice (gemma3 0.9085 vs 0.8742; ministral 0.8500 vs 0.8346), ali uparen t-test slab (t≈1.23/0.70, n=42) — statistički neodlučivo. Head-to-head skoro 50/50. Nedovoljno za odluku u bilo kom smjeru. Sljedeće: veći uzorak (100+ rečenica) ili ponavljanje na drugoj knjizi prije 15. jula, istim receptom (`bb_08_sudija1.py`, swap A/B/C). Poslije odluke: pravi refaktor `OCJENJIVANI_MODELI` → kolona u `bb_modeli`.
+
 ### Self-refine eksperiment — NEGATIVAN nalaz (s100)
 Hipoteza: dati pobjednika kao hint pri ponovnom prevodu (self-refine / MoA interakcija) poboljšava prevod. **Rezultat: ne radi na jakim seedovima.** Test J&H hr s1-100: refine head-to-head vs svoj seed = **0/100** (nikad bolji; avg delta -0.076). Win-rate 36/100 bio je artefakt selekcije iz šireg bazena, ne stvarno poboljšanje — head-to-head otkrio konfaund. Uzrok: seed je već pobjednik od 5 modela (blizu plafona), "popravi ovo" perturbuje optimalni anchor -> regresija. Infrastruktura (`bb_03 --refine`, `run_refine.sh`, pseudo-modeli `*-refine` id 12/13, `bb_08` fix) ostaje za buduće hipoteze. Detalji: `docs/sessions/session_100.md`.
 Otvoreno: (a) selektivni re-translate na SLABIM seedovima (apsolutni prag <0.85, jedini netestiran režim); (b) refaktor `OCJENJIVANI_MODELI` -> kolona `grupa` u bb_modeli.
@@ -642,4 +651,4 @@ Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 3. jul 2026. (sesija 109)*
+*Flavio & Claude · Buchenberg · V3 · 4. jul 2026. (sesija 110)*
