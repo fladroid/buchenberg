@@ -332,6 +332,9 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 | 19 | The Strange Case of Dr. Jekyll and Mr. Hyde | Robert Louis Stevenson | 43 | 1.157 |
 | 20 | Dracula | Bram Stoker | 345 | 9.073 |
 | 21 | Flatland: A Romance of Many Dimensions | Edwin Abbott Abbott | 201 | 1.341 |
+| 22 | The Hound of the Baskervilles Copy | Arthur Conan Doyle | 2852c | 3.852 |
+| 23 | The Big Four Copy | Agatha Christie | 70114c | 5.055 |
+| 24 | Frankenstein; or, the Modern Prometheus Copy | Mary Wollstonecraft Shelley | 84c | 3.384 |
 
 ---
 
@@ -354,6 +357,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+> **s113 snapshot (5. jul 2026):** Copy knjige — fizičke kopije 3 potpuno prevedene knjige kao nove knjige (id 22/23/24: Hound/Big Four/Frankenstein + " Copy", gutenberg_id +"c"); +12.291 rečenica (korpus 50.624), 0 prevoda — original ostaje zamrznuta referenca starih modela, Copy se prevodi novim parom poslije refaktora → direktno staro-vs-novo poređenje na punom korpusu. Kopije bit-identične (0 razlika u tekstu). Kod netaknut → BB_VERSION s108.4. Detalji: `docs/sessions/session_113.md`.
 >
 > **s112 snapshot (5. jul 2026):** Novi kanonski dokument `docs/KONCEPT.md` — identitet pipeline-a (minimumi + proces, ne komponente; refine = iteracija istog procesa; apsolutni pobjednik = najbolji preko SVIH faza; min 1 model u refine fazi; trojka (model, konfiguracija, faza) umjesto `-refine` sufiksa). Audit: UNIQUE(naziv,temperatura) → mora +faza_id; redovi 12/13 se samo preimenuju (prevodi netaknuti); bb_03 refine već ide flagom, sufiks samo lookup+replace; exporti ne iznose fazu → bb_xray_export +faza polje. **ODLUKE: refaktor + zamjena zajedno ("jedan dah") prije 15. jula; par gemma3:27b+ministral-3:8b prihvaćen pa ISTOG DANA poništen drugim retirement talasom (kompletna Ollama lista — obje familije nestaju) → NOVI PAR kroz sondu: mistral-large-3:675b + glm-5.2 (vidi dodatke s112).** Kompletna mapa: `docs/sessions/session_112.md`. Baza/web netaknuti → BB_VERSION s108.4.
 >
