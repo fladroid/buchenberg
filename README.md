@@ -355,6 +355,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+> **s112 snapshot (5. jul 2026):** Novi kanonski dokument `docs/KONCEPT.md` — identitet pipeline-a (minimumi + proces, ne komponente; refine = iteracija istog procesa; apsolutni pobjednik = najbolji preko SVIH faza; min 1 model u refine fazi; trojka (model, konfiguracija, faza) umjesto `-refine` sufiksa). Audit: UNIQUE(naziv,temperatura) → mora +faza_id; redovi 12/13 se samo preimenuju (prevodi netaknuti); bb_03 refine već ide flagom, sufiks samo lookup+replace; exporti ne iznose fazu → bb_xray_export +faza polje. **ODLUKE: zamjenski par gemma3:27b + ministral-3:8b prihvaćen; refaktor + zamjena zajedno ("jedan dah") prije 15. jula.** Kompletna mapa: `docs/sessions/session_112.md`. Baza/web netaknuti → BB_VERSION s108.4.
+>
 > **s111 snapshot (4. jul 2026):** Kompletna mapa uticaja zamjene modela (nezavisno od finalnog izbora) — 5 skripti za izmjenu identifikovano (`run_pipeline.sh`, `run_refine.sh`, `bb_08_sudija.py`, `health_check.py`, `bb_01_init_lookup.py`); 10 legacy skripti potvrđeno mrtvo (zadnje diranje maj, prije bb šeme). `bb_modeli` ne treba schema promjenu za registraciju; opciona kolona `aktivan` za trajni refaktor ostaje otvorena. Puna mapa: `docs/sessions/session_111.md`. Baza/web netaknuti → BB_VERSION s108.4.
 >
 > **s110 snapshot (4. jul 2026):** gemma3:27b + ministral-3:8b registrovani (id 14–17). Test Dracula/bs, 42 rečenice, swap-dizajn: prosjek finalni_score stari>novi u obje porodice, ali statistički neodlučivo (t<2, n=42); head-to-head skoro 50/50. Odluka o zamjeni OTVORENA. Otkriven i zaobiđen hardkod OCJENJIVANI_MODELI u bb_08_sudija.py (test-kopija bb_08_sudija1.py). Baza vraćena u prvobitno stanje za test-opsege. Web netaknut → BB_VERSION s108.4.
@@ -560,7 +562,8 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Zamjena modela (gemma3:27b + ministral-3:8b) — ODLUKA OTVORENA (s110)
+### Zamjena modela (gemma3:27b + ministral-3:8b) — ODLUČENO (s112)
+**Par prihvaćen; zamjena i refaktor idu zajedno ("jedan dah"), prije 15. jula** — po principima iz `docs/KONCEPT.md` i mapi iz `docs/sessions/session_112.md` (koraci: backup → shema → skripte → test → web). Istorijat testa ispod.
 Test na Dracula/bs (42 rečenice, swap-dizajn A/B/C): prosjek finalni_score stari>novi u obje porodice (gemma3 0.9085 vs 0.8742; ministral 0.8500 vs 0.8346), ali uparen t-test slab (t≈1.23/0.70, n=42) — statistički neodlučivo. Head-to-head skoro 50/50. Nedovoljno za odluku u bilo kom smjeru. Sljedeće: veći uzorak (100+ rečenica) ili ponavljanje na drugoj knjizi prije 15. jula, istim receptom (`bb_08_sudija1.py`, swap A/B/C). Poslije odluke: pravi refaktor `OCJENJIVANI_MODELI` → kolona u `bb_modeli`. Kompletna mapa svih pogođenih skripti i tabela (nezavisno od finalnog izbora modela) — vidi `docs/sessions/session_111.md` (s111).
 
 ### Self-refine eksperiment — NEGATIVAN nalaz (s100)
