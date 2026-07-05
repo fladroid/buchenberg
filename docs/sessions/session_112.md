@@ -60,3 +60,71 @@ Flaviova inicijativa: web opisi previše direktno vežu imena modela; prevod vi�
 ---
 
 *Flavio & Claude · Buchenberg · session 112 · 5. jul 2026.*
+
+---
+
+## DODATAK (5. jul 2026, kasnije istog dana) — drugi retirement talas
+
+Nova Ollama Cloud informacija (email Flaviu): kompletna lista modela koji se povlače 15. jula 2026. **Odluka o paru gemma3:27b + ministral-3:8b iz ove sesije postaje nevažeća** — oba su na listi.
+
+Puna lista povučenih (s Ollama preporukama):
+- deepseek-v3.1:671b → deepseek-v4-flash
+- deepseek-v3.2 → deepseek-v4-flash
+- devstral-2:123b → mistral-large-3:675b
+- devstral-small-2:24b
+- ministral-3:14b
+- ministral-3:3b
+- ministral-3:8b
+- gemini-3-flash-preview → minimax-m3
+- gemma3:12b → gemma4:31b
+- gemma3:27b → gemma4:31b
+- gemma3:4b → gemma4:31b
+- glm-4.7 → glm-5.2
+- glm-5 → glm-5.2
+- minimax-m2.1 → minimax-m3
+- qwen3-coder-next → qwen3.5:397b
+- qwen3-coder:480b → qwen3.5:397b
+
+Posljedice:
+- Cijele gemma3 i ministral-3 porodice nestaju — prisilna dekorelacija: novi prevodioci dolaze iz stranih familija (s102 "diverzifikacija o tom potom" postaje obavezna)
+- Sudija gemma4:31b NIJE na listi (Ollama ga čak preporučuje kao gemma3 zamjenu — za nas neupotrebljivo kao prevodilac dok je sudija, dok postoji izbor)
+- Redovi 14–17 u bb_modeli (registracija s110) mrtvi prije ulaska u produkciju
+- KONCEPT.md i implementaciona mapa NETAKNUTI — mijenja se samo podatak (imena), ne arhitektura; drugi talas u nedjelju dana potvrđuje ispravnost principa "identitet = minimumi + proces"
+
+Nove Flaviove odluke:
+- Ranija preferencija veličine (~12B) više ne važi — bitna je upotrebljivost u produkciji, ne veličina
+- Pretplata aktivna — besplatni resursi nisu više ograničavajući faktor (ali ni pretplata nije bezgranična)
+- Sudija/takmičar u istom modelu (različite konfiguracije/uloge) nije tabu — ali dok postoji izbor, koristimo izbor
+- Smjer: pronaći **dva ne-misleća (non-thinking) modela** kroz sandbox sondu (s109 alat, građen tačno za ovo)
+
+---
+
+## DODATAK 2 (5. jul 2026) — sonda novih kandidata i odluka o paru
+
+Sandbox sonda (s109 alat) pušteno model po model, jezik hr, `--no-think` na mislećim kandidatima. Ispravka poziva: `--models` prima JEDAN string s razmakom kao separatorom unutar navodnika (npr. `--models "m1 m2"`), ne više argumenata.
+
+**Capability filter (/api/show, 14 preostalih kandidata):** samo mistral-large-3:675b je nativno ne-misleći; svi ostali nose `thinking` capability → drugi test-kriterij: poštuje li model `think:false`.
+
+**Prvi krug (6 modela):**
+
+| model | think:false | tok | sec | temp | zastavica |
+|---|---|---|---|---|---|
+| mistral-large-3:675b | nativno ne-misleći | 10 | 1.4 | razlika | mystery→secrets drift |
+| deepseek-v4-flash | poštuje | 12 | 0.9 | identično | — (najbolji round-trip) |
+| glm-5.2 | poštuje | 13 | 0.9 | razlika | drift kao mistral |
+| minimax-m3 | IGNORIŠE (384 tok, think_len 1234) | 384 | 4.4 | — | OTPADA (obrazac kao gpt-oss s109) |
+| qwen3.5:397b | poštuje | 16 | 0.7 | identično | "vrelo" — semantička greška (moor) |
+| kimi-k2.6 | poštuje | 15 | 1.1 | razlika | rod ("je bilo" umjesto "je bila") |
+
+**Drugi krug (temp-identično modeli, Flaviovo pravilo — jedna rečenica nije dokaz):**
+- deepseek-v4-flash: temp identično PONOVO + prevod identičan prvom krugu od riječi do riječi → efektivni determinizam s ugašenim thinkingom; njegova druga temperatura bila bi plaćeni duplikat (2×2 temp shema ne radi)
+- qwen3.5:397b: temp identično ponovo, ALI prevod različit između krugova ("vrelo" greška se nije ponovila) — varijansa između runova postoji, unutar runa temperature ne razdvajaju
+
+**Aliasi (Flaviova provjera):** qwen3.5:cloud / qwen3.5:397b-cloud = qwen3.5:397b; gemma4:cloud / gemma4:31b-cloud = gemma4:31b — ista veličina/familija, već testirani → izbačeni po pravilu "testirano → izbaci". Nijansa: /api/show za gemma4 lista `thinking` capability iako ga s109 sonda mjeri kao ne-mislećeg — capability kaže šta model MOŽE, sonda šta RADI po defaultu; ponašanje sudije nepromijenjeno.
+
+**gemma4 manje veličine (Flaviova provjera library stranice):** gemma4:12b/26b/e2b/e4b = "not found" na api.ollama.com — cloud tag važi samo za 31b; manje veličine su download-za-lokalno (12B LLM na CPU nepraktičan za produkciju, za razliku od NLLB 600M). Otpadaju.
+
+**ODLUKA (Flavio, "nema sumnje"): novi par = mistral-large-3:675b + glm-5.2.**
+Obrazloženje: oba temp-živa (2×2 shema se čuva bez izmjene strukture), oba čista bez kvalitativnih zastavica, oba u rangu starih etalona po trošku (10–13 tok, ~1s), različite familije (Mistral/Zhipu — prava dekorelacija), mistral nosi kontinuitet Mistral loze. Rezerve: deepseek-v4-flash (#1 — najbolji round-trip, ali temp-mrtav; KONCEPT dozvoljava ulazak s jednom konfiguracijom), kimi-k2.6 (#2 — rod-greška).
+
+Kvalitet para formalno presuđuje sudija u koraku 3 implementacione mape (test malog opsega). Implementaciona sesija koristi ovaj par u koraku 1 (registracija u bb_modeli + aktivan) — sve ostalo iz mape nepromijenjeno.
