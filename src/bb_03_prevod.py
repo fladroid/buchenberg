@@ -349,15 +349,13 @@ def main():
     parser.add_argument("--temp",     type=float, nargs="+", default=[0.0])
     parser.add_argument("--embedder", type=str,   required=True)
     parser.add_argument("--jezici",   type=str,   nargs="+", required=True)
-    parser.add_argument("--refine", action="store_true",
-                        help="Refine mod: pobjednik kao hint (temp 0.8, single)")
+    parser.add_argument("--faza", type=int, default=1,
+                        help="Faza pipeline-a (1=base, 2+=refine: pobjednik kao hint)")
     args = parser.parse_args()
 
     is_nllb = (args.model == "nllb-600M")
-    is_refine = args.refine
-    ollama_naziv = args.model.replace("-refine", "")
-    if is_refine:
-        args.temp = [0.8]
+    is_refine = args.faza >= 2
+    ollama_naziv = args.model
 
     embedder_path = EMBEDDER_PATH_MAP.get(args.embedder, args.embedder)
     print(f"Učitavam embedder: {args.embedder} ({embedder_path})")
@@ -382,12 +380,12 @@ def main():
 
     for temp in args.temp:
         cur.execute(
-            "SELECT id FROM bb_modeli WHERE naziv=%s AND ROUND(temperatura::numeric,4)=ROUND(%s::numeric,4)",
-            (args.model, temp)
+            "SELECT id FROM bb_modeli WHERE naziv=%s AND ROUND(temperatura::numeric,4)=ROUND(%s::numeric,4) AND faza_id=%s",
+            (args.model, temp, args.faza)
         )
         row = cur.fetchone()
         if not row:
-            print(f"Model '{args.model}' temp={temp} nije u bb_modeli! Preskačem.")
+            print(f"Model '{args.model}' temp={temp} faza={args.faza} nije u bb_modeli! Preskačem.")
             continue
         model_id = row[0]
 

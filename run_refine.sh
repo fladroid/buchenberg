@@ -1,6 +1,6 @@
 #!/bin/bash
-# run_refine.sh — self-refine prolaz: pobjednik kao hint.
-# 2 modela (gemma3-refine, ministral-refine) @0.8, single. Bez NLLB.
+# run_refine.sh — refine prolaz: pobjednik kao hint (anchored mutation).
+# Modeli se čitaju iz baze: aktivni modeli faze 2 (bb_aktivni_modeli.py).
 # Primjer: bash run_refine.sh --knjiga 19 --jezici "hr" --od 1 --do 100
 set -e
 KNJIGA=""; JEZICI=""; OD=""; DO=""
@@ -20,17 +20,22 @@ EMBEDDER="multilingual-e5-large"
 LOG_DIR="logs"; mkdir -p "$LOG_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG="$LOG_DIR/refine_k${KNJIGA}_${TIMESTAMP}.log"
-echo ">>> SELF-REFINE k${KNJIGA} | $JEZICI | $OD-$DO | $(date)" | tee -a "$LOG"
 
-for MODEL in "gemma3:12b-refine" "ministral-3:14b-refine"; do
+MODELI=$(venv/bin/python src/bb_aktivni_modeli.py --faza 2)
+
+echo ">>> REFINE k${KNJIGA} | $JEZICI | $OD-$DO | $(date)" | tee -a "$LOG"
+echo ">>> Modeli (faza 2, aktivni):" | tee -a "$LOG"
+echo "$MODELI" | sed 's/^/    /' | tee -a "$LOG"
+
+while IFS='|' read -r MODEL TEMP; do
     echo "" | tee -a "$LOG"
-    echo ">>> Refine prevod: $MODEL @ 0.8" | tee -a "$LOG"
+    echo ">>> Refine prevod: $MODEL @ temp=$TEMP" | tee -a "$LOG"
     time venv/bin/python src/bb_03_prevod.py \
         --knjiga "$KNJIGA" --od "$OD" --do "$DO" \
-        --model "$MODEL" --refine \
+        --model "$MODEL" --temp "$TEMP" --faza 2 \
         --embedder "$EMBEDDER" \
         --jezici $JEZICI 2>&1 | tee -a "$LOG"
-done
+done <<< "$MODELI"
 
 echo "" | tee -a "$LOG"
 echo ">>> Sudija: gemma4:31b" | tee -a "$LOG"

@@ -34,9 +34,6 @@ OLLAMA_KEY   = os.getenv("OLLAMA_API_KEY", "")
 SUDIJA_MODEL = "gemma4:31b"
 SUDIJA_TEMP  = 0.0
 
-OCJENJIVANI_MODELI = ["gemma3:12b", "ministral-3:14b", "nllb-600M",
-                      "gemma3:12b-refine", "ministral-3:14b-refine"]
-
 PROMPT_TEMPLATE = """You are evaluating {lang} translations of an English sentence.
 Rate each translation on a scale 0.0–1.0 for three criteria:
 - grammar: grammatical correctness in {lang}
@@ -142,11 +139,11 @@ def main():
             WHERE r.knjiga_id = %s
               AND r.pozicija BETWEEN %s AND %s
               AND j.kod = %s
-              AND m.naziv = ANY(%s)
+              AND m.aktivan
               AND e.naziv = 'multilingual-e5-large'
               AND (pr.sudija_avg IS NULL OR %s)
             ORDER BY r.pozicija, m.naziv
-        """, (args.knjiga, args.od, args.do, kod, OCJENJIVANI_MODELI, args.force))
+        """, (args.knjiga, args.od, args.do, kod, args.force))
 
         rows = cur.fetchall()
 

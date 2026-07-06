@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 3. jul 2026. (sesija 109)  
+**Poslednje ažuriranje:** 6. jul 2026. (sesija 114)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -86,14 +86,16 @@ The project is built in ongoing collaboration with **[Claude](https://claude.ai)
 
 ## 3. Modeli prevoda
 
-| Model | Engine | Temperatura | Napomena |
-|-------|--------|-------------|---------|
-| `gemma3:12b` | Ollama Cloud | 0.1 / 0.8 | Dominira za južnoslavenske i RO. ⚠️ Ollama retire 15.jul 2026 (s109) |
-| `ministral-3:14b` | Ollama Cloud | 0.1 / 0.8 | Jak na germanskim i romanskim; jedini gdje DE dominira. ⚠️ Ollama retire 15.jul 2026 (s109) |
-| `nllb-600M` | Lokalno (CPU) | 0.0 | Deterministički; dobar za kratke rečenice |
-| `gemma4:31b` | Ollama Cloud | 0.0 | Samo sudija — ne prevodi |
+| Model | Engine | Temperatura | Faza | Napomena |
+|-------|--------|-------------|------|---------|
+| `mistral-large-3:675b` | Ollama Cloud | 0.1 / 0.8 | 1 (+0.8 faza 2) | Novi par od s114; nativno ne-misleći |
+| `glm-5.2` | Ollama Cloud | 0.1 / 0.8 | 1 (+0.8 faza 2) | Novi par od s114; poštuje think:false |
+| `nllb-600M` | Lokalno (CPU) | 0.0 | 1 | Deterministički; dobar za kratke rečenice |
+| `gemma4:31b` | Ollama Cloud | 0.0 | — | Samo sudija — ne prevodi |
 
-**Zamjena (s112 dodaci):** `gemma3:27b`/`ministral-3:8b` (id 14–17) POVUČENI drugim retirement talasom prije ulaska u produkciju. **Novi par: `mistral-large-3:675b` + `glm-5.2`** (sonda, vidi dodatke s112). Sudija gemma4:31b i NLLB nepogođeni.
+**Aktivni modeli žive u bazi** (`bb_modeli.aktivan`, s114) — orchestratori ih čitaju kroz `src/bb_aktivni_modeli.py --faza N`. Stari par `gemma3:12b`/`ministral-3:14b` (Ollama retire 15. jul 2026) zamrznut kao istorijska referenca: `aktivan=false`, svi prevodi netaknuti.
+
+**Zamjena IZVRŠENA (s114):** novi par registrovan (id 18–23) i testiran kroz cijeli lanac (Hound Copy hr 1–10). Sudija gemma4:31b i NLLB nepogođeni. Istorijat izbora: s109–s112.
 
 ### Temperatura pattern po jezičnoj grupi
 
@@ -132,6 +134,8 @@ bb_web_export.py   → JSON export → Apache2 web prikaz
 ```
 
 ### Pokretanje — standardni workflow
+
+> ⚠️ **s114:** modeli se čitaju iz baze (aktivni po fazi, helper `bb_aktivni_modeli.py`) — kanonski put je `run_pipeline.sh` / `run_refine.sh`. `bb_03` prima `--faza N` (default 1; 2+ = refine), `--refine` flag NE POSTOJI. Primjeri ispod su istorijski obrazac direktnog poziva — imena modela zamijeni aktivnima.
 
 ```bash
 # 1. gemma3@0.8 (cloud)
@@ -195,7 +199,7 @@ if parts is None:
 | Tabela | Opis |
 |--------|------|
 | `bb_jezik` | 14 jezika |
-| `bb_modeli` | Modeli × temperature |
+| `bb_modeli` | Modeli × temperature × faza; `aktivan` boolean; UNIQUE(naziv, temperatura, faza_id) — s114 |
 | `bb_embeddings` | Embedder definicije |
 | `bb_knjige` | Knjige (naziv, autor, gutenberg_id UNIQUE) |
 | `bb_recenice` | Rečenice (pozicija, tekst, knjiga_id) |
@@ -280,12 +284,12 @@ ORDER BY jezik, pobjede DESC;
 |---------|------|
 | `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
 | `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy); lista knjiga je hardcodovana u `KNJIGE` |
-| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu |
+| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114) |
 | `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
-| `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg |
-| `bb_08_sudija1.py` | Test-kopija `bb_08_sudija.py` (s110) — `OCJENJIVANI_MODELI` proširen za gemma3:27b/ministral-3:8b; koristiti SAMO za test opsege dok se ne donese odluka o zamjeni |
+| `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114) |
+| `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_refine.sh (s114) |
 | `bb_09_ner.py` | NER pipeline: spaCy ekstrakcija + Gemma4 normalizacija + upis u bb_ner_entiteti/bb_ner_recenica |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version) |
@@ -311,10 +315,11 @@ INSERT INTO bb_jezik (kod, naziv) VALUES ('xx', 'naziv') ON CONFLICT DO NOTHING;
 ### Kako dodati novi model i temperaturu
 
 ```sql
-INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT DO NOTHING;
+INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1) ON CONFLICT DO NOTHING;
+-- aktivan je DEFAULT true; deaktivacija: UPDATE bb_modeli SET aktivan=false WHERE id=N;
 ```
 
-> ⚠️ `bb_03_prevod.py` traži model po `naziv + temperatura` kombinaciji. Ako kombinacija nije u bazi — greška.
+> ⚠️ `bb_03_prevod.py` traži model po trojci `naziv + temperatura + faza_id` (s114). Ako trojka nije u bazi — greška.
 > ⚠️ Pri kopiranju `faza_id` iz postojećeg modela (`INSERT...SELECT...WHERE temperatura=X`) UVIJEK `ROUND(temperatura::numeric,4)=X` i u SELECT-izvoru — bez toga float precision tiho vraća `INSERT 0 0`, bez greške. Otkriveno s110.
 
 ---
@@ -357,6 +362,8 @@ INSERT INTO bb_modeli (naziv, temperatura) VALUES ('model:tag', 0.5) ON CONFLICT
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+> **s114 snapshot (6. jul 2026):** IMPLEMENTACIONA SESIJA ("jedan dah") IZVRŠENA — backup (1.5G pg_dump na hostu) → shema bb_modeli (faza_id NOT NULL, +aktivan, UNIQUE trojka, rename 12/13 bez sufiksa, novi par id 18–23) → skripte (bb_03 `--faza` umjesto `--refine`; NOVI bb_aktivni_modeli.py; run_pipeline/run_refine DB-vođeni; bb_08 aktivan-filter + sudija1 obrisan; health_check DB-vođen; bb_xray_export +faza) → test cijelog lanca Hound Copy k22/hr/1–10 (50+20 kandidata, 10 pobjednika, s4 = prva refine pobjeda novog para: glm-5.2@0.8 faza 2). 9 dana prije retirement roka. Web kod netaknut → BB_VERSION s108.4 (data regenerisan). Korak 4 (web) sljedeći. Detalji: `docs/sessions/session_114.md`.
 >
 > **s113 snapshot (5. jul 2026):** Copy knjige — fizičke kopije 3 potpuno prevedene knjige kao nove knjige (id 22/23/24: Hound/Big Four/Frankenstein + " Copy", gutenberg_id +"c"); +12.291 rečenica (korpus 50.624), 0 prevoda — original ostaje zamrznuta referenca starih modela, Copy se prevodi novim parom poslije refaktora → direktno staro-vs-novo poređenje na punom korpusu. Kopije bit-identične (0 razlika u tekstu). Kod netaknut → BB_VERSION s108.4. Detalji: `docs/sessions/session_113.md`.
 >
@@ -567,7 +574,8 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Zamjena modela — ODLUČENO (s112 + dodaci): mistral-large-3:675b + glm-5.2
+### Zamjena modela — IZVRŠENO (s114): mistral-large-3:675b + glm-5.2 u produkciji
+**Refaktor + zamjena izvršeni i testirani kroz cijeli lanac (session_114.md). Preostao Korak 4 (web).** Istorijat odluke ispod.
 **Drugi retirement talas (5. jul, kompletna Ollama lista) povukao i gemma3:27b i ministral-3:8b — prva s112 odluka nevažeća.** Novi par kroz sandbox sondu (6 kandidata, 2 kruga): **mistral-large-3:675b + glm-5.2** (oba ne-misleća/gase thinking, temp-živa, 10–13 tok, različite familije). Rezerve: deepseek-v4-flash (temp-mrtav), kimi-k2.6. Zamjena i refaktor idu zajedno ("jedan dah"), prije 15. jula — po principima iz `docs/KONCEPT.md` i mapi iz `docs/sessions/session_112.md` (koraci: backup → shema → skripte → test → web; puna lista povučenih + sonda u dodacima s112). Istorijat starog testa ispod.
 Test na Dracula/bs (42 rečenice, swap-dizajn A/B/C): prosjek finalni_score stari>novi u obje porodice (gemma3 0.9085 vs 0.8742; ministral 0.8500 vs 0.8346), ali uparen t-test slab (t≈1.23/0.70, n=42) — statistički neodlučivo. Head-to-head skoro 50/50. Nedovoljno za odluku u bilo kom smjeru. Sljedeće: veći uzorak (100+ rečenica) ili ponavljanje na drugoj knjizi prije 15. jula, istim receptom (`bb_08_sudija1.py`, swap A/B/C). Poslije odluke: pravi refaktor `OCJENJIVANI_MODELI` → kolona u `bb_modeli`. Kompletna mapa svih pogođenih skripti i tabela (nezavisno od finalnog izbora modela) — vidi `docs/sessions/session_111.md` (s111).
 
@@ -661,4 +669,4 @@ Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. 
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 4. jul 2026. (sesija 110)*
+*Flavio & Claude · Buchenberg · V3 · 6. jul 2026. (sesija 114)*

@@ -81,6 +81,7 @@ def get_all_candidates(cur, knjiga_id, lang_kod):
             pr.id AS prevod_id,
             m.naziv AS model,
             ROUND(m.temperatura::numeric, 4) AS temperatura,
+            m.faza_id AS faza,
             pr.prevod,
             pr.back_translation,
             ROUND(pr.translation_score::numeric, 4) AS ts,
@@ -110,7 +111,7 @@ def build_xray_json(cur, knjiga_id, naziv, autor, lang_kod, lang_naziv):
 
     # Grupiraj po poziciji
     sentences = {}
-    for (pozicija, original, prevod_id, model, temperatura,
+    for (pozicija, original, prevod_id, model, temperatura, faza,
          prevod, back_translation, ts, back_score,
          judge_avg, sudija_grammar, sudija_naturalness, sudija_fidelity,
          finalni_score) in rows:
@@ -125,6 +126,7 @@ def build_xray_json(cur, knjiga_id, naziv, autor, lang_kod, lang_naziv):
         candidate = {
             "model":            model,
             "temp":             float(temperatura) if temperatura is not None else None,
+            "faza":             faza,
             "prevod":           prevod,
             "back_translation": back_translation,
             "ts":               float(ts)               if ts               is not None else None,

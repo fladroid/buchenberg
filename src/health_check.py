@@ -145,11 +145,24 @@ def check_ollama():
         row(ERR, "API nedostupan", str(e))
         return False
 
-    used_models = {
-        "gemma3:12b":      "prevod",
-        "ministral-3:14b": "prevod",
-        "gemma4:31b":      "sudija",
-    }
+    used_models = {}
+    try:
+        dbc = psycopg2.connect(
+            host=os.getenv("DB_HOST"), port=int(os.getenv("DB_PORT", 5432)),
+            dbname="bb", user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"), connect_timeout=5
+        )
+        dbcur = dbc.cursor()
+        dbcur.execute(
+            "SELECT DISTINCT naziv FROM bb_modeli "
+            "WHERE aktivan AND naziv <> 'nllb-600M' ORDER BY naziv"
+        )
+        for (naziv,) in dbcur.fetchall():
+            used_models[naziv] = "prevod"
+        dbc.close()
+    except Exception as e:
+        row(WARN, "bb_modeli upit", f"ne mogu učitati aktivne modele: {e}")
+    used_models["gemma4:31b"] = "sudija"
 
     print(f"\n  {'─'*48}")
     print(f"  Modeli koji se koriste u projektu:")
