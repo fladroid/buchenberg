@@ -322,3 +322,30 @@ Napomena: OPIS za Fazu 2 (ovdje: nema šta za implementirati).
 
 ### Zaključak za nlp.html
 Faza 1: ✅ NIŠTA ZA MIJENJATI. Sljedeća stranica: learn.html.
+
+---
+
+## STRANICA: learn.html (menu: Learn)
+
+Napomena: OPIS za Fazu 2 (ovdje: nema šta za implementirati u Fazi 1).
+
+### Nalaz: ČISTA stranica — BEZ IZMJENE (kao nlp)
+- **Imena modela:** NEMA nigdje. Igre rade s prevedenim rečenicama iz tr_*.json —
+  nikad ne spominju koji ih je model proizveo. Čisto.
+- **Title/menu/naslov (G2):** menu "Learn" = `<title>` "Buchenberg — Learn" (slažu se);
+  h1 (`learn_title`) = "Language Learning" (opisni, prevedeno 5 jezika). Isti obrazac
+  kao nlp — menu i title isti, naslov namjerno opisniji. NIJE nesklad. Ostaviti isto.
+- **i18n:** opsežan, kompletan na svih 5 jezika (labele, dugmad, pravila 4 igre).
+- **Sadržaj:** sve žive iz books.json + tr_*.json. Bez hardkod brojeva strukture.
+
+### Zabilježeno za Fazu 2 (opciono, NIJE dio čišćenja imena) — i18n propust
+Neki UI stringovi hardkodovani na EN u JS-u umjesto kroz i18n → ostaju engleski
+na drugim jezicima: showToast poruke ("Please select a language.", "Loading...",
+"Not enough translated sentences." itd.), direction badge ("You will see English
+as context and fill in ..."), match kolone ("English"/"Translation"), placeholder
+("Click words below to build the sentence..."), "Sentence X of Y", "Score:",
+"Attempts:", "matched", "pairs". Širi i18n zadatak — nezavisan od imena modela i
+sadržaja. Flaviova odluka (s118): ne dirati sada; eventualno poseban i18n prolaz.
+
+### Zaključak za learn.html
+Faza 1: ✅ NIŠTA ZA MIJENJATI. Sljedeća stranica: geometry.html.
