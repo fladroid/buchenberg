@@ -303,3 +303,22 @@ sve zadovoljava. Svi brojevi/jezici/statusi žive iz books.json (web_export).
 ### Zaključak za books.html
 Faza 1 (tekst/odluke): ✅ KOMPLETNO. Samo title/naslov usklada (Faza 2), bez nove
 proze. Sljedeća stranica: nlp.html.
+
+---
+
+## STRANICA: nlp.html (menu: NLP)
+
+Napomena: OPIS za Fazu 2 (ovdje: nema šta za implementirati).
+
+### Nalaz: NAJČISTIJA stranica — BEZ IZMJENE
+- **Imena modela:** NEMA nigdje (HTML/i18n/JS). Radi s originalnim EN tekstovima +
+  NER podacima; backend (spaCy + normalizacija) se ne prikazuje korisniku. Ništa za skidati.
+- **Title/menu/naslov (G2):** menu "NLP" = `<title>` "NLP — Buchenberg" (slažu se);
+  h1 (`nlp_title`) = "Natural Language Processing" (opisni, prevedeno na 5 jezika).
+  NIJE nesklad kao stats — menu i title su isti, naslov je namjerno opisniji
+  (kratko u meniju, puno u naslovu). Flaviova odluka (s118): ostaviti sve isto.
+- **i18n:** kompletan i dosljedan na svih 5 jezika (dugmad, tabele, tooltipovi, tipovi).
+- **Sadržaj:** sve žive iz JSON-a (orig_*, ner_*, books.json). Bez hardkod brojeva strukture.
+
+### Zaključak za nlp.html
+Faza 1: ✅ NIŠTA ZA MIJENJATI. Sljedeća stranica: learn.html.
