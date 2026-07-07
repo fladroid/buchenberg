@@ -349,3 +349,40 @@ sadržaja. Flaviova odluka (s118): ne dirati sada; eventualno poseban i18n prola
 
 ### Zaključak za learn.html
 Faza 1: ✅ NIŠTA ZA MIJENJATI. Sljedeća stranica: geometry.html.
+
+---
+
+## STRANICA: geometry.html (menu: Geometry)
+
+Napomena: OPIS za Fazu 2. Sada se ništa ne dira.
+
+### Imena modela: DVIJE vrste, različit tretman (Flavio, s118)
+1. **Sudija "Gemma4:31b"** u `geo_c4_p1` ("...a blind LLM judge (Gemma4:31b)") →
+   IZBACITI samo "(Gemma4:31b)", ostaje "a blind LLM judge". Razlog: ZAMJENJIVOST
+   (princip s115 — imena su parametri), NE zastarjelost. gemma4:31b je aktivan
+   sudija (provjereno health check s118) — nije povučen kao prevodilački par.
+   Na svih 5 jezika (geo_c4_p1 postoji u en/de/it/hr/sr).
+2. **Embedder "multilingual-e5-large"** (`geo_banner`, `geo_subtitle`,
+   `geo_measure_sub`) → ZADRŽATI. Razlog: (a) stvarni model koji stranica
+   POKREĆE u browseru (Transformers.js, ~100 MB) — banner mora reći korisniku
+   šta preuzima; (b) embedder je INVARIJANTA projekta (KONCEPT §2 "tačno 1
+   embedder", README "UVIJEK e5-large"), ne prolazni parametar. Uklanjanje bi bilo
+   netačno i besmisleno.
+
+### NE dirati (Flaviova odluka s118)
+- Broj "Five models" u geo_c4_p1 — NE dirati (nije traženo; ne nagađati).
+- geo_c4 formula blok (HTML hardkod: composite/final/judge_avg) — tačan, ostaje.
+
+### Title / menu / naslov (G2): ČISTO
+menu "Geometry" / `<title>` "Geometry of Meaning — Buchenberg" / h1 "Geometry of
+Meaning". Nema nesklada u STRANICE.md. Bez izmjene.
+
+### Ostalo: čisto
+Borges/Wittgenstein proza, cosine kartice (01-03), scatter, measure similarity —
+bez imena prevodilačkih modela, konceptualno. Sadržaj iz geometry.json (živ).
+
+### FAZA 2 zadatak za geometry.html
+Jedna izmjena: geo_c4_p1 na 5 jezika — ukloniti "(Gemma4:31b)". Ništa drugo.
+
+### Zaključak za geometry.html
+Faza 1 (tekst/odluke): ✅ KOMPLETNO. Sljedeća stranica: art.html (posljednja).
