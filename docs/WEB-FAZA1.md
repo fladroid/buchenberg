@@ -204,3 +204,69 @@ Ništa za mijenjati.
 ### Zaključak za about.html
 Faza 1 (tekst/prevodi): ✅ KOMPLETNO — okvir imena + refine sekcija, EN + 4 jezika
 potvrđeno. Sljedeća stranica: stats.html.
+
+---
+
+## STRANICA: stats.html (menu: X-Ray Stats → Stats)
+
+Napomena: ovo je OPIS šta Faza 2 (implementacija) treba uraditi. Sada se ništa
+ne dira. Pri implementaciji koristiti KAKO-JeziciUI.md (i18n) i KAKO-KeyConcepts.md
+(kartice) iz docs/.
+
+### Title / menu / naslov (G2): TRI IZMJENE (Flavio, s118)
+Rješava nesklad iz STRANICE.md (menu "X-Ray Stats" ≠ naslov "X-Ray Statistics").
+Uklanja se "X-Ray" iz sve tri tačke → dosljedno Stats/Statistics.
+- **Menu tačka:** "X-Ray Stats" → "Stats"  (NAV_I18N, 5 jezika)
+- **`<title>`:** "X-Ray Stats — Buchenberg" → "Stats — Buchenberg"  (HTML head)
+- **Naslov (h1, `stats_title`):** "X-Ray Statistics" → "Statistics"  (i18n, 5 jezika)
+
+### stats_reading_note: preformulisati (tretman kao Home s115, NE about izuzetak)
+Razlog za Home-put (bez imena), a ne about-izuzetak: about je čisto edukativan
+(imena prvih modela pomažu razumjeti koncept), ali stats prikazuje ŽIVE podatke
+gdje imena više nisu tačna. Winner tablica živo prikazuje novi par (glm-5.2,
+mistral-large-3) uz zamrznute stare modele — imenovati gemma3/ministral u prozi
+dok tablica pokazuje glm-5.2 je nesklad, ne pedagogija.
+
+Trenutni tekst (svih 5 jezika) sadrži DVA problema:
+1. **Imena modela:** "gemma3 and ministral", "NLLB" — skinuti, opisati po ulozi
+   (general-purpose LLMs + dedicated MT model, isto kao Home/reader s115).
+2. **Hardkodovani brojevi u prozi:** "38,333 English sentences", "9 books",
+   "3 engines", "5 configurations" — ZASTARJELI i protivriječe živom funnelu tik
+   iznad (funnel povlači total_sentences iz stats.json; health check s118 pokazuje
+   50.624 rečenice, 12 knjiga — ne 38.333/9). Skinuti fiksne brojeve iz proze;
+   broj rečenica nosi ŽIVI funnel, proza objašnjava samo ODNOS (zašto selected >
+   source: jedan "prevod" = par rečenica–jezik, ne nova rečenica). Isti X-Ray
+   princip kao imena: fiksni brojevi u prozi zastarijevaju, živi podatak ne.
+> Flaviova nota: tekstovi su manje-više ok; brojevi se uvijek osvježavaju iz JSON-a
+> koji generiše web_export; uvijek će se nešto mijenjati/dodavati/oduzimati.
+
+### Hardkodirano u navesti — POPIS za Fazu 2 (ne dira se sad)
+- **Funnel hardkod (HTML):** "9 books · Project Gutenberg", "5 configs × up to 14
+  languages" — statični brojevi strukture; uskladiti sa živim stanjem ili
+  generalizovati (isti razlog kao reading note).
+- **JS `modelShortName()`** (l.~funkcija): prepoznaje samo gemma3/ministral/nllb/
+  gemma4 → novi par (glm-5.2, mistral-large-3:675b) pada na `return model` (puni
+  naziv, ružan prikaz). Treba proširiti ili preraditi da bude nezavisan od imena.
+- **JS `modelClass()`**: iste 3 stare klase (model-gem3/min3/nllb) → nova imena
+  bez boje. Vezano za CSS ispod.
+- **CSS klase** (`.model-gem3/.model-min3/.model-nllb` u <style>): vezane za stara
+  imena. Preraditi zajedno s modelClass.
+- **subtitle (`stats_subtitle`)** spominje "Data is loaded live from translation
+  JSON files" — provjeriti tačnost (od s99 čita agregirani stats.json, ne 126 tr_*).
+
+### Key Concepts: OBRISATI 2 kartice (Flavio, s118)
+Ukloniti iz data/concepts.json (pri implementaciji koristiti KAKO-KeyConcepts.md,
+obavezno json.load validacija poslije):
+- **"X-ray style art"** (wiki: X-ray_style_art)
+- **"Rock Art and the X-Ray Style"** (wiki: Rock_Art_and_the_X-Ray_Style)
+Napomena: ove kartice su dodane s96 na index/about/stats. Provjeriti pri
+implementaciji s kojih stranica se tačno brišu (Flaviova odluka: navedene 2 kartice).
+
+### Veći zadatak — ODVOJENO, NE u Fazi 1
+"Stats dvije tabele" (by engine / by configuration s win_rate, s107/s108) je
+strukturni/tehnički redizajn — zaseban budući prolaz, ne pripada Fazi 1.
+
+### Zaključak za stats.html
+Faza 1 (tekst/odluke): ✅ KOMPLETNO — odluke donesene i opisane gore. Nema novih
+prevoda za pisati sada (reading note preformulacija = Faza 2, jer zavisi od
+tehničke odluke o funnel/JS uskladi). Sljedeća stranica: books.html.
