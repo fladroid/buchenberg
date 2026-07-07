@@ -270,3 +270,36 @@ strukturni/tehnički redizajn — zaseban budući prolaz, ne pripada Fazi 1.
 Faza 1 (tekst/odluke): ✅ KOMPLETNO — odluke donesene i opisane gore. Nema novih
 prevoda za pisati sada (reading note preformulacija = Faza 2, jer zavisi od
 tehničke odluke o funnel/JS uskladi). Sljedeća stranica: books.html.
+
+---
+
+## STRANICA: books.html (menu: Library)
+
+Napomena: OPIS za Fazu 2. Sada se ništa ne dira. Stranica zadovoljava —
+svi podaci žive iz JSON-a (web_export). Nema imena modela nigdje (subtitle kaže
+"produced by the Buchenberg pipeline" — uloga, ne komponente). Čisto.
+
+### Title / menu / naslov (G2): DVIJE izmjene
+Rješava nesklad iz STRANICE.md (<title>="Books" ≠ h1="Library", nedovršen rename s72)
+PLUS otkriveni nesklad UNUTAR i18n rječnika (naslov znači različito po jeziku).
+Koncept stranice (Flavio, s118): "Library" — SVE knjige su knjige (prevedene,
+neprevedene, djelimično, fazno, djelimično fazno). Ne samo prevedene.
+
+1. **`<title>`:** "Books — Buchenberg" → "Library — Buchenberg"  (HTML head, hardkod)
+2. **`books_title` na DE/IT/HR/SR:** trenutno "Translated Books" (Übersetzte Bücher /
+   Libri tradotti / Prevedene knjige / Преведене књиге) → uskladiti na "Library":
+   - DE: "Bibliothek"
+   - IT: "Biblioteca"
+   - HR: "Knjižnica"
+   - SR: "Библиотека"
+   EN već "Library", menu već "Library". Cilj: naslov = "Library" na svih 5 jezika,
+   dosljedno s menijem i konceptom.
+   > HTML hardkod fallback <h1>Library</h1> već OK (EN); JS pregazi po jeziku.
+
+### Sve ostalo: BEZ IZMJENE
+subtitle, kartice, badges, word cloud modal, dugmad (Read/Gutenberg/NLP/Word cloud) —
+sve zadovoljava. Svi brojevi/jezici/statusi žive iz books.json (web_export).
+
+### Zaključak za books.html
+Faza 1 (tekst/odluke): ✅ KOMPLETNO. Samo title/naslov usklada (Faza 2), bez nove
+proze. Sljedeća stranica: nlp.html.
