@@ -386,3 +386,141 @@ Jedna izmjena: geo_c4_p1 na 5 jezika — ukloniti "(Gemma4:31b)". Ništa drugo.
 
 ### Zaključak za geometry.html
 Faza 1 (tekst/odluke): ✅ KOMPLETNO. Sljedeća stranica: art.html (posljednja).
+
+---
+
+## STRANICA: art.html (menu: Art)
+
+Napomena: OPIS za Fazu 2. Sada se ništa ne dira.
+
+### Naslov "Art" — STANDARDIZOVATI (Flavio, s118)
+STRANICE.md nesklad: `<h1 class="bb-section-title">Art</h1>` hardkodovan u HTML-u,
+BEZ id, BEZ i18n ključa — jedina stranica bez `_title` ključa. Naslov ostaje "Art"
+na svim jezicima. ODLUKA: uraditi standardno kao sve ostale stranice.
+- Dodati novi ključ `art_title` u nav.js, svih 5 jezika:
+  - EN: "Art" · DE: "Kunst" · IT: "Arte" · HR: "Umjetnost" · SR: "Уметност"
+- Dati `<h1>` id (npr. `art-title`) + apply-liniju u art.html inline script
+  (ids mapa: 'art-title':'art_title'). HTML hardkod fallback ostaje "Art" (EN, no-JS).
+- Time art se uklapa u isti obrazac kao about/stats/geo/learn/nlp (prevedeni naslov).
+
+### Imena modela — dvije vrste, isti tretman kao geometry
+1. **Embedder "multilingual-e5-large"** (`art_card_buchenberg_p1`, svih 5 jezika) →
+   ZADRŽATI. Invarijanta (KONCEPT §2), i Fingerprints eksponat ga STVARNO pokreće u
+   browseru (Transformers.js). Isti razlog kao geometry.
+2. **JS `MODEL_COLORS`** (Tapestry legenda, "Model" mod): hardkoduje povučene modele
+   (gemma3:12b@0.8, ministral-3:14b@0.8, nllb-600M@0.0 + temp varijante). Novi par
+   (glm-5.2, mistral-large-3) nema boju -> pada na '#888'. FAZA 2 TEHNIKA (isti problem
+   kao stats modelShortName/modelClass). Ne dira se sad.
+
+### Title / menu (G2)
+`<title>` "Art — Buchenberg" / menu "Art". Menu ima prevod (NAV_I18N), `<title>`
+ostaje EN brend (kao ostale stranice). Naslov h1 se standardizuje (gore).
+
+### Ostalo: čisto
+Kandinsky/Scriabin/Borges/Wittgenstein proza — konceptualno, bez imena prevodilačkih
+modela. Tri eksponata (Tapestry/Sound/Fingerprints) — sadržaj iz tr_*.json (živ).
+
+### FAZA 2 zadaci za art.html
+1. Novi ključ `art_title` × 5 jezika + `<h1>` id + apply-linija (standardizacija naslova).
+2. `MODEL_COLORS` hardkod povučenih modela — isti tretman kao stats (nezavisno od imena
+   u prezentaciji; vizuelna legenda). Preraditi da bude nezavisno od imena ili proširiti.
+
+### Zaključak za art.html
+Faza 1 (tekst/odluke): ✅ KOMPLETNO. **Sve stranice obrađene (9/9).**
+
+═══════════════════════════════════════════════════════════════
+## FAZA 1 ZAVRŠENA — sažetak (s118)
+
+Svih 9 stranica obrađeno. Nalaz po stranici:
+- **index.html:** rječnik čist (s115); Faza 2: G1 hardkod sync.
+- **about.html:** okvir o imenima (svjesni izuzetak) + NOVA Self-refinement sekcija
+  (tekst EN+4 jezika + dijagram, gotovo). Najveći tekstualni posao.
+- **stats.html:** title/menu/naslov (X-Ray Stats->Stats, Statistics); reading note
+  Home-put (bez imena+brojeva); Key Concepts -2 kartice; hardkod popis za F2.
+- **books.html:** title->Library; books_title uskladjen na "Library" 5 jezika.
+- **nlp.html:** BEZ IZMJENE (najčistija).
+- **learn.html:** BEZ IZMJENE; zabilježen i18n propust (hardkod EN u JS) za budući prolaz.
+- **geometry.html:** izbaciti (Gemma4:31b) iz geo_c4_p1; e5-large ostaje.
+- **art.html:** standardizovati naslov (art_title × 5 jezika); e5-large ostaje;
+  MODEL_COLORS = F2 tehnika.
+
+Globalna pravila (G1 hardkod sync, G2 title<->menu<->naslov) primijenjena po stranici.
+Trajni princip s115 (bez imena prolaznih modela) primijenjen; about = svjesni izuzetak;
+e5-large (embedder) = invarijanta, uvijek ostaje.
+
+**SLJEDEĆE: Faza 2 (tehnička implementacija, "u jednom dahu").** Redoslijed po stranici
+iz zadataka gore. Koristiti KAKO-JeziciUI.md (i18n) i KAKO-KeyConcepts.md (kartice).
+
+---
+
+## STRANICA: reader.html (menu: Reader)
+
+Napomena: OPIS za Fazu 2. Sada se ništa ne dira. Puni implementacioni plan: vidi
+DIO ispod (samodovoljan — bez zavisnosti od artefakata).
+
+### Kontekst: reader je bio POTPUNI i18n izuzetak (s77/s78)
+reader.html ima VLASTITI `const I18N = {...}` objekat (5 jezika) ugrađen u stranicu,
+odvojen od centralnog NAV_I18N u nav.js. Posljedica: svaka i18n izmjena mora se raditi
+dvaput ili reader "ispadne" (mijenjaš NAV_I18N — reader ne gleda tamo). To se danas
+i desilo (reader preskočen u prvom prolazu). Flaviova odluka s118: standardizovati
+ono što je dosljedno; izuzetke izričito navesti.
+
+### NAVEDENI IZUZETAK — ostaje (NE diramo)
+**X-Ray legenda = SAMO ENGLESKI, hardkodovana.** Dogovoreno na početku X-Ray
+implementacije (isti obrazac kao Key Concepts kartice — namjerno EN, ne prevoditi).
+Cijela legenda + X-Ray Full mod tekstovi ostaju EN hardkod. Ovo NIJE propust —
+svjesna odluka. Poslije migracije reader dosljedno ima dva režima:
+  (a) nav + kontrole → nav.js i18n (5 jezika) = STANDARD
+  (b) X-Ray legenda/Full → EN hardkod = NAVEDENI IZUZETAK (kao Key Concepts)
+
+### A1 — sitna izmjena (hardkod, jedan red)
+Judge Average red u legendi: "...assigned by the LLM judge (gemma4:31b)." →
+"...assigned by the LLM judge." Razlog: zamjenjivost (s115), kao geometry geo_c4_p1.
+NIJE zastarjelost (gemma4:31b aktivan sudija). Legenda ostaje EN hardkod → prosta
+izmjena jednog reda, NE kroz rječnik. e5-large (Translation Score red) OSTAJE (invarijanta).
+
+### B1 — migracija nav+kontrole u NAV_I18N (reader_ prefiks, vrijednosti iz lokalnog I18N)
+14 ključeva × 5 jezika (preseljenje, ne nov prevod):
+reader_books, reader_translations, reader_select, reader_show_original, reader_sentences,
+reader_author, reader_language, reader_sentences_lbl, reader_pipeline, reader_source,
+reader_infobox_title, reader_gutenberg, reader_original, reader_untranslated.
+ISPRAVKA usput (ODLUKA s118 = DA): SR reader_author/reader_language su latinica
+("Autor"/"Jezik") u lokalnom I18N dok je ostatak SR ćirilica → ispraviti na
+"Аутор"/"Језик" (dosljednost SR bloka, pravilo koje već slijedimo).
+
+### B2+B3 — brisanje + prepravka u reader.html
+- Obrisati cijeli lokalni `const I18N = {...}`.
+- Obrisati ručno punjenje nav labela (navLinks[0..5].textContent = t('nav_*')) —
+  nav.js SAM puni nav (buildHeaderHTML l.1491-1493 + l.1540 na promjenu jezika).
+- `const t = key => (I18N[state.uiLang]||I18N.en)[key]||key;` →
+  `const t = key => BB_NAV.t('reader_'+key) || BB_NAV.t(key) || key;`
+  (legenda EN hardkod NIJE t() poziv → nepogođena).
+- Ukloniti vlastiti .bb-lang-btn handler → `BB_NAV.onLangChange = applyI18n`
+  (inače dupli listeneri s nav.js).
+- apply na DOMContentLoaded + BB_NAV.onLangChange.
+
+### FAZA 2 zadaci za reader.html
+1. A1 (jedan red hardkoda).
+2. B1 (14 reader_ ključeva × 5 jezika u NAV_I18N; SR author/language ćirilica).
+3. B2+B3 (obrisati lokalni I18N + ručni nav; prepraviti apply na BB_NAV.t).
+4. Metoda: KAKO-JeziciUI §7 (Python heredoc, assert count==1, strukturni trap
+   `" },`, ćirilica literalno). node NE postoji.
+5. Browser test: 5 jezika — nav/kontrole/infobox rade; legenda OSTAJE EN (potvrda izuzetka).
+6. Ažurirati KAKO-JeziciUI.md §2/§10 + STRANICE.md (reader nav+kontrole = standard,
+   legenda = navedeni EN izuzetak).
+
+### Zaključak za reader.html
+Faza 1 (odluke): ✅ KOMPLETNO. **Svih 9 stranica sada stvarno obrađeno (9/9).**
+
+═══════════════════════════════════════════════════════════════
+## ISPRAVKA "9/9" (s118)
+Prethodni "FAZA 1 ZAVRŠENA" sažetak iznad je BIO PREURANJEN — reader.html preskočen
+u prvom prolazu (uhvaćeno provjerom broja STRANICA sekcija: 8 zaglavlja = 8 fajlova,
+reader fali). Sada dopunjen. Stvarno stanje: svih 9 stranica obrađeno.
+
+### Redoslijed Faze 2 (ODLUKA s118): "u jednom dahu", sve zajedno
+Kao s114 refaktor. Backup → stranice po redu (index G1 hardkod sync → about nova
+sekcija+okvir → stats title/reading-note/KeyConcepts → books title → geometry Gemma4
+→ art naslov standard → reader migracija) → JEDAN browser test svih stranica × 5 jezika
+→ JEDAN commit set (buchenweb) + BB_VERSION bump + push verifikacija.
+nlp i learn: bez izmjene (osim learn i18n propust — zaseban budući prolaz, ne sad).
