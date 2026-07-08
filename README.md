@@ -421,6 +421,15 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 
 > ⚠️ Sav razvoj je na **foxuno**. User se zove `balsam` ali to je user na foxuno serveru!
 
+### Backup raspored (CET/CEST, Vienna — ljeti CEST=UTC+2)
+
+| Server | Backup prozor |
+|--------|---------------|
+| foxuno | ~01:00–03:00 |
+| balsam | ~03:00–08:00 |
+
+Oba backupa mogu dodatno opteretiti server tokom tih prozora — uzeti u obzir pri planiranju velikih pipeline runova.
+
 ### MCP alati
 
 - `foxuno:run_command` — skripte, fajlovi, git
@@ -672,6 +681,10 @@ Neki modeli (capability `thinking`: gpt-oss, nemotron, deepseek, glm, qwen3.5…
 ### Prije usvajanja novog modela — pusti sondu
 `venv/bin/python src/sandbox_model_probe.py --models "MODEL" --jezik hr`
 Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. Kvalitet ide zasebno kroz pravi `bb_03`+`bb_08` na malom opsegu. Registracija u `bb_modeli` (naziv+temperatura+faza_id) je preduslov za pravi run.
+
+### Radni ritam — očekivano opterećenje po dobu dana
+
+Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno zapisati): performanse prema Ollama Cloud primjetno degradiraju otprilike između 16 i 18h CET/CEST (Vienna) vremena. Vjerovatno objašnjenje: Ollama ima servere u US i EU, a Flaviova infrastruktura i radni ritam su evropski — očekivano je da se poklapa sa regionalnim peak opterećenjem. Ovo nije laboratorijsko okruženje s garantovanim resursima; varijacija u rečenica/min (vidi `docs/RUNOVI.md`) je normalna, ne signal greške.
 
 ---
 
