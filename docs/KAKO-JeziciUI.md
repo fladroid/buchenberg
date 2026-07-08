@@ -26,9 +26,11 @@ Ako neko (uključujući Claude) **izmijeni tekst direktno u HTML hardkodu** misl
 
 ---
 
-## 2. `reader.html` — izuzetak
+## 2. `reader.html` — standard od s120, uz jedan navedeni izuzetak
 
-`reader.html` **NAMJERNO NIJE** dio `NAV_I18N` sistema — ima svoj vlastiti, zaseban i18n mehanizam (odluka iz s77/s78, potvrđena u s82 tabeli statusa). Ne primjenjivati ovaj obrazac tamo bez provjere kako reader.html stvarno radi.
+`reader.html` je od s120 MIGRIRAN u `NAV_I18N` sistem — nav + kontrole (14 `reader_` ključeva × 5 jezika) prate isti obrazac kao ostale stranice. Prije s120 imao je vlastiti, zaseban `const I18N = {...}` mehanizam (odluka iz s77/s78, potvrđena u s82 tabeli statusa) — ta arhitektura je obrisana u s120 (session_120.md).
+
+**Preostali navedeni izuzetak:** X-Ray legenda i X-Ray Full mod tekstovi ostaju EN hardkod, namjerno neprevedeni na bilo kom jeziku (isti obrazac kao Key Concepts kartice, §Web how-to u README). Ovo NIJE propust nego svjesna odluka iz same X-Ray implementacije.
 
 ---
 
@@ -158,9 +160,9 @@ Prema s82 tabeli statusa (posljednja poznata potpuna evidencija — provjeriti g
 | index.html | ✅ Potpun (sadržaj poslije mijenjan više puta, npr. s108, s115) |
 | nlp.html | ✅ Potpun |
 | about.html | ✅ Potpun |
-| art.html | ✅ Potpun (napomena: `art_title` ključ NE postoji — h1 "Art" hardkodovan, vidi `STRANICE.md`) |
+| art.html | ✅ Potpun (od s120: `art_title` ključ dodan × 5 jezika, h1 više nije hardkod) |
 | geometry.html | ✅ Potpun |
-| reader.html | ⏭ Namjerno van sistema — vlastiti i18n |
+| reader.html | ✅ Potpun od s120 (migriran u NAV_I18N, `reader_` prefiks); X-Ray legenda = navedeni EN izuzetak |
 | learn.html | Nizak prioritet, status na dan s82 nepoznat/TODO — provjeriti prije oslanjanja |
 
 ---
