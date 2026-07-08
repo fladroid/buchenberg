@@ -585,6 +585,7 @@ Svaka sesija završava:
 | `bb_knjige.gutenberg_id` bez UNIQUE constrainta — dupli insert prolazio tiho | 41 | `ALTER TABLE bb_knjige ADD CONSTRAINT bb_knjige_gutenberg_id_unique UNIQUE (gutenberg_id)` |
 
 | Orphan pobjednici u `bb_prev_recenica` — FK bez CASCADE — 11 redova pokazivalo na nepostojeće `bb_prevodi_recenica` | 54 | `DELETE FROM bb_prev_recenica WHERE prevodi_recenica_id NOT IN (SELECT id FROM bb_prevodi_recenica)` — obrisano 11 orphana; `ON DELETE CASCADE` odgođeno |
+| Base64 za prenos tekstualnog sadržaja na foxuno — nepouzdan za duže stringove | 119 | Uvijek heredoc `cat > file << 'EOF' ... EOF`, nikad base64 za tekstualni sadržaj |
 
 ---
 
