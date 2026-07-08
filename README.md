@@ -551,6 +551,10 @@ Tekst NIJE u HTML hardkodu — hardkod je samo **no-JS fallback**. Izvor istine 
 ### Inicijalizacija svake sesije (obavezno)
 
 ```bash
+# 0. Project knowledge / docs reference (prije README; s121 dodatak)
+cat docs/KONCEPT.md docs/ANALIZA.md docs/KAKO-JeziciUI.md docs/KAKO-KeyConcepts.md docs/STRANICE.md
+ls docs/ | grep -i "^WEB-FAZA"   # provjeriti ima li novijeg nacrta (npr. WEB-FAZA3.md)
+
 # 1. README
 cat /home/balsam/buchenberg/README.md
 
@@ -567,6 +571,10 @@ cd /home/balsam/buchenberg && venv/bin/python src/health_check.py
 **Claude uvijek prikazuje komandu prije izvršavanja. Bez izuzetka.**  
 Flavio kaže OK → tek onda se izvršava.  
 Važi za: `foxuno:run_command`, `balsam:run_command`, git operacije, izmjene fajlova.
+
+**Ko pokreće pipeline:** Prevođenje i refine pokreće isključivo Flavio, prema
+raspoloživim resursima i potrebi za poređenjem performansi/kvaliteta. Claude ne
+planira niti pokreće pipeline runove. (s121)
 
 ### Dokumentacija
 
@@ -632,6 +640,7 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 3. ✅ **Home hero ikona** (s96) — heksagon `favicon.svg` (64×64) lijevo od loga; `.bb-hero-logo` flex-centriran.
 4. ✅ **X-Ray Key Concepts kartice** (s96, dodano) → **OBRISANE s120** (Flaviova odluka): 🩻 X-ray style art + 🎸 Rock Art and the X-Ray Style uklonjene sa index/about/stats (`data/concepts.json`). "Key Concepts" naslov se i dalje ne prevodi.
 5. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
+6. **Stats dvije tabele + fazni pobjednik** — nacrt spreman u `docs/WEB-FAZA3.md` (Nivo A/B), čeka odluku. (s121)
 3. **Cache-Control za JS/CSS**
 
 ### Odloženo / u razmatranju
