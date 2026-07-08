@@ -112,7 +112,9 @@ Utvrđen empirijski na uzorku s1–s350 (HR, BS) i s1–s100 (ostali):
 
 ### Paralelno izvršavanje
 
-**Ollama Cloud = jedna sesija u isto vrijeme.** Cloud skripte se izvršavaju **striktno serijski**. NLLB je lokalni CPU — može se pokrenuti paralelno s cloud skriptom ali ne i cloud s cloud.
+**Ollama Cloud nalog je Pro tier (nadograđeno s free) — paralelni pozivi su podržani.** Najmanje posljednje dvije sedmice (od otprilike sredine/kraja juna 2026) svi pipeline runovi — i sa starim i sa novim modelima — redovno trče paralelno; sa starim (jeftinijim) modelima Flavio je često pokretao i 5 paralelnih tokova odjednom. Eksperiment s118/s119 (4 paralelne grupe) izmjerio je ~3.77× agregatno ubrzanje sa 4 paralelna toka naspram jednog solo. NLLB (lokalni CPU) i dalje radi nezavisno paralelno s bilo kojim cloud tokom.
+
+> ⚠️ **Istorijska napomena:** do nadogradnje na Pro (sredina/kraj juna 2026) nalog je bio free tier s ograničenjem od jedne sesije u isto vrijeme — stariji session dokumenti (npr. do ~s100) pominju to ograničenje i tretiraju paralelne procese kao grešku za ispravljanje. To više NE VAŽI.
 
 ---
 
