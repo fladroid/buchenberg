@@ -294,3 +294,115 @@ Ovaj dokument raste — svaki novi run (pipeline ili refine) dodaje novu sekciju
 - **Agregatna brzina ≈ 3.27 rec/min** (zbir aproksimativnih prosjeka: k22 0.79 + k23-dehritsr 0.84 + k23-esfrptro 0.94 + k24 0.69), u istom rasponu kao s119 eksperiment (~3.47) — potvrđuje da Ollama Cloud Pro tier i dalje nema primjetno usko grlo pri 4 konkurentna toka.
 - **Prvi pravi bazni prevod za es/fr/pt/ro** (van NLLB pre-fetch) na k22/k23/k24 — kvalitet (avg final 0.9658–0.9669) u istom rasponu kao core-4 nastavak (0.9652), bez pada kvaliteta na novoaktiviranim jezicima.
 - **Bez prelaska preko ponoći** — sve četiri grupe završile unutar istog dana (8. jul), za razliku od s119 eksperimenta gdje su tri od četiri grupe prešle u sljedeći dan.
+
+## Run: 8–9. jul 2026 — Eksperiment: 4 paralelne grupe (noćni run; nastavak k23 core-4 2001–2500 + prvi bazni prevod af/nl na k22/k23/k24)
+
+*Sve četiri grupe pokrenute skoro istovremeno (~21:18–21:19 UTC / ~23:18–23:19 CEST) 8. jula, izvršavale su se konkurentno preko ponoći u 9. jul. Grupa 1 je direktan nastavak prethodnog runa (k23 dehritsr, 1501–2000 → sada 2001–2500). Grupe 2–4 su prvi pravi bazni prevod za af/nl na sve tri Copy knjige.*
+
+**Metodološka napomena:** afnl grupe imaju samo 2 jezika (af, nl) naspram 4 jezika u prethodnom (esfrptro/dehritsr) runu. "Rečenica/min" u Tabeli 1 je pozicijska brzina (broj_recenica/elapsed) i NIJE direktno uporediva preko grupa s različitim brojem jezika — manje jezika po poziciji znači manje ukupnog rada po poziciji, pa prividno viša brzina. Za pravo poređenje throughput-a korišten je **prevoda/min** (upisano/elapsed): k23_dehritsr ~3.47, k22_afnl ~2.99, k23_afnl ~3.40, k24_afnl ~2.45 — svi u istom rasponu kao prethodni dnevni run (2.76–3.76), dakle nema stvarne noć/dan razlike u brzini.
+
+### Grupa 1 — k23 (Big Four Copy), de/hr/it/sr, opseg 2001–2500 (nastavak)
+
+**Tabela 1 — Identifikacija & vrijeme**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 2001–2020 | 21:19 | 21:48 | 0:29:25 | 0.68 |
+| 2021–2060 | 21:48 | 22:49 | 1:01:14 | 0.65 |
+| 2061–2120 | 22:49 | 00:29(+1d) | 1:39:38 | 0.60 |
+| 2121–2200 | 00:29 | 02:08(+1d) | 1:38:34 | 0.81 |
+| 2201–2300 | 02:08 | 03:47(+1d) | 1:39:30 | 1.01 |
+| 2301–2500 | 03:47 | 06:55(+1d) | 3:07:29 | 1.07 |
+
+**Tabela 2 — Kvalitet & pobjede**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 2001–2020 | 0.9596 | 0.9429 | 0.9709 | 63 (78.8%) | 15 (18.8%) | 2 (2.5%) |
+| 2021–2060 | 0.9640 | 0.9418 | 0.9788 | 98 (61.2%) | 51 (31.9%) | 11 (6.9%) |
+| 2061–2120 | 0.9709 | 0.9522 | 0.9835 | 134 (55.8%) | 100 (41.7%) | 6 (2.5%) |
+| 2121–2200 | 0.9698 | 0.9532 | 0.9810 | 198 (61.9%) | 97 (30.3%) | 25 (7.8%) |
+| 2201–2300 | 0.9657 | 0.9464 | 0.9786 | 252 (63.0%) | 119 (29.8%) | 29 (7.2%) |
+| 2301–2500 | 0.9718 | 0.9524 | 0.9847 | 518 (64.8%) | 232 (29.0%) | 50 (6.2%) |
+| **UKUPNO** | **0.9690** | **0.9501** | **0.9817** | **1263 (63.1%)** | **614 (30.7%)** | **123 (6.2%)** |
+
+### Grupa 2 — k22 (Hound Copy), af/nl, opseg 1–500
+
+**Tabela 1**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 1–20 | 21:18 | 21:32 | 0:14:05 | 1.42 |
+| 21–60 | 21:32 | 22:03 | 0:31:02 | 1.29 |
+| 61–120 | 22:03 | 22:46 | 0:43:16 | 1.39 |
+| 121–200 | 22:46 | 23:36 | 0:49:50 | 1.61 |
+| 201–300 | 23:36 | 01:03(+1d) | 1:26:43 | 1.15 |
+| 301–500 | 01:03 | 02:53(+1d) | 1:50:02 | 1.82 |
+
+**Tabela 2**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 1–20 | 0.9770 | 0.9624 | 0.9868 | 23 (57.5%) | 16 (40.0%) | 1 (2.5%) |
+| 21–60 | 0.9640 | 0.9464 | 0.9759 | 45 (56.2%) | 31 (38.8%) | 4 (5.0%) |
+| 61–120 | 0.9663 | 0.9582 | 0.9717 | 70 (58.3%) | 42 (35.0%) | 8 (6.7%) |
+| 121–200 | 0.9674 | 0.9569 | 0.9745 | 91 (56.9%) | 60 (37.5%) | 9 (5.6%) |
+| 201–300 | 0.9560 | 0.9495 | 0.9606 | 108 (54.0%) | 89 (44.5%) | 3 (1.5%) |
+| 301–500 | 0.9666 | 0.9546 | 0.9794 | 253 (63.2%) | 115 (28.8%) | 32 (8.0%) |
+| **UKUPNO** | **0.9648** | **0.9540** | **0.9739** | **590 (59.0%)** | **353 (35.3%)** | **57 (5.7%)** |
+
+### Grupa 3 — k23 (Big Four Copy), af/nl, opseg 1–500
+
+**Tabela 1**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 1–20 | 21:18 | 21:33 | 0:15:22 | 1.30 |
+| 21–60 | 21:33 | 21:59 | 0:25:29 | 1.57 |
+| 61–120 | 21:59 | 22:34 | 0:35:08 | 1.71 |
+| 121–200 | 22:34 | 23:21 | 0:46:52 | 1.71 |
+| 201–300 | 23:21 | 00:14(+1d) | 0:52:45 | 1.90 |
+| 301–500 | 00:14 | 02:12(+1d) | 1:58:51 | 1.68 |
+
+**Tabela 2**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 1–20 | 0.9720 | 0.9613 | 0.9792 | 26 (65.0%) | 10 (25.0%) | 4 (10.0%) |
+| 21–60 | 0.9615 | 0.9507 | 0.9688 | 47 (58.8%) | 22 (27.5%) | 11 (13.8%) |
+| 61–120 | 0.9696 | 0.9540 | 0.9800 | 70 (58.3%) | 39 (32.5%) | 11 (9.2%) |
+| 121–200 | 0.9721 | 0.9530 | 0.9849 | 89 (55.6%) | 59 (36.9%) | 12 (7.5%) |
+| 201–300 | 0.9712 | 0.9526 | 0.9837 | 129 (64.5%) | 55 (27.5%) | 16 (8.0%) |
+| 301–500 | 0.9670 | 0.9538 | 0.9759 | 259 (64.8%) | 104 (26.0%) | 37 (9.2%) |
+| **UKUPNO** | **0.9687** | **0.9535** | **0.9790** | **620 (62.0%)** | **289 (28.9%)** | **91 (9.1%)** |
+
+### Grupa 4 — k24 (Frankenstein Copy), af/nl, opseg 1–500
+
+**Tabela 1**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 1–20 | 21:18 | 21:35 | 0:16:25 | 1.22 |
+| 21–60 | 21:35 | 22:11 | 0:36:49 | 1.09 |
+| 61–120 | 22:11 | 23:15 | 1:03:10 | 0.95 |
+| 121–200 | 23:15 | 00:15(+1d) | 1:00:21 | 1.33 |
+| 201–300 | 00:15 | 01:44(+1d) | 1:28:52 | 1.13 |
+| 301–500 | 01:44 | 04:07(+1d) | 2:23:06 | 1.40 |
+
+**Tabela 2**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 1–20 | 0.9653 | 0.9633 | 0.9667 | 26 (65.0%) | 12 (30.0%) | 2 (5.0%) |
+| 21–60 | 0.9640 | 0.9563 | 0.9692 | 41 (51.2%) | 39 (48.8%) | 0 (0.0%) |
+| 61–120 | 0.9573 | 0.9479 | 0.9637 | 63 (52.5%) | 52 (43.3%) | 5 (4.2%) |
+| 121–200 | 0.9643 | 0.9503 | 0.9736 | 75 (46.9%) | 81 (50.6%) | 4 (2.5%) |
+| 201–300 | 0.9571 | 0.9488 | 0.9627 | 85 (42.5%) | 102 (51.0%) | 13 (6.5%) |
+| 301–500 | 0.9606 | 0.9504 | 0.9675 | 189 (47.2%) | 195 (48.8%) | 16 (4.0%) |
+| **UKUPNO** | **0.9606** | **0.9508** | **0.9672** | **479 (47.9%)** | **481 (48.1%)** | **40 (4.0%)** |
+
+### Zapažanja (cross-grupa)
+- **k24 obrazac — mistral prvi put ispred glm:** 48.1% vs 47.9%, četvrti uzastopni run gdje je k24 (Frankenstein Copy) skoro izjednačen, i prvi put da mistral-large-3 stvarno pretekne glm-5.2 (makar minimalno) u ukupnom zbiru grupe. Trend iz s119/prethodnog runa (sve izraženija ravnoteža na ovoj knjizi) se produbljuje.
+- **k23_dehritsr ostaje vrlo stabilan** — glm dominacija 63.1% u ovom opsegu (2001–2500), skoro identično prethodnom (62.9% za 1501–2000) — dosljedan obrazac za tu kombinaciju knjiga+core4 kroz uzastopne opsege.
+- **Throughput (prevoda/min) bez noć/dan razlike** — nakon korekcije za broj jezika po grupi, sve četiri grupe (2.45–3.47) padaju u isti raspon kao prethodni dnevni run (2.76–3.76); pozicijska "rečenica/min" metrika NIJE uporediva preko grupa s različitim brojem jezika (2 kod afnl naspram 4 kod esfrptro/dehritsr).
+- Kvalitet (avg final 0.9606–0.9690) dosljedan i za af/nl kao i za core-4 i esfrptro iz prethodnog runa — nema pada kvaliteta na bilo kojoj od novoaktiviranih jezičkih grupa.
