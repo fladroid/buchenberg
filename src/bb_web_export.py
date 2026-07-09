@@ -91,7 +91,8 @@ def get_translations(cur, knjiga_id, lang_kod):
             ROUND(pr.naturalness_score::numeric, 4) AS naturalness_score,
             ROUND(pr.sudija_grammar::numeric, 4)    AS sudija_grammar,
             ROUND(pr.sudija_naturalness::numeric, 4) AS sudija_naturalness,
-            ROUND(pr.sudija_fidelity::numeric, 4)   AS sudija_fidelity
+            ROUND(pr.sudija_fidelity::numeric, 4)   AS sudija_fidelity,
+            m.faza_id                                AS faza
         FROM bb_prev_knjige pk
         JOIN bb_jezik j            ON j.id  = pk.jezik_id
         JOIN bb_prev_recenica pvr  ON pvr.prev_knjige_id = pk.id
@@ -137,6 +138,80 @@ def get_ner_veze(cur, knjiga_id, min_tezina=2):
     """, (knjiga_id, knjiga_id, min_tezina))
     return [{"od": od, "od_tip": od_tip, "do": do, "do_tip": do_tip, "tezina": int(t)}
             for od, od_tip, do, do_tip, t in cur.fetchall()]
+
+def get_model_registry(cur):
+    """Tabela 0 — inventar: svi modeli iz registra + broj prevoda (kandidata).
+    LEFT JOIN po imenu -> sudija/embeder/neupotrijebljeni modeli pokazuju 0
+    (X-Ray potpunost: nula je informacija, ne rupa). 'broj prevoda' = svi
+    kandidati koje je model ikad proizveo (bb_prevodi_recenica), ne parovi
+    knjiga x jezik i ne samo pobjede."""
+    cur.execute("""
+        SELECT reg.naziv, reg.vrsta, reg.uloge,
+               COALESCE(cnt.n, 0) AS broj_prevoda
+        FROM bb_model_registar reg
+        LEFT JOIN (
+            SELECT m.naziv, COUNT(*) AS n
+            FROM bb_prevodi_recenica pvr
+            JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
+            JOIN bb_modeli m ON pk.model_id = m.id
+            GROUP BY m.naziv
+        ) cnt ON cnt.naziv = reg.naziv
+        ORDER BY broj_prevoda DESC, reg.naziv
+    """)
+    return [{"naziv": naziv, "vrsta": vrsta, "uloge": list(uloge) if uloge else [],
+             "broj_prevoda": int(n)}
+            for naziv, vrsta, uloge, n in cur.fetchall()]
+
+
+def get_phase_winners(cur, knjiga_id, lang_kod):
+    """Nivo B: za rečenice koje IMAJU faza-2 pobjednika, vrati fazno-pobjednički
+    prevod za SVAKU fazu (faza 1 i faza 2 su RAZLIČITI prevodi_recenica_id — različiti
+    modeli/faze — vezani preko iste rečenice). Za reader "prije/poslije".
+    finalni_score = 0.4*kompozit + 0.6*sudija (ista formula kao bb_xray_export)."""
+    cur.execute("""
+        SELECT r.pozicija,
+               prf.faza_id,
+               m.naziv AS model,
+               pr.prevod,
+               ROUND(pr.translation_score::numeric, 4) AS ts,
+               ROUND(pr.sudija_avg::numeric, 4)        AS judge_avg,
+               ROUND(
+                 (0.4 * ((COALESCE(pr.translation_score,0) + COALESCE(pr.score,0)) / 2.0)
+                 + 0.6 * COALESCE(pr.sudija_avg, 0))::numeric
+               , 4) AS finalni_score,
+               EXISTS (
+                 SELECT 1 FROM bb_prev_recenica ap
+                 WHERE ap.prev_knjige_id = prf.prev_knjige_id
+                   AND ap.prevodi_recenica_id = pr.id
+               ) AS je_apsolutni
+        FROM bb_prev_recenica_faza prf
+        JOIN bb_prev_knjige pk       ON pk.id = prf.prev_knjige_id
+        JOIN bb_jezik j              ON j.id = pk.jezik_id
+        JOIN bb_prevodi_recenica pr  ON pr.id = prf.prevodi_recenica_id
+        JOIN bb_prevodi_knjige ppk   ON ppk.id = pr.prevodi_knjige_id
+        JOIN bb_modeli m             ON m.id = ppk.model_id
+        JOIN bb_recenice r           ON r.id = pr.recenica_id
+        WHERE pk.knjiga_id = %s AND j.kod = %s
+        ORDER BY r.pozicija, prf.faza_id
+    """, (knjiga_id, lang_kod))
+
+    # Pivot po poziciji; emituj SAMO pozicije koje imaju fazu 2.
+    po_poziciji = {}
+    for pozicija, faza, model, prevod, ts, judge_avg, finalni, je_aps in cur.fetchall():
+        d = po_poziciji.setdefault(pozicija, {"pos": pozicija})
+        d[f"faza{faza}"] = {
+            "model":         model,
+            "prevod":        prevod,
+            "ts":            float(ts)       if ts       is not None else None,
+            "judge_avg":     float(judge_avg) if judge_avg is not None else None,
+            "finalni_score": float(finalni)  if finalni  is not None else None,
+        }
+        if je_aps:
+            d["apsolutna_faza"] = faza
+
+    return [po_poziciji[p] for p in sorted(po_poziciji)
+            if "faza2" in po_poziciji[p]]
+
 
 def get_stats(cur):
     """Agregati za stats.html — izracunati u bazi (jednom pri exportu), ne u browseru.
@@ -193,9 +268,9 @@ def get_stats(cur):
     }
 
     cur.execute("""
-        SELECT m.naziv, m.temperatura, COUNT(*) AS cnt
+        SELECT m.naziv, m.temperatura, m.faza_id, COUNT(*) AS cnt
     """ + base_from + """
-        GROUP BY m.naziv, m.temperatura
+        GROUP BY m.naziv, m.temperatura, m.faza_id
         ORDER BY cnt DESC
     """)
     win_rows = cur.fetchall()
@@ -204,26 +279,60 @@ def get_stats(cur):
     # (svi prevodi, ne samo pobjednici). Odvojen izvor od base_from (koji ide
     # kroz pobjednike) -> nema fan-outa, dva nezavisna agregata spojena u Pythonu.
     cur.execute("""
-        SELECT m.naziv, m.temperatura, COUNT(*) AS cnt
+        SELECT m.naziv, m.temperatura, m.faza_id, COUNT(*) AS cnt
         FROM bb_prevodi_recenica pvr
         JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
         JOIN bb_modeli m ON pk.model_id = m.id
-        GROUP BY m.naziv, m.temperatura
+        GROUP BY m.naziv, m.temperatura, m.faza_id
     """)
-    cand_map = {(model, float(temp) if temp is not None else None): int(cnt)
-                for model, temp, cnt in cur.fetchall()}
+    cand_map = {(model, float(temp) if temp is not None else None, faza): int(cnt)
+                for model, temp, faza, cnt in cur.fetchall()}
 
-    winners = []
-    for model, temp, cnt in win_rows:
+    # Tabela 2 (by-configuration): red po (naziv, temp, faza)
+    winners_by_config = []
+    for model, temp, faza, cnt in win_rows:
         tkey = float(temp) if temp is not None else None
-        cand = cand_map.get((model, tkey), 0)
-        winners.append({
+        cand = cand_map.get((model, tkey, faza), 0)
+        winners_by_config.append({
             "model": model,
             "temp": tkey,
+            "faza": faza,
             "count": int(cnt),
             "candidates": cand,
             "win_rate": round(100.0 * int(cnt) / cand, 1) if cand else None,
         })
+
+    # Tabela 1 (by-engine): roll-up po (naziv, faza) + ukupno. Apsolutne pobjede
+    # razlozene po fazi (Flavio D3). Nazivnik po fazi -> posten win-rate (ANALIZA.md).
+    from collections import defaultdict
+    eng_win  = defaultdict(lambda: defaultdict(int))   # naziv -> faza -> wins
+    eng_cand = defaultdict(lambda: defaultdict(int))   # naziv -> faza -> candidates
+    for model, temp, faza, cnt in win_rows:
+        eng_win[model][faza] += int(cnt)
+    for (model, temp, faza), cnt in cand_map.items():
+        eng_cand[model][faza] += cnt
+
+    winners_by_engine = []
+    for model in sorted(eng_win, key=lambda mm: -sum(eng_win[mm].values())):
+        phases = {}
+        for faza in sorted(set(eng_win[model]) | set(eng_cand[model])):
+            w = eng_win[model].get(faza, 0)
+            c = eng_cand[model].get(faza, 0)
+            phases[str(faza)] = {
+                "count": w,
+                "candidates": c,
+                "win_rate": round(100.0 * w / c, 1) if c else None,
+            }
+        tot_w = sum(eng_win[model].values())
+        tot_c = sum(eng_cand[model].values())
+        winners_by_engine.append({
+            "engine": model,
+            "phases": phases,
+            "total_count": tot_w,
+            "total_candidates": tot_c,
+            "total_win_rate": round(100.0 * tot_w / tot_c, 1) if tot_c else None,
+        })
+
 
     cur.execute("""
         SELECT kn.naziv, j.kod, COUNT(*) AS cnt
@@ -248,9 +357,13 @@ def get_stats(cur):
                "avg_judge": float(avg_j) if avg_j is not None else None}
               for lang, n, avg_ts, avg_j in cur.fetchall()]
 
+    models = get_model_registry(cur)
+
     return {
         "summary":  summary,
-        "winners":  winners,
+        "models":   models,
+        "winners_by_config": winners_by_config,
+        "winners_by_engine": winners_by_engine,
         "coverage": coverage,
         "scores":   scores,
     }
@@ -321,7 +434,7 @@ def main():
 
             # index prevedenih rečenica
             translated = {}
-            for pozicija, original, translation, model, temperatura, back_score, ts, judge_avg, back_translation, naturalness_score, sudija_grammar, sudija_naturalness, sudija_fidelity in rows:
+            for pozicija, original, translation, model, temperatura, back_score, ts, judge_avg, back_translation, naturalness_score, sudija_grammar, sudija_naturalness, sudija_fidelity, faza in rows:
                 translated[pozicija] = {
                     "pos":         pozicija,
                     "original":    original,
@@ -337,6 +450,7 @@ def main():
                     "sudija_grammar":   float(sudija_grammar)                  if sudija_grammar      is not None else None,
                     "sudija_natural":   float(sudija_naturalness)              if sudija_naturalness  is not None else None,
                     "sudija_fidelity":  float(sudija_fidelity)                 if sudija_fidelity     is not None else None,
+                    "faza":             faza,
                 }
 
             # sve rečenice knjige — prevedene + neprevedene
@@ -366,6 +480,22 @@ def main():
                 json.dump(out, f, ensure_ascii=False, indent=2)
             print(f"  {fname} — {len(rows)} prevedenih / {len(sentences)} ukupno ({lang_naziv})")
 
+            # phases_<id>_<lang>.json — Nivo B (before/after), rijedak: samo rečenice
+            # s fazom 2. Ne piše prazan fajl (94% korpusa nema fazu 2).
+            phases = get_phase_winners(cur, book_id, lang_kod)
+            if phases:
+                pout = {
+                    "book_id":   book_id,
+                    "title":     naziv,
+                    "language":  lang_kod,
+                    "lang_name": lang_naziv,
+                    "sentences": phases,
+                }
+                pfname = f"phases_{book_id}_{lang_kod}.json"
+                with open(os.path.join(args.output, pfname), "w", encoding="utf-8") as pf:
+                    json.dump(pout, pf, ensure_ascii=False, indent=2)
+                print(f"  {pfname} — {len(phases)} rečenica s fazom 2")
+
     # NER export
     for book in books_data:
         knjiga_id = book["id"]
@@ -384,7 +514,10 @@ def main():
     with open(stats_path, "w", encoding="utf-8") as f:
         json.dump(stats_data, f, ensure_ascii=False, indent=2)
     print(f"  stats.json — {stats_data['summary']['total_winners']} pobjednika agregirano "
-          f"({len(stats_data['winners'])} modela, {len(stats_data['coverage'])} knjiga×jezik, "
+          f"({len(stats_data['models'])} modela u registru, "
+          f"{len(stats_data['winners_by_engine'])} engine-a, "
+          f"{len(stats_data['winners_by_config'])} konfiguracija, "
+          f"{len(stats_data['coverage'])} knjiga×jezik, "
           f"{len(stats_data['scores'])} jezika)")
 
     cur.close()
