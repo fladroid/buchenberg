@@ -27,8 +27,9 @@ proceduru (dodao čitanje KONCEPT.md/ANALIZA.md/KAKO-*/STRANICE.md/WEB-FAZA*.md
 prije README-a). Prihvaćen kao pouzdan.
 
 ### 2. Analiza dnevnog runa (4 grupe, 8. jul ~07:42–19:47 UTC)
-24 log fajla: k23_dehritsr nastavak (1501–2000, core-4 de/hr/it/sr) + PRVI pravi
-bazni prevod (svih 5 modela, ne samo NLLB pre-fetch) za es/fr/pt/ro na k22/k23/k24.
+24 log fajla: k23_dehritsr nastavak (1501–2000, core-4 de/hr/it/sr) + prvi prevod
+(svih 5 modela — Copy knjige uvijek idu direktno kroz pun set) za es/fr/pt/ro na
+opsegu 1–500 na k22/k23/k24 (te rečenice ranije nisu imale nikakav prevod).
 Upisano u RUNOVI.md (110 novih linija, čisto dodavanje). Commit `e297d07`.
 
 Ključni nalazi: k24 (Frankenstein Copy) obrazac potvrđen treći put zaredom
@@ -68,6 +69,7 @@ za ovu sesiju — nije dio repoa.
    nezavisne provjere kroz git — potvrđuje da je server/repo izvor istine (ne
    memorija), pa čak i sesija bez punog konteksta može dati validan rezultat ako
    prati protokol (prikaži→OK→izvrši, bez destruktivnih akcija).
+4. **NLLB pre-fetch napomena (README, originalne knjige) pogrešno pripisana Copy knjigama** — Copy knjige (22/23/24) NIKAD nemaju NLLB-only fazu, uvijek idu direktno kroz svih 5 modela od prve rečenice. Pogrešna formulacija u RUNOVI.md i ovom dokumentu (implicirala da su es/fr/pt/ro na k22/k23/k24 "nadograđeni" sa NLLB-only na puni set) uočena i ispravljena post-sesije (Flaviova provjera). NLLB-only taktika postoji isključivo na originalnim knjigama (id 1/5/8/12/17-21), nikad na Copy (id 22/23/24).
 
 ## Otvoreno / sljedeći koraci
 1. WEB-FAZA3.md — i dalje čeka Flaviovu odluku (Nivo A/B), nedirano ova sesija.

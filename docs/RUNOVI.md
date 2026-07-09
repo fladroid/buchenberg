@@ -187,7 +187,7 @@ Ovaj dokument raste — svaki novi run (pipeline ili refine) dodaje novu sekciju
 
 ## Run: 8. jul 2026 — Eksperiment: 4 paralelne grupe (nastavak k23 core-4 + prvi bazni prevod es/fr/pt/ro na k22/k23/k24)
 
-*Sve četiri grupe pokrenute skoro istovremeno (~07:42–07:43 UTC / ~09:42–09:43 CEST, Vienna ljetno vrijeme) 8. jula, izvršavale su se konkurentno na Ollama Cloud (Pro tier). Grupa 1 je direktan nastavak s119 Grupe 1 (k23 dehritsr, tada 1001–1500, sada 1501–2000). Grupe 2–4 su PRVI PUT pravi bazni prevod (svih 5 modela, ne samo NLLB pre-fetch) za jezike es/fr/pt/ro na sve tri Copy knjige — do sada su ovi jezici u README tabeli imali samo NLLB pre-fetch bez pravih pobjednika. Sva vremena u tabelama ispod su UTC; CEST (Vienna, jul) = UTC+2. Za razliku od prethodnog 4-grupnog eksperimenta (s119), ovaj run je završen u cjelosti unutar istog dana — nema prelaska preko ponoći.*
+*Sve četiri grupe pokrenute skoro istovremeno (~07:42–07:43 UTC / ~09:42–09:43 CEST, Vienna ljetno vrijeme) 8. jula, izvršavale su se konkurentno na Ollama Cloud (Pro tier). Grupa 1 je direktan nastavak s119 Grupe 1 (k23 dehritsr, tada 1001–1500, sada 1501–2000). Grupe 2–4 su prvi prevod (svih 5 modela — Copy knjige uvijek idu direktno kroz pun set, nema NLLB-only međukorak kao kod originalnih knjiga) za opseg 1–500 na jezicima es/fr/pt/ro na sve tri Copy knjige — te rečenice ranije nisu imale nikakav prevod. Sva vremena u tabelama ispod su UTC; CEST (Vienna, jul) = UTC+2. Za razliku od prethodnog 4-grupnog eksperimenta (s119), ovaj run je završen u cjelosti unutar istog dana — nema prelaska preko ponoći.*
 
 ### Grupa 1 — k23 (Big Four Copy), de/hr/it/sr, opseg 1501–2000 (nastavak s119 Grupe 1)
 
@@ -292,7 +292,7 @@ Ovaj dokument raste — svaki novi run (pipeline ili refine) dodaje novu sekciju
 ### Zapažanja (cross-grupa)
 - **k24 (Frankenstein Copy) obrazac potvrđen treći put zaredom:** glm-5.2/mistral-large-3 skoro izjednačeni (48.5% vs 47.8%), naspram dosljednog ~2:1 odnosa u preostale tri grupe (58–63% vs 30–35%). Odnos je ovdje IZRAŽENIJI nego u s119 istoj knjizi (tada 55.5% vs 42.45%). k24 je i ovog puta najsporija grupa (aproks. 0.69 rec/min naspram 0.79–0.94 kod ostalih, računato kao 500/ukupno_elapsed_min po grupi). Dosljedno potkrepljuje hipotezu iz s119 da je uzrok sadržaj knjige (Šelijeva gotska proza, 1818), ne artefakt paralelizma ili slučajnost.
 - **Agregatna brzina ≈ 3.27 rec/min** (zbir aproksimativnih prosjeka: k22 0.79 + k23-dehritsr 0.84 + k23-esfrptro 0.94 + k24 0.69), u istom rasponu kao s119 eksperiment (~3.47) — potvrđuje da Ollama Cloud Pro tier i dalje nema primjetno usko grlo pri 4 konkurentna toka.
-- **Prvi pravi bazni prevod za es/fr/pt/ro** (van NLLB pre-fetch) na k22/k23/k24 — kvalitet (avg final 0.9658–0.9669) u istom rasponu kao core-4 nastavak (0.9652), bez pada kvaliteta na novoaktiviranim jezicima.
+- **Prvi prevod za es/fr/pt/ro na opsegu 1–500** na k22/k23/k24 (standardni Copy-knjiga pristup, direktno kroz svih 5 modela) — kvalitet (avg final 0.9658–0.9669) u istom rasponu kao core-4 nastavak (0.9652).
 - **Bez prelaska preko ponoći** — sve četiri grupe završile unutar istog dana (8. jul), za razliku od s119 eksperimenta gdje su tri od četiri grupe prešle u sljedeći dan.
 
 ## Run: 8–9. jul 2026 — Eksperiment: 4 paralelne grupe (noćni run; nastavak k23 core-4 2001–2500 + prvi bazni prevod af/nl na k22/k23/k24)
