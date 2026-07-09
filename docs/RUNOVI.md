@@ -184,3 +184,113 @@ Ovaj dokument raste — svaki novi run (pipeline ili refine) dodaje novu sekciju
 - **k24 (Frankenstein Copy) izdvaja se kvalitetom pobjeda:** mistral-large-3 pobjeđuje skoro podjednako koliko glm-5.2 (42.45% vs 55.5%), dok je u preostale tri grupe odnos dosljedno ~2:1 u korist glm-5.2. Avg_final za k24 je i najniži od četiri (0.9599). Vjerovatno sadržaj (Šelijeva gotska proza iz 1818) a ne efekat paralelizma — per-model brzine su normalne.
 - **Sve četiri grupe imaju avg_final u uskom rasponu 0.960–0.969** — stabilan kvalitet novog para (mistral-large-3 + glm-5.2) bez obzira na broj istovremenih tokova.
 - **Radni ritam i backup prozori (Flaviovo zapažanje; CEST=UTC+2 u julu):** Flavio subjektivno primjećuje degradaciju performansi prema Ollama Cloud otprilike 16–18h CEST — vjerovatno regionalno opterećenje (Ollama ima servere u US i EU, Flaviova infrastruktura i radni ritam su evropski, pa se poklapa s regionalnim peak periodom). Backup raspored: foxuno 01:00–03:00 CEST (=23:00–01:00 UTC), balsam 03:00–08:00 CEST (=01:00–06:00 UTC). Ova konkretna sesija (start ~19:20 CEST) ne pokriva 16–18h CEST prozor direktno — počela je poslije njega, pa se hipoteza ne može ni potvrditi ni opovrgnuti iz ovih brojeva. Djelimično preklapanje s backup prozorom postoji: posljednji batch k24 (301–500) leži u cjelosti unutar balsam backup prozora (01:10–05:47 UTC), ali k24 je bio dosljedno najsporiji od sve četiri grupe već u ranijim batch-evima prije backup prozora — pa backup nije glavni uzrok njegove sporosti, najviše dodatni faktor. Normalna varijabilnost dijeljenog cloud okruženja, ne greška u sistemu.
+
+## Run: 8. jul 2026 — Eksperiment: 4 paralelne grupe (nastavak k23 core-4 + prvi bazni prevod es/fr/pt/ro na k22/k23/k24)
+
+*Sve četiri grupe pokrenute skoro istovremeno (~07:42–07:43 UTC / ~09:42–09:43 CEST, Vienna ljetno vrijeme) 8. jula, izvršavale su se konkurentno na Ollama Cloud (Pro tier). Grupa 1 je direktan nastavak s119 Grupe 1 (k23 dehritsr, tada 1001–1500, sada 1501–2000). Grupe 2–4 su PRVI PUT pravi bazni prevod (svih 5 modela, ne samo NLLB pre-fetch) za jezike es/fr/pt/ro na sve tri Copy knjige — do sada su ovi jezici u README tabeli imali samo NLLB pre-fetch bez pravih pobjednika. Sva vremena u tabelama ispod su UTC; CEST (Vienna, jul) = UTC+2. Za razliku od prethodnog 4-grupnog eksperimenta (s119), ovaj run je završen u cjelosti unutar istog dana — nema prelaska preko ponoći.*
+
+### Grupa 1 — k23 (Big Four Copy), de/hr/it/sr, opseg 1501–2000 (nastavak s119 Grupe 1)
+
+**Tabela 1 — Identifikacija & vrijeme**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 1501–1520 | 07:43 | 08:02 | 0:19:15 | 1.04 |
+| 1521–1560 | 08:02 | 08:53 | 0:50:29 | 0.79 |
+| 1561–1620 | 08:53 | 09:54 | 1:01:17 | 0.98 |
+| 1621–1700 | 09:54 | 11:27 | 1:33:00 | 0.86 |
+| 1701–1800 | 11:27 | 13:27 | 1:59:36 | 0.84 |
+| 1801–2000 | 13:27 | 17:37 | 4:10:11 | 0.80 |
+
+**Tabela 2 — Kvalitet & pobjede**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 1501–1520 | 0.9647 | 0.9437 | 0.9788 | 46 (57.5%) | 25 (31.2%) | 9 (11.2%) |
+| 1521–1560 | 0.9686 | 0.9501 | 0.9873 | 107 (66.9%) | 40 (25.0%) | 13 (8.1%) |
+| 1561–1620 | 0.9716 | 0.9572 | 0.9854 | 162 (67.5%) | 56 (23.3%) | 22 (9.2%) |
+| 1621–1700 | 0.9684 | 0.9483 | 0.9849 | 190 (59.4%) | 106 (33.1%) | 24 (7.5%) |
+| 1701–1800 | 0.9630 | 0.9502 | 0.9765 | 261 (65.2%) | 114 (28.5%) | 25 (6.2%) |
+| 1801–2000 | 0.9624 | 0.9465 | 0.9731 | 491 (61.4%) | 263 (32.9%) | 46 (5.8%) |
+| **UKUPNO** | **0.9652** | **0.9490** | **0.9785** | **1257 (62.9%)** | **604 (30.2%)** | **139 (7.0%)** |
+
+### Grupa 2 — k22 (Hound Copy), es/fr/pt/ro, opseg 1–500
+
+**Tabela 1**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 1–20 | 07:42 | 08:08 | 0:26:10 | 0.76 |
+| 21–60 | 08:08 | 09:04 | 0:55:14 | 0.72 |
+| 61–120 | 09:04 | 10:23 | 1:19:21 | 0.76 |
+| 121–200 | 10:23 | 11:53 | 1:30:30 | 0.88 |
+| 201–300 | 11:53 | 14:41 | 2:47:50 | 0.60 |
+| 301–500 | 14:41 | 18:13 | 3:31:28 | 0.95 |
+
+**Tabela 2**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 1–20 | 0.9623 | 0.9551 | 0.9791 | 51 (63.8%) | 27 (33.8%) | 2 (2.5%) |
+| 21–60 | 0.9650 | 0.9444 | 0.9788 | 91 (56.9%) | 61 (38.1%) | 8 (5.0%) |
+| 61–120 | 0.9659 | 0.9497 | 0.9767 | 144 (60.0%) | 70 (29.2%) | 26 (10.8%) |
+| 121–200 | 0.9677 | 0.9476 | 0.9812 | 184 (57.5%) | 116 (36.2%) | 20 (6.2%) |
+| 201–300 | 0.9637 | 0.9445 | 0.9766 | 218 (54.5%) | 173 (43.2%) | 9 (2.2%) |
+| 301–500 | 0.9665 | 0.9489 | 0.9807 | 474 (59.2%) | 247 (30.9%) | 79 (9.9%) |
+| **UKUPNO** | **0.9658** | **0.9478** | **0.9793** | **1162 (58.1%)** | **694 (34.7%)** | **144 (7.2%)** |
+
+### Grupa 3 — k23 (Big Four Copy), es/fr/pt/ro, opseg 1–500
+
+**Tabela 1**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 1–20 | 07:42 | 08:12 | 0:29:16 | 0.68 |
+| 21–60 | 08:12 | 09:03 | 0:51:38 | 0.77 |
+| 61–120 | 09:03 | 10:06 | 1:03:06 | 0.95 |
+| 121–200 | 10:06 | 11:28 | 1:21:55 | 0.98 |
+| 201–300 | 11:28 | 13:06 | 1:37:32 | 1.03 |
+| 301–500 | 13:06 | 16:34 | 3:28:27 | 0.96 |
+
+**Tabela 2**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 1–20 | 0.9557 | 0.9579 | 0.9787 | 50 (62.5%) | 27 (33.8%) | 3 (3.8%) |
+| 21–60 | 0.9667 | 0.9437 | 0.9821 | 75 (46.9%) | 74 (46.2%) | 11 (6.9%) |
+| 61–120 | 0.9696 | 0.9514 | 0.9858 | 151 (62.9%) | 73 (30.4%) | 16 (6.7%) |
+| 121–200 | 0.9698 | 0.9470 | 0.9881 | 187 (58.4%) | 91 (28.4%) | 42 (13.1%) |
+| 201–300 | 0.9689 | 0.9475 | 0.9857 | 238 (59.5%) | 120 (30.0%) | 42 (10.5%) |
+| 301–500 | 0.9652 | 0.9458 | 0.9818 | 476 (59.5%) | 260 (32.5%) | 64 (8.0%) |
+| **UKUPNO** | **0.9669** | **0.9473** | **0.9840** | **1177 (58.9%)** | **645 (32.2%)** | **178 (8.9%)** |
+
+### Grupa 4 — k24 (Frankenstein Copy), es/fr/pt/ro, opseg 1–500
+
+**Tabela 1**
+
+| Opseg | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| 1–20 | 07:43 | 08:15 | 0:32:27 | 0.62 |
+| 21–60 | 08:15 | 09:23 | 1:07:47 | 0.59 |
+| 61–120 | 09:23 | 11:10 | 1:46:44 | 0.56 |
+| 121–200 | 11:10 | 13:05 | 1:55:19 | 0.69 |
+| 201–300 | 13:05 | 15:55 | 2:50:38 | 0.59 |
+| 301–500 | 15:55 | 19:47 | 3:51:40 | 0.86 |
+
+**Tabela 2**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 1–20 | 0.9647 | 0.9628 | 0.9780 | 44 (55.0%) | 34 (42.5%) | 2 (2.5%) |
+| 21–60 | 0.9709 | 0.9556 | 0.9811 | 82 (51.2%) | 70 (43.8%) | 8 (5.0%) |
+| 61–120 | 0.9645 | 0.9495 | 0.9747 | 110 (45.8%) | 122 (50.8%) | 8 (3.3%) |
+| 121–200 | 0.9677 | 0.9491 | 0.9802 | 150 (46.9%) | 161 (50.3%) | 9 (2.8%) |
+| 201–300 | 0.9662 | 0.9486 | 0.9781 | 174 (43.5%) | 210 (52.5%) | 16 (4.0%) |
+| 301–500 | 0.9669 | 0.9503 | 0.9781 | 410 (51.2%) | 358 (44.8%) | 32 (4.0%) |
+| **UKUPNO** | **0.9668** | **0.9506** | **0.9783** | **970 (48.5%)** | **955 (47.8%)** | **75 (3.8%)** |
+
+### Zapažanja (cross-grupa)
+- **k24 (Frankenstein Copy) obrazac potvrđen treći put zaredom:** glm-5.2/mistral-large-3 skoro izjednačeni (48.5% vs 47.8%), naspram dosljednog ~2:1 odnosa u preostale tri grupe (58–63% vs 30–35%). Odnos je ovdje IZRAŽENIJI nego u s119 istoj knjizi (tada 55.5% vs 42.45%). k24 je i ovog puta najsporija grupa (aproks. 0.69 rec/min naspram 0.79–0.94 kod ostalih, računato kao 500/ukupno_elapsed_min po grupi). Dosljedno potkrepljuje hipotezu iz s119 da je uzrok sadržaj knjige (Šelijeva gotska proza, 1818), ne artefakt paralelizma ili slučajnost.
+- **Agregatna brzina ≈ 3.27 rec/min** (zbir aproksimativnih prosjeka: k22 0.79 + k23-dehritsr 0.84 + k23-esfrptro 0.94 + k24 0.69), u istom rasponu kao s119 eksperiment (~3.47) — potvrđuje da Ollama Cloud Pro tier i dalje nema primjetno usko grlo pri 4 konkurentna toka.
+- **Prvi pravi bazni prevod za es/fr/pt/ro** (van NLLB pre-fetch) na k22/k23/k24 — kvalitet (avg final 0.9658–0.9669) u istom rasponu kao core-4 nastavak (0.9652), bez pada kvaliteta na novoaktiviranim jezicima.
+- **Bez prelaska preko ponoći** — sve četiri grupe završile unutar istog dana (8. jul), za razliku od s119 eksperimenta gdje su tri od četiri grupe prešle u sljedeći dan.
