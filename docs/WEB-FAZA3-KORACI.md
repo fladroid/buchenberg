@@ -106,6 +106,56 @@ FROM bb_modeli ORDER BY aktivan DESC, naziv, faza_id, temperatura;
 
 ---
 
+## KORAK 0.5 — `bb_model_registar` (atributi vrsta + uloge)
+
+*Prva izmjena šeme baze u Fazi 3. Uzak registar (Flaviova odluka) — `bb_modeli` se NE
+dira; temperatura/faza/aktivan ostaju gdje jesu (vezani za red/trojku), vrsta/uloga idu
+u registar (vezani za ime modela).*
+
+**Zašto zasebna tabela, ključ = ime:** vrsta i uloga pripadaju IDENTITETU modela
+(`glm-5.2` je "prevodilac"/"opšti LLM" bez obzira na temp i fazu), a `bb_modeli` red je
+trojka (model+temp+faza) — isto ime u više redova. Uz to, uloga je 1:N (jedan model
+može imati više uloga — tvoj ekstremni slučaj: jedan model u svim ulogama =
+`{prevodilac,sudija,vektorizacija}`), pa obična kolona ne bi radila → `uloge TEXT[]`.
+I embedder/sudija prirodno ulaze iako e5-large NIJE red u `bb_modeli` (nije takmičar).
+
+Redoslijed (svaka komanda prikazana, čeka OK):
+1. **Backup baze** (prije DDL-a, bez izuzetka).
+2. `CREATE TABLE bb_model_registar (naziv TEXT PRIMARY KEY, vrsta TEXT, uloge TEXT[]);`
+   — bez DEFAULT (novi model mora svjesno dobiti ulogu; tiho `{prevodilac}` bi sakrilo
+   sudiju/embeder).
+3. **Provjera prije INSERT-a:** broj prevoda po modelu — potvrđuje gemma4:31b ulogu
+   (ako ima prevode → `{prevodilac,sudija}`, ne samo `{sudija}`); usput podatak za Tabelu 0.
+4. `INSERT` (10 redova, vrijednosti dole).
+5. `SELECT *` verifikacija.
+
+| naziv | vrsta | uloge |
+|---|---|---|
+| glm-5.2, mistral-large-3:675b, gemma3:12b, gemma3:27b, ministral-3:14b, ministral-3:8b, claude-sonnet-4-6 | opšti LLM | {prevodilac} |
+| gemma4:31b | opšti LLM | {sudija} |
+| nllb-600M | namenski MT model | {prevodilac} |
+| multilingual-e5-large | embeder | {vektorizacija} |
+
+**Trajno pravilo:** novi model = svjestan unos u registar (nema tihog DEFAULT-a).
+
+### Nova Tabela 0 na `stats.html` (podzadatak Koraka 4)
+"Model / vrsta / uloga / broj prevoda" = `bb_model_registar` LEFT JOIN broj prevoda po
+imenu. Sudija i totalno neuspešni prevodioci pokazuju **0** — X-Ray potpunost (svi
+modeli vidljivi, nula je informacija, ne rupa). Tabele 1 (by-engine) i 2 (by-config)
+onda mogu ostati čiste (samo oni s pobjedama), jer je potpunost pokrivena Tabelom 0.
+
+### Novi izlaz za stats
+`get_stats()` dobija i agregat registra (registar LEFT JOIN broj prevoda) → novi ključ
+`"models"` u `stats.json`. Detalji u Koraku 2.
+
+### Budući korak (van Faze 3), zabilježen da se ne izgubi
+Normalizacija KONFIGURACIJE (temperatura) na isti način — svjesno odgođeno. Temperatura
+je 1:1 s redom (vezana za instancu/trojku, ne za ime), pa je denormalizacija u `bb_modeli`
+legitiman trade-off čitljivosti (KONCEPT §3), ne isti 1:N problem kao uloga. Ako se ikad
+normalizuje, to je zaseban zahvat s vlastitim backupom — ne miješati u Fazu 3.
+
+---
+
 ## KORAK 1 — `bb_web_export.py :: get_translations()` — dodati fazu (Nivo A)
 
 Faza je već dostupna kroz postojeći `JOIN bb_modeli m`, samo nije u SELECT-u.
