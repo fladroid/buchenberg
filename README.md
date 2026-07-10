@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 10. jul 2026. (sesija 125)  
+**Poslednje ažuriranje:** 10. jul 2026. (sesija 126)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -297,6 +297,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version) |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
+| `bb_10_ner_llm.py` | LLM NER (glm-5.2): type reconciliation konfliktnih entiteta s groundingom dokaznim rečenicama; upis method='llm' paralelno uz classic (s126, Dio 1). Relacije van rečenice = Dio 2. |
 | `bb_xray_export.py` | Generira X-Ray JSON fajlove (`data/xray_<id>_<lang>.json`) — svih 5 kandidata po rečenici s kompletnim scoreovima; pokrenuti nakon `bb_web_export.py` |
 | `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
 | `sandbox_model_probe.py` | READ-ONLY sonda ponašanja Ollama modela (s109). Prima `--models` listu, `--jezik`, `--no-think`. Mjeri: čistoća izlaza, thinking+eval_count+sec (trošak), temp reakcija, batch N/N, round-trip. Baseline (gemma3/ministral)=etalon. Ne dira bazu/pipeline. Vidi §15. |
@@ -365,6 +366,8 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+> **s126 snapshot (10. jul 2026):** Početak LLM-potpomognute NER analize (Dio 1: type reconciliation). Nova **`method` kolona** na `bb_ner_entiteti` + `bb_ner_recenica` (TEXT NOT NULL DEFAULT 'classic'; UNIQUE bb_ner_entiteti → +method) — classic i llm NER koegzistiraju paralelno, "prije/poslije" prikaz. Backup prije DDL (1.5G, `/tmp/bb_backup_pre_method_20260710_145601.dump`). Nova skripta **`bb_10_ner_llm.py`** (glm-5.2, NE sudija — s124 princip): čita konfliktna imena (isto ime, >1 tip = spaCy nekonzistentnost) + do 4 dokazne rečenice po tipu, LLM presuđuje IZ TEKSTA (grounding, s90), tri ishoda — `greska` (spoji u primarni), `dvojnost` (2 legitimna smisla, npr. Baskerville osoba+imanje), `ne_entitet` (odbaci, npr. "I."=zamjenica). LLM smije predložiti tip van postojećih labela (Coombe Tracey classic PERSON/ORG→llm GPE). Baseline (Hound, prije gradnje): 18 type conflicta + relacije samo 28 na pragu ≥2 od 194 ukupno (mreža gotovo prazna — co-occurrence samo iste-rečenice). Test Hound: 18 konflikata, 0 JSON grešaka, 17/18 očigledno tačne → upis 18 llm entiteta / 365 veza. Web NETAKNUT → BB_VERSION s125.5. bb_web_export.py NIJE još diran. SLJEDEĆE (Dio 2): kompletiranje llm sloja (sad samo 18 konfliktnih imena), relacije van rečenice (DocRE/koreferencija, prozor N rečenica + grounding), web toggle classic/with-llm na nlp.html, prompt prikazan na stranici. Detalji: `docs/sessions/session_126.md`.
 >
 > **s125 snapshot (10. jul 2026):** Korpus nepromijenjen (1.518.170 prevoda / 296.578 pobjednika — Flavio prekinuo runove za vrijeme sesije). Word cloud univerzalno pismo (`\p{L}` regex, books.html+nlp.html — ćirilica sr/bg/mk sad radi). **learn.html i18n potpuno zatvoren** (otvoren od s120) — runtime JS (40 zamjena, 29 novih ključeva) + statični HTML (18 zamjena, 5 novih ključeva), oba dijela u jednoj sesiji, sve 4 igre verifikovane u browseru. Sentence Match estetika (CSS grid, redovi poravnati po visini). Privremeni prikazni prevod DB registra (Type/Role) na stats.html — baza netaknuta, jasno označeno kao izuzetak dok se ne uradi trajni fix. BB_VERSION s123.2→s125.5. Commits: buchenberg 39f43cc, buchenweb 7171738/345e759/d331f87/7cc43ca/015efc5. Detalji: `docs/sessions/session_125.md`.
 >
@@ -708,4 +711,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 10. jul 2026. (sesija 125)*
+*Flavio & Claude · Buchenberg · V3 · 10. jul 2026. (sesija 126)*
