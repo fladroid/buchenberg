@@ -366,6 +366,8 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+> **s125 snapshot (10. jul 2026):** Korpus nepromijenjen (1.518.170 prevoda / 296.578 pobjednika — Flavio prekinuo runove za vrijeme sesije). Word cloud univerzalno pismo (`\p{L}` regex, books.html+nlp.html — ćirilica sr/bg/mk sad radi). **learn.html i18n potpuno zatvoren** (otvoren od s120) — runtime JS (40 zamjena, 29 novih ključeva) + statični HTML (18 zamjena, 5 novih ključeva), oba dijela u jednoj sesiji, sve 4 igre verifikovane u browseru. Sentence Match estetika (CSS grid, redovi poravnati po visini). Privremeni prikazni prevod DB registra (Type/Role) na stats.html — baza netaknuta, jasno označeno kao izuzetak dok se ne uradi trajni fix. BB_VERSION s123.2→s125.5. Commits: buchenberg 39f43cc, buchenweb 7171738/345e759/d331f87/7cc43ca/015efc5. Detalji: `docs/sessions/session_125.md`.
+>
 > **s123 snapshot (9. jul 2026):** **WEB FAZA 3 KOMPLETNA** — fazni prikaz kroz cijeli lanac. Detaljan plan `docs/WEB-FAZA3-KORACI.md` (Claude iz konceptualnih docs → izvršni koraci). **Nova tabela `bb_model_registar`** (naziv PK, vrsta, uloge TEXT[]; backup 1.5G prije DDL; 10 redova: opšti LLM/namenski MT model/embeder × prevodilac/sudija/vektorizacija; uzak registar, bb_modeli nedirnut, bez DEFAULT). `bb_web_export.py`: faza u `get_translations` (tr_ nosi faza po rečenici) + `get_stats` (winners_by_config Tabela 2, winners_by_engine Tabela 1 s faza1/faza2/ukupno, models Tabela 0 iz registra; stari `winners` uklonjen) + novi `get_phase_winners` → `phases_<id>_<lang>.json` (127 fajlova, Nivo B before/after, sparse). stats.html: tri tabele (0 modeli+uloge / 1 by-engine+faza / 2 by-config); reader.html: "refined" badge (faza 2 apsolutni pobjednik) + klik→before/after panel s "winner" oznakom. nav.js: 20 novih ključeva × 5 jezika. Nalaz: faza-2 win-rate svuda niži od faza-1 (ANALIZA pejsmejker, brojkom). Odluke zabilježene: DB vrijednosti→engleski (budući izuzetak kao Key Concepts); uloga-po-instanci (ekstremni slučaj) budući redizajn; ministral Markdown `**` artefakt ostaje (server=istina). BB_VERSION s120→s123.2. Commits: buchenberg b014ed5, buchenweb 26e34c3. Detalji: `docs/sessions/session_123.md`.
 
 > **s122 snapshot (9. jul 2026):** Analiza 48 log fajlova (dva Flaviova paralelna runa, 4+4 grupe) preko `parse_run_logs.py` → dva nova unosa u `docs/RUNOVI.md`. Dnevni run (8. jul): k23 core-4 nastavak (1501-2000) + prvi bazni prevod es/fr/pt/ro na k22/k23/k24 — k24 (Frankenstein Copy) obrazac treći put potvrđen (glm/mistral 48.5/47.8%). Noćni run (8-9. jul, preko ponoći): k23 core-4 nastavak (2001-2500) + prvi bazni prevod af/nl na k22/k23/k24 — k24 obrazac četvrti put, PRVI PUT mistral ispred glm (48.1% vs 47.9%). Metodološka lekcija: pozicijska "rečenica/min" nije uporediva preko grupa s različitim brojem jezika — throughput mjeriti kao prevoda/min. Takođe: provjerena i prihvaćena s121 (Windows Cowork app sesija bez pristupa memoriji, verifikovana kroz git hronologiju kao legitimna). Baza/web nedirnuti (Flaviovi pozadinski runovi rastu nezavisno). Detalji: `docs/sessions/session_122.md`.
@@ -645,7 +647,7 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 3. ✅ **Home hero ikona** (s96) — heksagon `favicon.svg` (64×64) lijevo od loga; `.bb-hero-logo` flex-centriran.
 4. ✅ **X-Ray Key Concepts kartice** (s96, dodano) → **OBRISANE s120** (Flaviova odluka): 🩻 X-ray style art + 🎸 Rock Art and the X-Ray Style uklonjene sa index/about/stats (`data/concepts.json`). "Key Concepts" naslov se i dalje ne prevodi.
 5. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
-6. **Stats dvije tabele + fazni pobjednik** — nacrt spreman u `docs/WEB-FAZA3.md` (Nivo A/B), čeka odluku. (s121)
+6. ✅ **Stats dvije tabele + fazni pobjednik** — KOMPLETNO (s123, vidi §9 s123 snapshot)
 3. **Cache-Control za JS/CSS**
 
 ### Odloženo / u razmatranju
@@ -655,7 +657,7 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 - ✅ **Key Concepts proširenje** — svih 9 stranica (index, about, geometry, art, nlp, stats, learn, reader, books); books → Wikipedia link po knjizi; `concepts.json` sad pod gitom (izuzet iz `.gitignore`)
 - ✅ **SR ekavica fix** — sve stranice (reader nema SR teksta)
 - ✅ **X-Ray JSON export** — `bb_xray_export.py` pokrenut za sve knjige × jezike (126 JSON fajlova)
-- ✅ **learn.html i18n** (s85)
+- ✅ **learn.html i18n — statični UI** (s85); **runtime JS + preostali statični labeli** (s125, propust otvoren s120, sad potpuno zatvoren)
 
 ---
 
