@@ -1,6 +1,6 @@
 # WEB-FAZA3-KORACI — Detaljan plan implementacije
 
-**Status:** NACRT ZA PREGLED — nijedna komanda nije izvršena, ništa nije na serveru.
+**Status:** IZVRŠENO (sesija 123, 9. jul 2026.) — svih 8 koraka sprovedeno i zatvoreno, vidi `session_123.md`. Dokument ostaje kao izvršni plan/referenca.
 Pandan `WEB-FAZA1.md` (koji je pripremio Fazu 2), ali za DB-upit / export / reader sloj.
 Kad Flavio odobri (uz eventualne izmjene), ovaj fajl se upisuje kao
 `docs/WEB-FAZA3-KORACI.md` na server.
@@ -361,4 +361,4 @@ izuzetak, KAKO-JeziciUI §2) — before/after NIJE dio legende, pa se prevodi no
 
 ---
 
-*Nacrt za Flaviovu reviziju — 9. jul 2026. Nijedna komanda nije izvršena na server/bazu.*
+*Nacrt pisan 9. jul 2026. — IZVRŠENO isti dan u sesiji 123, vidi `session_123.md`.*

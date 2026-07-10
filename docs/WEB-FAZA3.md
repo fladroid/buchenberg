@@ -1,6 +1,6 @@
 # Web Faza 3 — Fazni pobjednik i dublji stats sloj
 
-**Status:** NACRT — pripremni dokument, nema izvršenih izmjena. Analogan `WEB-FAZA1.md`
+**Status:** IZVRŠENO (sesija 123, 9. jul 2026.) — svih 8 koraka sprovedeno, vidi `session_123.md`. Ovaj dokument ostaje kao konceptualni nacrt/odluke (Nivo A/B). Analogan `WEB-FAZA1.md`
 (koji je pripremio Fazu 2), ali za DB-upit / export sloj umjesto teksta/i18n.
 
 **Razlika od Faze 1/2:** Faza 1/2 = tekst i i18n na postojećim podacima. Faza 3 = novi
@@ -145,4 +145,4 @@ zavisi od ovih podataka.
 
 ---
 
-*Nacrt za Flaviovu reviziju — 8. jul 2026. Nema izvršenih komandi na server/bazu.*
+*Nacrt pisan 8. jul 2026. — IZVRŠENO u sesiji 123 (9. jul 2026.), vidi `session_123.md`.*
