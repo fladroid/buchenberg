@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 11. jul 2026. (sesija 127)  
+**Poslednje ažuriranje:** 11. jul 2026. (sesija 128)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -368,6 +368,30 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
 >
+> **s128 snapshot (11. jul 2026):** DIZAJNERSKA sesija — otvoren Dio 2 #1 (DocRE,
+> relacije van rečenice). Baza/web NETAKNUTI → BB_VERSION ostaje s127. Ključne odluke:
+> **(1) Proizvodnja vs izvoz — čvrsta granica:** proizvodni sloj (bb_09/bb_10/DocRE)
+> zove LLM/spaCy i UPISUJE; izvozni (bb_web_export) samo ČITA/agregira, READ-ONLY.
+> LLM u web-exportu = anti-pattern. **(2) Skladište relacija — DVIJE tabele** (Flaviov
+> kriterij: isti atribut/različita semantika → dvije tabele; co-occ `tezina`=broj
+> rečenica simetrično vs DocRE smjer nosi značenje): `bb_ner_veze` (co-occurrence,
+> simetrična, `entitet1<2`, tezina) + `bb_ner_relacije` (DocRE, USMJERENA izvor→cilj,
+> tip_veze/opis/dokaz/dokaz_pozicije). `method` implicitan preko entitet_id (web-export
+> JOIN+filter). **(3) Materijalizovati** i co-occurrence (get_ner_veze self-join →
+> čitanje). **(4) DocRE strategija PAR-VOĐENA** (Flaviov preokret): kreni od entiteta+
+> tačnih pozicija (bb_ner_recenica), nađi parove s ≥prag bliskih susreta, LLM daje
+> jednu USMJERENU vezu po paru. **(5) Rječnik grupa (~10 tip_veze) = dvoprolaz**
+> (slobodni opis→embedding e5-large→najbliža fiksna grupa, s90 princip); kristalisati
+> IZ podataka. **Proba** (`bb_10b_docre_probe.py`, NIJE commitovan, nula upisa): 15
+> najjačih parova Hounda, glm-5.2 → 14 relacija, smjer+tip+dokaz visok kvalitet
+> (Charles→[uncle of/left estate to]→Henry; Holmes↔Watson mutual; Holmes→[investigating
+> death of]→Charles). Sirovina za ~8–9 grupa dobijena. Mjerena geografija entiteta
+> (Holmes 189 pojava raspon 3–3688; bliski parovi rangirani). Zatvaranje samostalno
+> (Flavio odsutan, jednokratni izuzetak). SLJEDEĆE: kristalisati grupe → kreirati
+> tabele (backup!) → proba u produkciju (bb_10 faza/ner_ porodica, --knjiga all) →
+> materijalizovati co-occ → web (usmjeren graf, boja po tip_veze, klik→opis+dokaz).
+> Detalji: `docs/sessions/session_128.md`.
+>
 > **s127 snapshot (11. jul 2026):** LLM NER Dio 2 (planirani redoslijed 1→3). **(1) Kompletiran llm sloj** — `bb_10_ner_llm.py` sad kopira i nekonfliktne classic entitete kao čiste llm redove (unutar `upisi_llm`). Hound llm sloj: 181 entitet (163 nekonfliktna + 18 razriješenih) / 1219 veza; classic netaknut (201/1236). Manje veza kod llm = čišća mreža (uklonjeni lažni entiteti + pogrešne type-veze). Commit buchenberg f4a725a. **(2) Web export** — `get_ner`/`get_ner_veze` +`method` param; `ner_<id>.json` nova struktura `{knjiga_id, classic:{...}, llm?:{...}}` (llm grana SAMO ako knjiga ima llm sloj). **(3) nlp.html preimenovan** u **"Named Entities & Relations"** (fajl ostaje nlp.html; meni "Entities", naslov+meni prevedeni ×5); **word cloud UKLONJEN** (redundantan s books.html, ne hrani NER — X-Ray: šum, ne signal); **classic/with-llm toggle** (grana-svjesno: `nerFull`/`nerData`=aktivna grana, ~15 postojećih referenci netaknuto; toggle skriven ako nema llm); **method intro + dinamični opis** (statični intro imenuje **spaCy** uokvireno kao about-modeli — "tool we chose, could be replaced"; dinamični red prati aktivni sloj; svi ×5 jez). Toggle labele "Classic"/"With LLM" = svjestan preostali EN i18n izuzetak. BB_VERSION s125.5→s127. Commits: buchenberg f4a725a, buchenweb (ovaj commit). SLJEDEĆE: relacije van rečenice (DocRE, najkrupnije), prompt na stranici, bb_10 na ostale knjige. Detalji: `docs/sessions/session_127.md`.
 >
 > **s126 snapshot (10. jul 2026):** Početak LLM-potpomognute NER analize (Dio 1: type reconciliation). Nova **`method` kolona** na `bb_ner_entiteti` + `bb_ner_recenica` (TEXT NOT NULL DEFAULT 'classic'; UNIQUE bb_ner_entiteti → +method) — classic i llm NER koegzistiraju paralelno, "prije/poslije" prikaz. Backup prije DDL (1.5G, `/tmp/bb_backup_pre_method_20260710_145601.dump`). Nova skripta **`bb_10_ner_llm.py`** (glm-5.2, NE sudija — s124 princip): čita konfliktna imena (isto ime, >1 tip = spaCy nekonzistentnost) + do 4 dokazne rečenice po tipu, LLM presuđuje IZ TEKSTA (grounding, s90), tri ishoda — `greska` (spoji u primarni), `dvojnost` (2 legitimna smisla, npr. Baskerville osoba+imanje), `ne_entitet` (odbaci, npr. "I."=zamjenica). LLM smije predložiti tip van postojećih labela (Coombe Tracey classic PERSON/ORG→llm GPE). Baseline (Hound, prije gradnje): 18 type conflicta + relacije samo 28 na pragu ≥2 od 194 ukupno (mreža gotovo prazna — co-occurrence samo iste-rečenice). Test Hound: 18 konflikata, 0 JSON grešaka, 17/18 očigledno tačne → upis 18 llm entiteta / 365 veza. Web NETAKNUT → BB_VERSION s125.5. bb_web_export.py NIJE još diran. SLJEDEĆE (Dio 2): kompletiranje llm sloja (sad samo 18 konfliktnih imena), relacije van rečenice (DocRE/koreferencija, prozor N rečenica + grounding), web toggle classic/with-llm na nlp.html, prompt prikazan na stranici. Detalji: `docs/sessions/session_126.md`.
@@ -714,4 +738,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 11. jul 2026. (sesija 127)*
+*Flavio & Claude · Buchenberg · V3 · 11. jul 2026. (sesija 128)*
