@@ -12,7 +12,7 @@ Referentna tabela svih HTML stranica web portala, njihove menu tačke i vidljivo
 | about.html | About | About Buchenberg |
 | stats.html | Stats (od s120, bilo "X-Ray Stats") | Statistics (od s120, bilo "X-Ray Statistics") |
 | books.html | Library | Library |
-| nlp.html | NLP | Natural Language Processing |
+| nlp.html | Entities (od s127, bilo "NLP") | Named Entities & Relations (od s127, bilo "Natural Language Processing"; word cloud uklonjen, dodan classic/with-llm toggle) |
 | reader.html | Reader | *(nema fiksni)* — dinamički, ime trenutno otvorene knjige (`#book-title`) |
 | learn.html | Learn | Language Learning |
 | geometry.html | Geometry | Geometry of Meaning |

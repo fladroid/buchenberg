@@ -107,13 +107,13 @@ def get_translations(cur, knjiga_id, lang_kod):
 
 
 
-def get_ner(cur, knjiga_id):
+def get_ner(cur, knjiga_id, method='classic'):
     cur.execute("""
         SELECT tip, ime_norm, pojave
         FROM bb_ner_entiteti
-        WHERE knjiga_id = %s
+        WHERE knjiga_id = %s AND method = %s
         ORDER BY tip, pojave DESC
-    """, (knjiga_id,))
+    """, (knjiga_id, method))
     rows = cur.fetchall()
     entiteti = {}
     for tip, ime_norm, pojave in rows:
@@ -123,7 +123,7 @@ def get_ner(cur, knjiga_id):
     return entiteti
 
 
-def get_ner_veze(cur, knjiga_id, min_tezina=2):
+def get_ner_veze(cur, knjiga_id, method='classic', min_tezina=2):
     cur.execute("""
         SELECT e1.ime_norm, e1.tip, e2.ime_norm, e2.tip, COUNT(*) AS tezina
         FROM bb_ner_recenica r1
@@ -132,10 +132,11 @@ def get_ner_veze(cur, knjiga_id, min_tezina=2):
         JOIN bb_ner_entiteti e1 ON e1.id = r1.entitet_id
         JOIN bb_ner_entiteti e2 ON e2.id = r2.entitet_id
         WHERE e1.knjiga_id = %s AND e2.knjiga_id = %s
+          AND e1.method = %s AND e2.method = %s AND r1.method = %s AND r2.method = %s
         GROUP BY e1.ime_norm, e1.tip, e2.ime_norm, e2.tip
         HAVING COUNT(*) >= %s
         ORDER BY tezina DESC
-    """, (knjiga_id, knjiga_id, min_tezina))
+    """, (knjiga_id, knjiga_id, method, method, method, method, min_tezina))
     return [{"od": od, "od_tip": od_tip, "do": do, "do_tip": do_tip, "tezina": int(t)}
             for od, od_tip, do, do_tip, t in cur.fetchall()]
 
@@ -499,14 +500,21 @@ def main():
     # NER export
     for book in books_data:
         knjiga_id = book["id"]
-        ner = get_ner(cur, knjiga_id)
-        veze = get_ner_veze(cur, knjiga_id, min_tezina=1)
-        ner_out = {"knjiga_id": knjiga_id, "entiteti": ner, "veze": veze}
+        ner_out = {"knjiga_id": knjiga_id}
+        ner_c = get_ner(cur, knjiga_id, method='classic')
+        veze_c = get_ner_veze(cur, knjiga_id, method='classic', min_tezina=1)
+        ner_out["classic"] = {"entiteti": ner_c, "veze": veze_c}
+        cur.execute("SELECT 1 FROM bb_ner_entiteti WHERE knjiga_id=%s AND method='llm' LIMIT 1", (knjiga_id,))
+        ima_llm = cur.fetchone() is not None
+        if ima_llm:
+            ner_l = get_ner(cur, knjiga_id, method='llm')
+            veze_l = get_ner_veze(cur, knjiga_id, method='llm', min_tezina=1)
+            ner_out["llm"] = {"entiteti": ner_l, "veze": veze_l}
         ner_path = os.path.join(args.output, f"ner_{knjiga_id}.json")
         with open(ner_path, "w", encoding="utf-8") as f:
             json.dump(ner_out, f, ensure_ascii=False, indent=2)
-        total = sum(len(v) for v in ner.values())
-        print(f"  ner_{knjiga_id}.json — {total} entiteta")
+        total_c = sum(len(v) for v in ner_c.values())
+        print(f"  ner_{knjiga_id}.json — classic {total_c} ent" + (" + llm" if ima_llm else ""))
 
     # --- stats.json — agregati za stats.html (DB-side, zamjena za 165 MB client-side) ---
     stats_data = get_stats(cur)
