@@ -231,6 +231,40 @@ def upisi_llm(cur, knjiga_id, odluke):
             """, (cilj_id, c_id))
             upis_veze += cur.rowcount
 
+    # -- Kopiraj NEKONFLIKTNE classic entitete kao ciste llm redove ---------
+    # (llm postaje potpun samostalan sloj: razrijeseni konflikti + svi nekonfliktni)
+    cur.execute("""
+        SELECT e.id, e.tip, e.ime_orig, e.ime_norm, e.pojave
+        FROM bb_ner_entiteti e
+        WHERE e.knjiga_id = %s AND e.method = 'classic'
+          AND e.ime_norm NOT IN (
+            SELECT ime_norm FROM bb_ner_entiteti
+            WHERE knjiga_id = %s AND method = 'classic'
+            GROUP BY ime_norm HAVING COUNT(*) > 1
+          )
+    """, (knjiga_id, knjiga_id))
+    nekonfliktni = cur.fetchall()
+
+    kopirano_ent = kopirano_veze = 0
+    for c_id, tip, ime_orig, ime_norm, pojave in nekonfliktni:
+        cur.execute("""
+            INSERT INTO bb_ner_entiteti (knjiga_id, tip, ime_orig, ime_norm, pojave, method)
+            VALUES (%s, %s, %s, %s, %s, 'llm')
+            RETURNING id
+        """, (knjiga_id, tip, ime_orig, ime_norm, pojave))
+        novi_id = cur.fetchone()[0]
+        kopirano_ent += 1
+        cur.execute("""
+            INSERT INTO bb_ner_recenica (recenica_id, entitet_id, ime_orig, method)
+            SELECT r.recenica_id, %s, r.ime_orig, 'llm'
+            FROM bb_ner_recenica r
+            WHERE r.entitet_id = %s AND r.method = 'classic'
+            ON CONFLICT DO NOTHING
+        """, (novi_id, c_id))
+        kopirano_veze += cur.rowcount
+
+    logger.info(f"  Kopirano nekonfliktnih: {kopirano_ent} entiteta, {kopirano_veze} veza.")
+
     logger.info(f"  Upisano: {upis_ent} llm entiteta, {upis_veze} veza, "
                 f"{preskoceno} preskoceno (ne_entitet).")
 
