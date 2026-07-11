@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 11. jul 2026. (sesija 128)  
+**Poslednje ažuriranje:** 11. jul 2026. (sesija 129)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -211,6 +211,9 @@ if parts is None:
 | `bb_prev_recenica` | FK na ukupnog pobjednika u bb_prevodi_recenica |
 | `bb_prev_recenica_faza` | Fazni pobjednik po (rečenica, faza) — UNIQUE(prev_knjige, prevodi_recenica, faza). Puni ga bb_04 (faza-blok, DELETE+INSERT po opsegu, od s106). |
 | `bb_model_registar` | Registar modela po IMENU (naziv PK, vrsta, uloge TEXT[]) — s123. Vrsta/uloga = identitet imena (ne instance); uloge 1:N. Uzak registar, bb_modeli nedirnut. Bez DEFAULT. Hrani stats Tabelu 0. |
+| `bb_ner_tip_veze` | DocRE rječnik grupa (s129): `tip_veze` PK, `klasa` (P osoba-osoba / M osoba-mjesto / O ostalo-ventil), `opis_grupe`. 13 redova (12 grupa + ostalo). Lookup obrazac kao bb_model_registar; FK meta za bb_ner_relacije. |
+| `bb_ner_veze` | Co-occurrence MATERIJALIZOVAN (s129): `entitet1_id<entitet2_id` (kanonski), `tezina` (broj zajedničkih rečenica). Preseljeno iz get_ner_veze self-joina → web-export čita. method implicitan preko entitet_id. |
+| `bb_ner_relacije` | DocRE usmjerene relacije (s129): `izvor_id→cilj_id`, `tip_veze` FK, `opis` (slobodni LLM tekst), `smjer` (directed/mutual), `dokaz` (citat), `dokaz_pozicije` int[], `pouzdanost`. UNIQUE(izvor,cilj,tip). 74 relacije Hound. |
 | `bb_rag_korpus` | RAG korpus (odgođeno) |
 
 ### Metrike kvaliteta
@@ -295,9 +298,10 @@ ORDER BY jezik, pobjede DESC;
 | `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_refine.sh (s114) |
 | `bb_09_ner.py` | NER pipeline: spaCy ekstrakcija + Gemma4 normalizacija + upis u bb_ner_entiteti/bb_ner_recenica |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
-| `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; ner_<id>.json = `{classic, llm?}` (llm grana samo ako knjiga ima llm sloj) — s127 |
+| `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
 | `bb_10_ner_llm.py` | LLM NER (glm-5.2): type reconciliation konfliktnih entiteta s groundingom dokaznim rečenicama; upis method='llm' paralelno uz classic (s126). Kompletira llm sloj — kopira i nekonfliktne classic entitete kao čiste llm redove (s127). Relacije van rečenice = ostatak Dio 2. |
+| `bb_10c_docre.py` | DocRE (s129): par-vođena ekstrakcija usmjerenih relacija (prvi prolaz glm-5.2, iz s128 probe) + drugi prolaz (e5-large embedding opisa → najbliži centroid od 12 grupa iz SEED_OPISI → tip_veze; prag ostalo). Upis u bb_ner_relacije, idempotentno, `--knjiga N|all`, `--dry-run` za kalibraciju. |
 | `bb_xray_export.py` | Generira X-Ray JSON fajlove (`data/xray_<id>_<lang>.json`) — svih 5 kandidata po rečenici s kompletnim scoreovima; pokrenuti nakon `bb_web_export.py` |
 | `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
 | `sandbox_model_probe.py` | READ-ONLY sonda ponašanja Ollama modela (s109). Prima `--models` listu, `--jezik`, `--no-think`. Mjeri: čistoća izlaza, thinking+eval_count+sec (trošak), temp reakcija, batch N/N, round-trip. Baseline (gemma3/ministral)=etalon. Ne dira bazu/pipeline. Vidi §15. |
@@ -367,6 +371,32 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s129 snapshot (11. jul 2026):** DocRE KOMPLETIRAN kraj-do-kraja (baza+web).
+> Korpus nepromijenjen (1.518.170 prevoda / 296.578 pobjednika). **3 nove tabele**
+> (backup prije DDL, s123): `bb_ner_tip_veze` (rječnik grupa, 13 redova: klasa P/M/O
+> + tip_veze PK + opis_grupe; lookup obrazac kao bb_model_registar), `bb_ner_veze`
+> (co-occurrence materijalizovan, 3820 parova, entitet1<entitet2+tezina), `bb_ner_relacije`
+> (DocRE usmjeren izvor→cilj, tip_veze FK, opis/smjer/dokaz/dokaz_pozicije/pouzdanost,
+> 74 relacije Hound). `method` implicitan preko entitet_id (s128). **Rječnik 12 grupa**
+> (8 P osoba-osoba: srodstvo/prijateljstvo/angazman/sluzba/istraga/zastita/prevara/
+> susjedstvo + 4 M osoba-mjesto: kretanje/prebivaliste/posjed/radnja + O ostalo-ventil),
+> kristalisan iz 75 probnih opisa. **`bb_10c_docre.py`** (commit 39ae0b1): prvi prolaz
+> par-vođen (glm-5.2, iz s128 probe), drugi prolaz e5-large embedding opisa → najbliži
+> od 12 centroida (SEED_OPISI; goli .encode() konzistentno s bb_06) → tip_veze; prag
+> ostalo 0.85 (kalibrisan na kosinusima 0.86-0.98, "mjeri pa definiši"). A/B bug fix
+> (LLM vraća "A"/"B"/"Ime (TIP)" → _norm mapiranje). `get_ner_veze` prepisan da ČITA
+> materijalizovanu tabelu (web-export read-only, s128; verifikovan bit-identično sa
+> starim self-joinom). Nova `get_ner_relacije` → relacije u llm grani JSON-a
+> (`{knjiga_id, classic, llm:{entiteti,veze,relacije}}`, opcija a). **nlp.html: DocRE
+> TREĆI RAVNOPRAVAN POGLED** (Flaviov ispravak: ne skriveni switch nego treći taster
+> Classic|With LLM|DocRE); usmjeren graf (strelica+boja po klasi, legenda, klik→
+> opis+dokaz); **tri infoboxa (šta+kako)** s DocRE naglaskom "sami implementirali,
+> gotov softver ne postoji"; i18n ×5 (nlp_mcard_*; What/How po jeziku). Intro skraćen
+> ×5 (uska praznina). BB_VERSION s127→s129.4. Commits: buchenberg (bb_web_export +
+> session_129 + README), buchenweb 668af2d. SLJEDEĆE: bb_10c --knjiga all kad llm sloj
+> sazrije na drugim knjigama, tjuning rječnika/ventila na drugim žanrovima, prompt na
+> stranici, ner_ orkestracija. Detalji: `docs/sessions/session_129.md`.
 >
 > **s128 snapshot (11. jul 2026):** DIZAJNERSKA sesija — otvoren Dio 2 #1 (DocRE,
 > relacije van rečenice). Baza/web NETAKNUTI → BB_VERSION ostaje s127. Ključne odluke:
@@ -511,7 +541,7 @@ Oba backupa mogu dodatno opteretiti server tokom tih prozora — uzeti u obzir p
 | `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
 | `stats.html` | Stats (od s120, bilo "X-Ray Stats") | Corpus funnel (38k rečenice → kandidati → izabrani prevodi + full-14), definiciona nota ("kako čitati brojeve": prevod=rečenica-jezik par, engine vs konfiguracija, NLLB=dedicated MT), 5 summary kartica (uklj. 14 jezika i 126 kombinacija), winner distribution, coverage, avg scoreovi. **DB-side agregacija (s99):** čita `data/stats.json` (generiše `bb_web_export.py:get_stats()` — od s101 +total_sentences/total_candidates/total_languages/full_all_langs). |
 | `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NLP, Word cloud |
-| `nlp.html` | NLP analiza | Word cloud (EN original, NER bojanje) + Named Entities lista + Entity Network graph (D3 force, zoom, slider co-occurrence) + Original tekst s rednim brojevima, highlight (word-boundary match; PERSON=OR, ostali=AND) i navigacijom po pogocima (prev/next, only-highlighted) |
+| `nlp.html` | Named Entities & Relations | TRI ravnopravna pogleda (s129): Classic \| With LLM \| DocRE. Entity Network graph (D3 force); DocRE mod = usmjeren graf (strelica+boja po klasi P/M/O, legenda, klik→opis+dokaz). Tri infoboxa (šta+kako, DocRE naglašava vlastitu implementaciju, i18n ×5). Named Entities lista + Original tekst s highlight/navigacijom. Word cloud uklonjen (s127). |
 | `reader.html` | Čitač | Prima `?book=ID` URL param; X-Ray Full mod — paginacija po 25 rečenica, svih 5 kandidata s kompletnim scoreovima i back translationom |
 | `learn.html` | Language Learning | Landing overview s 4 game kartice; 4 igre: Fill in the Blank (MC + tipkanje, hint lang za EN), Sentence Match, Memory (trunkiranje 80 znakova), Scrambled (Hold to Peek hint) |
 | `geometry.html` | Geometry of Meaning | D3 UMAP scatter embeddinga (EN+HR+SR+IT+DE), grid pozadina, D3 zoom (scaleExtent 1–12, reset dugme), Transformers.js cosine similarity, SVG angle vizualizacija s gridom (220×220), centriran rezultat, A/B corpus selektor; i18n ✅ (s82) |
@@ -738,4 +768,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 11. jul 2026. (sesija 128)*
+*Flavio & Claude · Buchenberg · V3 · 11. jul 2026. (sesija 129)*

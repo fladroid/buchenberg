@@ -124,21 +124,40 @@ def get_ner(cur, knjiga_id, method='classic'):
 
 
 def get_ner_veze(cur, knjiga_id, method='classic', min_tezina=2):
+    # s129: cita iz materijalizovane bb_ner_veze (web-export read-only, s128).
+    # method implicitan preko entitet_id (JOIN na bb_ner_entiteti). Format izlaza
+    # identican starom self-joinu (od/od_tip/do/do_tip/tezina) -> nlp.html netaknut.
     cur.execute("""
-        SELECT e1.ime_norm, e1.tip, e2.ime_norm, e2.tip, COUNT(*) AS tezina
-        FROM bb_ner_recenica r1
-        JOIN bb_ner_recenica r2 ON r2.recenica_id = r1.recenica_id
-            AND r2.entitet_id > r1.entitet_id
-        JOIN bb_ner_entiteti e1 ON e1.id = r1.entitet_id
-        JOIN bb_ner_entiteti e2 ON e2.id = r2.entitet_id
-        WHERE e1.knjiga_id = %s AND e2.knjiga_id = %s
-          AND e1.method = %s AND e2.method = %s AND r1.method = %s AND r2.method = %s
-        GROUP BY e1.ime_norm, e1.tip, e2.ime_norm, e2.tip
-        HAVING COUNT(*) >= %s
-        ORDER BY tezina DESC
-    """, (knjiga_id, knjiga_id, method, method, method, method, min_tezina))
+        SELECT e1.ime_norm, e1.tip, e2.ime_norm, e2.tip, v.tezina
+        FROM bb_ner_veze v
+        JOIN bb_ner_entiteti e1 ON e1.id = v.entitet1_id
+        JOIN bb_ner_entiteti e2 ON e2.id = v.entitet2_id
+        WHERE v.knjiga_id = %s
+          AND e1.method = %s AND e2.method = %s
+          AND v.tezina >= %s
+        ORDER BY v.tezina DESC
+    """, (knjiga_id, method, method, min_tezina))
     return [{"od": od, "od_tip": od_tip, "do": do, "do_tip": do_tip, "tezina": int(t)}
             for od, od_tip, do, do_tip, t in cur.fetchall()]
+
+
+def get_ner_relacije(cur, knjiga_id):
+    # s129: DocRE usmjerene relacije (bb_ner_relacije). Gradi se nad llm slojem;
+    # JOIN na entitete (imena/tipovi) + tip_veze registar (klasa P/M/O za boju/filter).
+    cur.execute("""
+        SELECT ei.ime_norm, ei.tip, ec.ime_norm, ec.tip,
+               r.tip_veze, tv.klasa, r.smjer, r.opis, r.dokaz, r.pouzdanost
+        FROM bb_ner_relacije r
+        JOIN bb_ner_entiteti ei ON ei.id = r.izvor_id
+        JOIN bb_ner_entiteti ec ON ec.id = r.cilj_id
+        JOIN bb_ner_tip_veze tv ON tv.tip_veze = r.tip_veze
+        WHERE r.knjiga_id = %s
+        ORDER BY r.tip_veze, ei.ime_norm
+    """, (knjiga_id,))
+    return [{"izvor": iz, "izvor_tip": izt, "cilj": ci, "cilj_tip": cit,
+             "tip_veze": tv, "klasa": kl, "smjer": sm, "opis": op,
+             "dokaz": dk, "pouzdanost": pz}
+            for iz, izt, ci, cit, tv, kl, sm, op, dk, pz in cur.fetchall()]
 
 def get_model_registry(cur):
     """Tabela 0 — inventar: svi modeli iz registra + broj prevoda (kandidata).
@@ -509,7 +528,7 @@ def main():
         if ima_llm:
             ner_l = get_ner(cur, knjiga_id, method='llm')
             veze_l = get_ner_veze(cur, knjiga_id, method='llm', min_tezina=1)
-            ner_out["llm"] = {"entiteti": ner_l, "veze": veze_l}
+            ner_out["llm"] = {"entiteti": ner_l, "veze": veze_l, "relacije": get_ner_relacije(cur, knjiga_id)}
         ner_path = os.path.join(args.output, f"ner_{knjiga_id}.json")
         with open(ner_path, "w", encoding="utf-8") as f:
             json.dump(ner_out, f, ensure_ascii=False, indent=2)
