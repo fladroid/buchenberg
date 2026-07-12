@@ -360,6 +360,8 @@ def main():
     ap.add_argument("--prozor", type=int, default=5)
     ap.add_argument("--prag-ostalo", type=float, default=PRAG_OSTALO)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--force", action="store_true",
+                    help="Prepiši i knjige koje već imaju relacije")
     args = ap.parse_args()
 
     logger.info(f"Ucitavam e5-large ({EMBEDDER_PATH})...")
@@ -377,10 +379,33 @@ def main():
     else:
         knjige = [int(args.knjiga)]
 
-    logger.info(f"Knjige za obradu: {knjige} | model {LLM_MODEL} | dry_run={args.dry_run}")
+    logger.info(f"Knjige za obradu: {knjige} | model {LLM_MODEL} | "
+                f"force={args.force} | dry_run={args.dry_run}")
+
+    cur = conn.cursor()
+    obradjeno = preskoceno = 0
     for kid in knjige:
+        # DocRE se izvodi IZ llm sloja — bez njega nema entiteta ni pozicija
+        cur.execute("""SELECT COUNT(*) FROM bb_ner_entiteti
+                       WHERE knjiga_id=%s AND method=%s""", (kid, NER_METHOD))
+        if cur.fetchone()[0] == 0:
+            logger.info(f"[{kid}] nema {NER_METHOD} sloj → PRESKAČEM (pokreni bb_10 prvo)")
+            preskoceno += 1
+            continue
+
+        cur.execute("SELECT COUNT(*) FROM bb_ner_relacije WHERE knjiga_id=%s", (kid,))
+        postoji = cur.fetchone()[0]
+        if postoji and not args.force and not args.dry_run:
+            logger.info(f"[{kid}] relacije postoje ({postoji}) → PRESKAČEM (--force za prepis)")
+            preskoceno += 1
+            continue
+
         obradi_knjigu(conn, embedder, centroidi, kid, args.prag, args.prozor,
                       args.prag_ostalo, args.dry_run)
+        obradjeno += 1
+
+    logger.info(f"bb_10c gotov — obrađeno {obradjeno}, preskočeno {preskoceno}.")
+    cur.close()
     conn.close()
 
 

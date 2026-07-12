@@ -165,12 +165,8 @@ def parse_odgovor(raw):
 # -- Faza upisa: LLM odluke -> method='llm' redovi -------------
 def upisi_llm(cur, knjiga_id, odluke):
     """Pretvori LLM odluke u method='llm' redove. Idempotentno (DELETE llm pa INSERT)."""
-    cur.execute("""
-        DELETE FROM bb_ner_recenica
-        WHERE method = 'llm' AND entitet_id IN (
-            SELECT id FROM bb_ner_entiteti WHERE knjiga_id = %s AND method = 'llm'
-        )
-    """, (knjiga_id,))
+    # Briši SAMO svoje llm entitete — pojave/veze/relacije padaju kaskadno (s130).
+    # bb_10 ne zna za slojeve iznad sebe (DocRE); orkestrator ih obnavlja.
     cur.execute("DELETE FROM bb_ner_entiteti WHERE knjiga_id = %s AND method = 'llm'",
                 (knjiga_id,))
 
@@ -268,27 +264,41 @@ def upisi_llm(cur, knjiga_id, odluke):
     logger.info(f"  Upisano: {upis_ent} llm entiteta, {upis_veze} veza, "
                 f"{preskoceno} preskoceno (ne_entitet).")
 
+    # Co-occurrence (ista rečenica) za llm sloj — ko briše, taj i vraća (s130).
+    cur.execute("""
+        INSERT INTO bb_ner_veze (knjiga_id, entitet1_id, entitet2_id, tezina)
+        SELECT %s, r1.entitet_id, r2.entitet_id, COUNT(*)
+        FROM bb_ner_recenica r1
+        JOIN bb_ner_recenica r2
+          ON r1.recenica_id = r2.recenica_id
+         AND r1.entitet_id < r2.entitet_id
+        JOIN bb_ner_entiteti e1 ON e1.id = r1.entitet_id
+        JOIN bb_ner_entiteti e2 ON e2.id = r2.entitet_id
+        WHERE e1.knjiga_id = %s AND e1.method = 'llm'
+          AND e2.knjiga_id = %s AND e2.method = 'llm'
+        GROUP BY r1.entitet_id, r2.entitet_id
+        ON CONFLICT DO NOTHING
+    """, (knjiga_id, knjiga_id, knjiga_id))
+    cur.execute("""
+        SELECT COUNT(*) FROM bb_ner_veze v
+        JOIN bb_ner_entiteti e ON e.id = v.entitet1_id
+        WHERE e.knjiga_id = %s AND e.method = 'llm'
+    """, (knjiga_id,))
+    logger.info(f"  Co-occurrence veza (llm): {cur.fetchone()[0]}")
+
 
 # -- Main ------------------------------------------------------
-def main():
-    parser = argparse.ArgumentParser(description="LLM NER type reconciliation")
-    parser.add_argument("--knjiga", type=int, required=True)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Samo ispisi LLM odluke, ne pisi u bazu")
-    args = parser.parse_args()
+def broj_sloja(cur, knjiga_id, method):
+    """Koliko entiteta knjiga ima u datom sloju."""
+    cur.execute("""
+        SELECT COUNT(*) FROM bb_ner_entiteti
+        WHERE knjiga_id = %s AND method = %s
+    """, (knjiga_id, method))
+    return cur.fetchone()[0]
 
-    conn = get_conn()
-    cur = conn.cursor()
 
-    cur.execute("SELECT naziv FROM bb_knjige WHERE id = %s", (args.knjiga,))
-    row = cur.fetchone()
-    if not row:
-        logger.error(f"Knjiga id={args.knjiga} ne postoji!")
-        sys.exit(1)
-    knjiga_naziv = row[0]
-    logger.info(f"bb_10_ner_llm -- knjiga: {knjiga_naziv} (id={args.knjiga})")
-
-    konflikti = ucitaj_konflikte(cur, args.knjiga)
+def obradi_knjigu(conn, cur, knjiga_id, knjiga_naziv, dry_run):
+    konflikti = ucitaj_konflikte(cur, knjiga_id)
     logger.info(f"  Konfliktnih imena: {len(konflikti)}")
 
     odluke = []
@@ -310,16 +320,63 @@ def main():
             f"{'+' + odluka['sekundarni_tip'] if odluka.get('sekundarni_tip') else ''}"
         )
 
-    if args.dry_run:
+    if dry_run:
         logger.info("  DRY-RUN -- nista nije upisano. Rezime odluka:")
         print(json.dumps(odluke, ensure_ascii=False, indent=2))
     else:
-        upisi_llm(cur, args.knjiga, odluke)
+        upisi_llm(cur, knjiga_id, odluke)
         conn.commit()
 
+
+def main():
+    parser = argparse.ArgumentParser(description="LLM NER (llm sloj) — type reconciliation")
+    parser.add_argument("--knjiga", default="1", help="ID knjige ili 'all'")
+    parser.add_argument("--force", action="store_true",
+                        help="Prepiši i knjige koje već imaju llm sloj")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Samo ispisi LLM odluke, ne pisi u bazu")
+    args = parser.parse_args()
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    if str(args.knjiga).lower() == "all":
+        cur.execute("SELECT id, naziv FROM bb_knjige ORDER BY id")
+        knjige = cur.fetchall()
+    else:
+        cur.execute("SELECT id, naziv FROM bb_knjige WHERE id = %s", (int(args.knjiga),))
+        knjige = cur.fetchall()
+        if not knjige:
+            logger.error(f"Knjiga id={args.knjiga} ne postoji!")
+            sys.exit(1)
+
+    logger.info(f"bb_10_ner_llm — knjiga={args.knjiga} ({len(knjige)} knjiga), "
+                f"force={args.force}, dry_run={args.dry_run}")
+
+    obradjeno = preskoceno = 0
+    for knjiga_id, knjiga_naziv in knjige:
+        # llm sloj se izvodi IZ classic sloja — bez njega nema sirovine
+        if broj_sloja(cur, knjiga_id, 'classic') == 0:
+            logger.info(f"[{knjiga_id}] {knjiga_naziv}: nema classic sloj "
+                        f"→ PRESKAČEM (pokreni bb_09 prvo)")
+            preskoceno += 1
+            continue
+
+        postoji = broj_sloja(cur, knjiga_id, 'llm')
+        if postoji and not args.force:
+            logger.info(f"[{knjiga_id}] {knjiga_naziv}: llm sloj postoji "
+                        f"({postoji} entiteta) → PRESKAČEM (--force za prepis)")
+            preskoceno += 1
+            continue
+
+        logger.info(f"[{knjiga_id}] {knjiga_naziv}: obrađujem"
+                    + (f" (prepisujem {postoji} entiteta)" if postoji else ""))
+        obradi_knjigu(conn, cur, knjiga_id, knjiga_naziv, args.dry_run)
+        obradjeno += 1
+
+    logger.info(f"bb_10 gotov — obrađeno {obradjeno}, preskočeno {preskoceno}.")
     cur.close()
     conn.close()
-    logger.info("Gotovo.")
 
 if __name__ == "__main__":
     main()
