@@ -142,22 +142,24 @@ def get_ner_veze(cur, knjiga_id, method='classic', min_tezina=2):
 
 
 def get_ner_relacije(cur, knjiga_id):
-    # s129: DocRE usmjerene relacije (bb_ner_relacije). Gradi se nad llm slojem;
-    # JOIN na entitete (imena/tipovi) + tip_veze registar (klasa P/M/O za boju/filter).
+    # s131: Massey taksonomija (fine/coarse/afinitet + audit_kosinus).
+    # LEFT JOIN na bb_ner_massey — fine moze biti NULL (ventil/osoba-mjesto),
+    # te relacije MORAJU ostati u izlazu (mapa kretanja na grafu).
     cur.execute("""
         SELECT ei.ime_norm, ei.tip, ec.ime_norm, ec.tip,
-               r.tip_veze, tv.klasa, r.smjer, r.opis, r.dokaz, r.pouzdanost
+               r.fine, m.coarse, r.afinitet, r.audit_kosinus,
+               r.smjer, r.opis, r.dokaz, r.pouzdanost
         FROM bb_ner_relacije r
         JOIN bb_ner_entiteti ei ON ei.id = r.izvor_id
         JOIN bb_ner_entiteti ec ON ec.id = r.cilj_id
-        JOIN bb_ner_tip_veze tv ON tv.tip_veze = r.tip_veze
+        LEFT JOIN bb_ner_massey m ON m.fine = r.fine
         WHERE r.knjiga_id = %s
-        ORDER BY r.tip_veze, ei.ime_norm
+        ORDER BY m.coarse NULLS LAST, r.fine, ei.ime_norm
     """, (knjiga_id,))
     return [{"izvor": iz, "izvor_tip": izt, "cilj": ci, "cilj_tip": cit,
-             "tip_veze": tv, "klasa": kl, "smjer": sm, "opis": op,
-             "dokaz": dk, "pouzdanost": pz}
-            for iz, izt, ci, cit, tv, kl, sm, op, dk, pz in cur.fetchall()]
+             "fine": fn, "coarse": co, "afinitet": af, "audit": au,
+             "smjer": sm, "opis": op, "dokaz": dk, "pouzdanost": pz}
+            for iz, izt, ci, cit, fn, co, af, au, sm, op, dk, pz in cur.fetchall()]
 
 def get_model_registry(cur):
     """Tabela 0 — inventar: svi modeli iz registra + broj prevoda (kandidata).

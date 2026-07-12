@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 12. jul 2026. (sesija 130)  
+**Poslednje ažuriranje:** 12. jul 2026. (sesija 131)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -211,10 +211,10 @@ if parts is None:
 | `bb_prev_recenica` | FK na ukupnog pobjednika u bb_prevodi_recenica |
 | `bb_prev_recenica_faza` | Fazni pobjednik po (rečenica, faza) — UNIQUE(prev_knjige, prevodi_recenica, faza). Puni ga bb_04 (faza-blok, DELETE+INSERT po opsegu, od s106). |
 | `bb_model_registar` | Registar modela po IMENU (naziv PK, vrsta, uloge TEXT[]) — s123. Vrsta/uloga = identitet imena (ne instance); uloge 1:N. Uzak registar, bb_modeli nedirnut. Bez DEFAULT. Hrani stats Tabelu 0. |
-| `bb_ner_tip_veze` | DocRE rječnik grupa (s129): `tip_veze` PK, `klasa` (P osoba-osoba / M osoba-mjesto / O ostalo-ventil), `opis_grupe`. 13 redova (12 grupa + ostalo). Lookup obrazac kao bb_model_registar; FK meta za bb_ner_relacije. |
 | `bb_ner_veze` | Co-occurrence MATERIJALIZOVAN (s129): `entitet1_id<entitet2_id` (kanonski), `tezina` (broj zajedničkih rečenica). Preseljeno iz get_ner_veze self-joina → web-export čita. method implicitan preko entitet_id. |
-| `bb_ner_relacije` | DocRE usmjerene relacije (s129): `izvor_id→cilj_id`, `tip_veze` FK, `opis` (slobodni LLM tekst), `smjer` (directed/mutual), `dokaz` (citat), `dokaz_pozicije` int[], `pouzdanost`. UNIQUE(izvor,cilj,tip). 78 relacija Hound / 60 Alice (s130). ⚠️ `tip_veze` rječnik POGREŠNO POSTAVLJEN — zamjena Massey shemom (coarse+fine+afinitet) u s131. |
-| **FK politika (s130)** | **5 FK-ova na `bb_ner_entiteti(id)` = `ON DELETE CASCADE`**: `bb_ner_recenica.entitet_id`, `bb_ner_veze.entitet1_id`/`entitet2_id`, `bb_ner_relacije.izvor_id`/`cilj_id`. Izvedeni slojevi padaju kad im temelj nestane. Ostala 4 FK-a (`knjiga_id` ×3, `tip_veze`) ostaju **NO ACTION namjerno** — lookup/domen veze, ne izvedeni slojevi. **Skripta briše samo svoj sloj; shema čisti ostatak.** |
+| `bb_ner_relacije` | DocRE usmjerene relacije: `izvor_id→cilj_id`, `opis` (slobodni LLM tekst), `smjer`, `dokaz`, `dokaz_pozicije` int[], `pouzdanost` + **Massey klasifikacija (s131)**: `fine` FK na bb_ner_massey (NULL=ventil/osoba-mjesto), `afinitet` CHECK (positive/negative/neutral), `audit_kosinus` (e5-large audit metrika, ne sudija). UNIQUE(izvor_id,cilj_id) — jedna relacija po usmjerenom paru. Hound 78 (29 fine) / Alice 60 (10 fine). |
+| `bb_ner_massey` | Massey/Bamman lookup (s131): `fine` PK (29 kategorija: friend/enemy/parent/servant...), `coarse` CHECK (social/familial/professional — dominantno mapiranje izmjereno iz podataka). Čista 1:1 preslika Massey sheme, bez naših dopuna (s130 O6). 'ostalo' NIJE red — ventil je fine=NULL. |
+| **FK politika (s130)** | **5 FK-ova na `bb_ner_entiteti(id)` = `ON DELETE CASCADE`**: `bb_ner_recenica.entitet_id`, `bb_ner_veze.entitet1_id`/`entitet2_id`, `bb_ner_relacije.izvor_id`/`cilj_id`. Izvedeni slojevi padaju kad im temelj nestane. Ostala 4 FK-a (`knjiga_id` ×3, `fine`→bb_ner_massey od s131) ostaju **NO ACTION namjerno** — lookup/domen veze, ne izvedeni slojevi. **Skripta briše samo svoj sloj; shema čisti ostatak.** |
 | `bb_rag_korpus` | RAG korpus (odgođeno) |
 
 ### Metrike kvaliteta
@@ -302,10 +302,11 @@ ORDER BY jezik, pobjede DESC;
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
 | `bb_10_ner_llm.py` | LLM NER (glm-5.2): type reconciliation konfliktnih entiteta s groundingom dokaznim rečenicama; upis method='llm' paralelno uz classic (s126). Kompletira llm sloj — kopira i nekonfliktne classic entitete kao čiste llm redove (s127). s130: `--knjiga N\|all`, `--force`, održava **vlastite co-occ veze**, preskače knjige bez classic sloja. |
-| `bb_10c_docre.py` | DocRE (s129): par-vođena ekstrakcija usmjerenih relacija (prvi prolaz glm-5.2, iz s128 probe) + drugi prolaz (e5-large embedding opisa → najbliži centroid od 12 grupa iz SEED_OPISI → tip_veze; prag ostalo). Upis u bb_ner_relacije, idempotentno, `--knjiga N\|all`, `--dry-run` za kalibraciju. s130: `--force`, preskače knjige bez llm sloja; `--dry-run` namjerno zaobilazi EXISTS provjeru. ⚠️ **Rječnik od 12 grupa je POGREŠNO POSTAVLJEN** (miješa status i radnju; ventil `ostalo` mrtav) — zamjena Massey shemom u s131, v. session_130. |
+| `bb_10c_docre.py` | DocRE: par-vođena ekstrakcija usmjerenih relacija (prvi prolaz glm-5.2, nedirano od s129) + **drugi prolaz s131 (Massey)**: glm-5.2 (think:false, temp 0.0) klasifikuje iz zatvorene liste 29 fine kategorija (iz baze) + afinitet; "ostalo"→fine=NULL (živ ventil). Deterministički filter: klasifikacija SAMO za PERSON-PERSON parove. `audit_kosinus` = e5-large audit metrika. `--reklasifikuj` = samo drugi prolaz nad postojećim relacijama (UPDATE). `--knjiga N\|all`, `--force`, `--dry-run`. |
 | `run_ner.sh` | **NER orkestrator (s130)** — proizvodni ulaz: bb_09 → bb_10 → bb_10c, `set -euo pipefail`. `--knjiga N\|all`, `--force`. **`--force` je svojstvo PROLAZA, ne faze** — prosljeđuje se svim trima. Pojedinačne skripte ostaju samostalno pokretljive (istraživački alat). |
 | `bb_xray_export.py` | Generira X-Ray JSON fajlove (`data/xray_<id>_<lang>.json`) — svih 5 kandidata po rečenici s kompletnim scoreovima; pokrenuti nakon `bb_web_export.py` |
 | `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
+| `sandbox_cluster_probe.py` | READ-ONLY dijagnostička sonda (s131): k-means + silhouette nad e5-large embeddinzima DocRE opisa — mjeri vidi li embedding prostor strukturu. Presudila arhitekturu drugog prolaza (klasifikator NE, audit DA). |
 | `sandbox_model_probe.py` | READ-ONLY sonda ponašanja Ollama modela (s109). Prima `--models` listu, `--jezik`, `--no-think`. Mjeri: čistoća izlaza, thinking+eval_count+sec (trošak), temp reakcija, batch N/N, round-trip. Baseline (gemma3/ministral)=etalon. Ne dira bazu/pipeline. Vidi §15. |
 
 ### Kako dodati novu knjigu
@@ -373,6 +374,36 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s131 snapshot (12. jul 2026):** MASSEY IMPLEMENTIRAN kraj-do-kraja (baza+bb_10c).
+> Korpus nepromijenjen (50.624 / 1.518.170 / 296.578). **(1) Dijagnostika prije
+> arhitekture:** `sandbox_cluster_probe.py` (novo, read-only, 22s) — k-means+silhouette
+> nad 138 opisa: silhouette 0.10-0.12 (globalno slabo) ali lokalna koherencija
+> (klaster "neprijateljstvo" postoji!) → embedding za AUDIT da, za SUDIJU ne.
+> Varijante (a)/(b)/(d=k-means, Flaviova hashing ideja) odbačene s dokazom; usvojena
+> **(c): glm-5.2 klasifikuje iz zatvorene liste**. **(2) Shema** (backup
+> pre_massey_20260712; stari dump obrisan — higijena /tmp): `bb_ner_massey` (29 fine
+> + dominantni coarse IZMJEREN iz podataka — fine→coarse NIJE čista funkcija kod
+> Masseya); `bb_ner_relacije` +fine (NULL=ventil)/afinitet/audit_kosinus, −tip_veze,
+> UNIQUE(izvor,cilj); `bb_ner_tip_veze` DROPPED (odluka: brisanje, ne zamrzavanje).
+> **(3) bb_10c prepisan:** Massey lista IZ BAZE; klasifikacija SAMO PERSON-PERSON
+> (deterministički filter — Massey je character-character; mjesta=NULL bez LLM);
+> `--reklasifikuj` (UPDATE bez ponavljanja prvog prolaza); think:false. **(4) Obje
+> knjige reklasifikovane:** Hound 29/78 fine (enemy/negative za "plotting to murder",
+> lovers/negative za lažnu romansu — afinitet dimenzija radi!), Alice 10/60.
+> **VENTIL ŽIV PRVI PUT:** Hound 17, Alice 21 — sadržaj dosljedno RADNJE (istraga,
+> razgovor) = s130 dijagnoza sada mjerena. Nedeterminizam ±1-3 uz temp 0.0.
+> **(5) NALAZ — šum tipova (Alice):** Dodo/Duchess/March Hare→ORG, Cheshire Cat→GPE
+> (spaCy news-bias na fantastici); bb_10 rješava samo konflikte → **"type audit" na
+> horizont uz koreferenciju** (koja se javila 3. put: "is the same person as" u
+> ventilu). Hound tipovi zdravi (provjereno). **(6) bb_web_export.get_ner_relacije
+> prepravljen** (fine/coarse/afinitet/audit, LEFT JOIN — NULL relacije ostaju) ali
+> **export NIJE pokrenut**: web konzistentan (staro+staro); ⚠️ novi JSON + nlp.html
+> idu ZAJEDNO u s132. BB_VERSION ostaje s129.4. Margin-based ventil SKINUT s liste
+> (nepotreban — LLM "ostalo" živ po konstrukciji). SLJEDEĆE (s132): nlp.html
+> (coarse boje, afinitet prikaz) + export + browser test; koreferencija+type audit
+> u bb_10; tek onda run_ner.sh --knjiga all --force. Detalji:
+> `docs/sessions/session_131.md`.
 >
 > **s130 snapshot (12. jul 2026):** NER ORKESTRACIJA + CASCADE shema + **otkriće da je DocRE
 > rječnik pogrešno postavljen**. Korpus nepromijenjen (50.624 / 1.518.170 / 296.578).
@@ -812,4 +843,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 12. jul 2026. (sesija 130)*
+*Flavio & Claude · Buchenberg · V3 · 12. jul 2026. (sesija 131)*
