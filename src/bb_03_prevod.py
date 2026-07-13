@@ -311,7 +311,7 @@ def prevedi_refine_single(tekst, jezik_naziv, model, temp, seed):
     prompt = (
         f"Translate the following English text to {jezik_naziv}.\n"
         f"A reference translation is provided. Produce a BETTER translation — "
-        f"more accurate and more natural. Keep the reference only if it is already optimal.\n"
+        f"more accurate and more natural.\n"
         f"Output only the translation, nothing else.\n\n"
         f"English: {tekst}\n"
         f"Reference {jezik_naziv}: {seed}"

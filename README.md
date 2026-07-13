@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 13. jul 2026. (sesija 133)  
+**Poslednje ažuriranje:** 13. jul 2026. (sesija 135)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -409,6 +409,8 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
 >
+> **s135 snapshot (13. jul 2026):** Nastavak s134 DUG liste. N-faza-safe web sloj ZAVRŠEN: reader.html dinamički phase panel, nav.js parametrizovani ključevi (`reader_phase_n`, `stats_col_phase_n`), stats.html dinamične kolone "Wins by engine and phase" — sve verifikovano browserom na k22/hr (3 faze) i starim slučajevima (2 faze). BB_VERSION s133→s135, buchenweb commit a3d203c. **NO-OP REFINE POTVRĐEN I ISPRAVLJEN:** SQL provjera pokazala 39/40 "izjednačenih" refine slučajeva iz s134 (240-uzorak) su bukvalno identičan tekst kao seed, ne koincidencija scorea (16,25% potrošenih refine poziva). Uzrok: `bb_03_prevod.py :: prevedi_refine_single()` prompt sadržavao "Keep the reference only if it is already optimal." — eksplicitna dozvola za klon. Live test potvrdio uzrok (stari prompt 3/3 klon uživo) i pokazao trade-off (agresivnija zabrana 0/3 klona ALI rizik promjene značenja na kratkim rečenicama). Flaviova odluka: minimalna izmjena — samo uklonjena "keep if optimal" rečenica, bez dodate zabrane. Necommitovano do kraja sesije. `v_status_faza_matrica` — pokušaj dinamičke PL/pgSQL funkcije (RETURNS SETOF record + EXECUTE) pukao na tačno-poklapanje-tipa ograničenju Postgresa (varchar≠text); Flavio odlučio da ne nastavlja — modifikacija SPUŠTENA na nizak prioritet. Novi horizont: NER+relacije kao kontekst-injection za refine kvalitet (ne samo ti/vi baseline) — zaseban budući session. Detalji: `docs/sessions/session_135.md`.
+
 > **s134 snapshot (13. jul 2026):** **FAZA ≠ METOD — strukturno razdvajanje.** Nova tabela `bb_metode` (`base` root / `self-refine`), `bb_faze.metod_id` FK → **1 metod : M faza**; faza degradirana na redni broj + identifikator izvršavanja. ROOT-invarijanta ("base ide tačno jednom") preseljena iz ničije glave u SHEMU: partial unique index `WHERE metod_id=1` (verifikovano da puca). `bb_modeli` netaknut — UNIQUE(naziv,temp,faza_id) je N faza podržavao od s114; **uskost je bila isključivo u orkestratoru**. Novi `run_faza.sh --faza N` (+ `src/bb_faza_info.py`) **zamijenio `run_refine.sh`** (obrisan): `--faza` obavezan, ne auto-inkrementira; `--force` samo sudiji. **Faza 3 (`refine-2`) pokrenuta bez ijedne linije koda** — dva INSERT-a → k22/hr 1–40. Refine k22/23/24 × de/hr/it/sr × 1–20 (faza 2) + analiza: win-rate 30,0% (baseline 2/7=28,6%), **head-to-head 25,0%** (stari par: 0/100) — i **headroom gradijent**: k23 (najslabiji seedovi) jedina s pozitivnom deltom na sva 4 jezika (k23/sr seed 0,9267 → 11/20 pobjeda), k24 (najjači seedovi) −0,008…−0,021. OTVORENO: 40/240 refine prevoda ima **identičan finalni_score** kao seed (no-op sumnja). Novi viewovi `v_status_faza` (long, N-faza-safe) + `v_status_faza_matrica` (privremen pivot). NER k22 (85 relacija). **Faza 3 otkrila hardkod "refine=faza 2" u web sloju:** `bb_web_export.py` l.235 POPRAVLJEN (generički filter); **DUG:** `reader.html` l.746, `nav.js` i18n (`reader_phaseN`, `stats_col_phaseN` — treba jedan parametrizovan ključ), `stats.html` kolone. **Re-export namjerno NIJE pokrenut** (backend bi slao `faza3` koji reader ne zna prikazati — backend i frontend idu zajedno). Web kod netaknut → **BB_VERSION ostaje s133**. Detalji: `docs/sessions/session_134.md`.
 
 > **s133 snapshot (13. jul 2026):** **NER LINIJA ZATVORENA.** Kriterij (Flavio):
@@ -842,9 +844,9 @@ To potvrđuje s100-ovu dijagnozu (plafon), ali je pretvara u **kontinuum umjesto
 
 > ⚠️ **Metodološka ograda (Flavio, s134):** ispravna formulacija nije *"refine kvari jak prevod"* nego **"naš sudija i embedder ne vide poboljšanje na jakom seedu"**. Ocjenjivač je jedina mjera koju imamo i mjeri sam sebe. Blizu plafona i "poboljšanje" i "kvarenje" gube sadržaj. Pravi zadatak: **izmjeriti gdje sudija prestaje da razlikuje** i tu povući granicu poboljšavanja — umjesto pretpostavljati da razlikuje.
 
-**OTVORENO (s134):** 40/240 refine prevoda (17 %) ima **identičan `finalni_score` kao seed** na 4 decimale → sumnja na **no-op refine** (model vratio doslovno isti tekst): trošen LLM poziv, lažni kandidat u bazenu. Neprovjereno.
+**RIJEŠENO (s135):** no-op refine sumnja iz s134 POTVRĐENA i ISPRAVLJENA. SQL provjera (seed=faza-1 pobjednik JOIN najbolji faza-2 kandidat po rečenici) pokazala **39/40 "izjednačenih" slučajeva su bukvalno identičan tekst** kao seed, ne koincidencija scorea (samo 1/40 stvarna slučajnost). Uzrok: `bb_03_prevod.py :: prevedi_refine_single()` prompt sadržavao "Keep the reference only if it is already optimal." — eksplicitna dozvola LLM-u da vrati klon. Live test (3 kratke rečenice/naslova, izvan baze) potvrdio uzrok i pokazao trade-off: agresivnija zabrana ("do NOT repeat verbatim") rješava 0/3 klona ALI rizikuje promjenu ZNAČENJA na kratkim/trivijalnim rečenicama ("Frankenstein;"→"Čudovište Frankensteina"). Flaviova odluka (izbjegavanje scope-creepa): minimalna izmjena — samo uklonjena "keep if optimal" rečenica, bez dodate eksplicitne zabrane. Primijenjeno u kodu, necommitovano do kraja s135. Detalji: `docs/sessions/session_135.md`.
 
-Otvoreno i dalje: (a) selektivni re-translate na SLABIM seedovima (prag <0,85) — s134 pokazuje da je to najizgledniji režim; (b) refaktor `OCJENJIVANI_MODELI` → kolona `grupa` u bb_modeli.
+Otvoreno i dalje: (a) selektivni re-translate na SLABIM seedovima (prag <0,85) — s134 pokazuje da je to najizgledniji režim; (b) refaktor `OCJENJIVANI_MODELI` → kolona `grupa` u bb_modeli; (c) novi horizont (s135): NER+relacije kao kontekst-injection za refine kvalitet — zaseban budući session.
 
 
 ### Performanse — NLLB CTranslate2 int8 — URAĐENO (s93)
@@ -937,4 +939,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 13. jul 2026. (sesija 134)*
+*Flavio & Claude · Buchenberg · V3 · 13. jul 2026. (sesija 135)*
