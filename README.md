@@ -137,7 +137,7 @@ bb_web_export.py   → JSON export → Apache2 web prikaz
 
 ### Pokretanje — standardni workflow
 
-> ⚠️ **s114:** modeli se čitaju iz baze (aktivni po fazi, helper `bb_aktivni_modeli.py`) — kanonski put je `run_pipeline.sh` / `run_refine.sh`. `bb_03` prima `--faza N` (default 1; 2+ = refine), `--refine` flag NE POSTOJI. Primjeri ispod su istorijski obrazac direktnog poziva — imena modela zamijeni aktivnima.
+> ⚠️ **s114:** modeli se čitaju iz baze (aktivni po fazi, helper `bb_aktivni_modeli.py`) — kanonski put je `run_pipeline.sh` (faza 1) / `run_faza.sh --faza N` (s134). `bb_03` prima `--faza N` (default 1; 2+ = refine), `--refine` flag NE POSTOJI. Primjeri ispod su istorijski obrazac direktnog poziva — imena modela zamijeni aktivnima.
 
 ```bash
 # 1. gemma3@0.8 (cloud)
@@ -201,7 +201,9 @@ if parts is None:
 | Tabela | Opis |
 |--------|------|
 | `bb_jezik` | 14 jezika |
-| `bb_modeli` | Modeli × temperature × faza; `aktivan` boolean; UNIQUE(naziv, temperatura, faza_id) — s114 |
+| `bb_metode` | **Metod = tip operacije** (s134). `root` boolean: `base` (root, izvršiv tačno jednom) i `self-refine` (ponovljiv M puta). Metod nosi SADRŽAJ (šta se radi, koji seed); faza nosi REDOSLIJED. |
+| `bb_faze` | **Faza = jedno izvršavanje metoda** (s134): redni broj + jedinstveni identifikator. `metod_id` FK → `bb_metode` (**1 metod : M faza**). Partial UNIQUE `WHERE metod_id=1` čuva ROOT-invarijantu u SHEMI — druga bazna faza je fizički nemoguća. |
+| `bb_modeli` | Modeli × temperature × faza; `aktivan` boolean; UNIQUE(naziv, temperatura, faza_id) — s114. Isti model+temp može postojati u SVAKOJ fazi (npr. `glm-5.2@0.8` = id 20 faza 1, id 23 faza 2, id 27 faza 3). |
 | `bb_embeddings` | Embedder definicije |
 | `bb_knjige` | Knjige (naziv, autor, gutenberg_id UNIQUE) |
 | `bb_recenice` | Rečenice (pozicija, tekst, knjiga_id) |
@@ -240,6 +242,8 @@ if parts is None:
 | `v_sudija_pokrivenost` | knjiga_id, jezik, broj rečenica s ocjenom sudije | Praćenje sudija pipeline-a |
 | `v_pobjednici_pokrivenost` | knjiga_id, jezik, broj pobjednika | Praćenje pobjednika |
 | `v_status_knjige` | Pivot po modelu/temperaturi — jedan red po knjiga×jezik, sve kolone pokrivenosti | **Dashboard — koristiti na početku svake sesije** |
+| `v_status_faza` | **LONG** (s134): knjiga × jezik × faza → broj rečenica s bar jednim prevodom u toj fazi. Deriviran iz majke. **N-faza-safe bez izmjena.** | Pokrivenost po fazama |
+| `v_status_faza_matrica` | ⚠️ PRIVREMEN (s134): pivot `f1/f2/f3` — **hardkodovane kolone, NE SKALIRA**; faza 4 traži `CREATE OR REPLACE`. Rješenje = analitičke funkcije (Flavio demonstrira). | Brzi pregled, ne oslanjati se |
 
 #### `_full` sloj (s107) — maksimalna denormalizacija
 
@@ -296,7 +300,9 @@ ORDER BY jezik, pobjede DESC;
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114) |
-| `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_refine.sh (s114) |
+| `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_faza.sh |
+| `bb_faza_info.py` | Faza -> metod (`metod_id\|naziv\|root`) iz `bb_faze` JOIN `bb_metode`; exit 1 ako faza ne postoji (s134) |
+| `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force]`. Metod cita iz baze, modele iz `bb_modeli`. Zamijenio `run_refine.sh` (s134) |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
@@ -332,6 +338,34 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 
 > ⚠️ `bb_03_prevod.py` traži model po trojci `naziv + temperatura + faza_id` (s114). Ako trojka nije u bazi — greška.
 > ⚠️ Pri kopiranju `faza_id` iz postojećeg modela (`INSERT...SELECT...WHERE temperatura=X`) UVIJEK `ROUND(temperatura::numeric,4)=X` i u SELECT-izvoru — bez toga float precision tiho vraća `INSERT 0 0`, bez greške. Otkriveno s110.
+
+### Kako pokrenuti NOVU FAZU (s134)
+
+**Model: 1 metod : M faza.** Faza je samo redni broj + identifikator izvršavanja; SADRŽAJ je u metodu (`bb_metode`). Nova faza = **dva INSERT-a, nula linija koda.**
+
+```sql
+-- 1) registruj fazu (metod_id 2 = self-refine)
+INSERT INTO bb_faze (naziv, redoslijed, metod_id, opis)
+VALUES ('refine-2', 3, 2, 'Drugi prolaz self-refine metoda.');
+
+-- 2) registruj modele TE faze (isti model+temp smije se ponoviti u novoj fazi)
+INSERT INTO bb_modeli (naziv, temperatura, faza_id, aktivan)
+VALUES ('mistral-large-3:675b', 0.8, 3, true), ('glm-5.2', 0.8, 3, true);
+```
+
+```bash
+# 3) pokreni
+bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
+```
+
+**Pravila:**
+- `--faza` je **OBAVEZAN i ne auto-inkrementira se.** Skripta ne izmišlja faze — *vidi se šta radiš*. Nepostojeća faza → guard je odbija (`exit 1`).
+- **Faze se ne popunjavaju unazad.** Ako registruješ samo fazu 6, ona radi; faze 4/5 ne trebaju. Jedini preduslov je **postojanje pobjednika** (faza 1).
+- **Seed = trenutni apsolutni pobjednik**, iz bilo koje prethodne faze. Zato faze **nisu komutativne** — put je dio rezultata.
+- `redoslijed` je metapodatak koji **ti** upisuješ; ako preskačeš faze, on može lagati o stvarnom broju prolaza.
+- `--force` ide **samo sudiji** (`bb_08`); `bb_03` nema force — `already_done()` je namjerna idempotentnost.
+
+> ⚠️ **`nextval` NIJE transakcijski.** Ako INSERT u `bb_faze` padne pa se ponovi, sekvenca je odmakla i faza dobija pogrešan `id` (s134: dobila 5 umjesto 3). Poslije pale transakcije sa `serial` PK — **provjeri `id` prije nego se osloniš na njega**; po potrebi `setval('bb_faze_id_seq', N)`.
 
 ---
 
@@ -375,6 +409,8 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
 >
+> **s134 snapshot (13. jul 2026):** **FAZA ≠ METOD — strukturno razdvajanje.** Nova tabela `bb_metode` (`base` root / `self-refine`), `bb_faze.metod_id` FK → **1 metod : M faza**; faza degradirana na redni broj + identifikator izvršavanja. ROOT-invarijanta ("base ide tačno jednom") preseljena iz ničije glave u SHEMU: partial unique index `WHERE metod_id=1` (verifikovano da puca). `bb_modeli` netaknut — UNIQUE(naziv,temp,faza_id) je N faza podržavao od s114; **uskost je bila isključivo u orkestratoru**. Novi `run_faza.sh --faza N` (+ `src/bb_faza_info.py`) **zamijenio `run_refine.sh`** (obrisan): `--faza` obavezan, ne auto-inkrementira; `--force` samo sudiji. **Faza 3 (`refine-2`) pokrenuta bez ijedne linije koda** — dva INSERT-a → k22/hr 1–40. Refine k22/23/24 × de/hr/it/sr × 1–20 (faza 2) + analiza: win-rate 30,0% (baseline 2/7=28,6%), **head-to-head 25,0%** (stari par: 0/100) — i **headroom gradijent**: k23 (najslabiji seedovi) jedina s pozitivnom deltom na sva 4 jezika (k23/sr seed 0,9267 → 11/20 pobjeda), k24 (najjači seedovi) −0,008…−0,021. OTVORENO: 40/240 refine prevoda ima **identičan finalni_score** kao seed (no-op sumnja). Novi viewovi `v_status_faza` (long, N-faza-safe) + `v_status_faza_matrica` (privremen pivot). NER k22 (85 relacija). **Faza 3 otkrila hardkod "refine=faza 2" u web sloju:** `bb_web_export.py` l.235 POPRAVLJEN (generički filter); **DUG:** `reader.html` l.746, `nav.js` i18n (`reader_phaseN`, `stats_col_phaseN` — treba jedan parametrizovan ključ), `stats.html` kolone. **Re-export namjerno NIJE pokrenut** (backend bi slao `faza3` koji reader ne zna prikazati — backend i frontend idu zajedno). Web kod netaknut → **BB_VERSION ostaje s133**. Detalji: `docs/sessions/session_134.md`.
+
 > **s133 snapshot (13. jul 2026):** **NER LINIJA ZATVORENA.** Kriterij (Flavio):
 > prihvatanje je TEHNIČKO (izvršava se / upisuje potpun sloj / izvoziv u web) — kvalitet
 > klasifikacije je NALAZ, ne kriterij. **Odluka o obimu: proba/test samo na knjigama
@@ -785,9 +821,30 @@ Svaka sesija završava:
 **Drugi retirement talas (5. jul, kompletna Ollama lista) povukao i gemma3:27b i ministral-3:8b — prva s112 odluka nevažeća.** Novi par kroz sandbox sondu (6 kandidata, 2 kruga): **mistral-large-3:675b + glm-5.2** (oba ne-misleća/gase thinking, temp-živa, 10–13 tok, različite familije). Rezerve: deepseek-v4-flash (temp-mrtav), kimi-k2.6. Zamjena i refaktor idu zajedno ("jedan dah"), prije 15. jula — po principima iz `docs/KONCEPT.md` i mapi iz `docs/sessions/session_112.md` (koraci: backup → shema → skripte → test → web; puna lista povučenih + sonda u dodacima s112). Istorijat starog testa ispod.
 Test na Dracula/bs (42 rečenice, swap-dizajn A/B/C): prosjek finalni_score stari>novi u obje porodice (gemma3 0.9085 vs 0.8742; ministral 0.8500 vs 0.8346), ali uparen t-test slab (t≈1.23/0.70, n=42) — statistički neodlučivo. Head-to-head skoro 50/50. Nedovoljno za odluku u bilo kom smjeru. Sljedeće: veći uzorak (100+ rečenica) ili ponavljanje na drugoj knjizi prije 15. jula, istim receptom (`bb_08_sudija1.py`, swap A/B/C). Poslije odluke: pravi refaktor `OCJENJIVANI_MODELI` → kolona u `bb_modeli`. Kompletna mapa svih pogođenih skripti i tabela (nezavisno od finalnog izbora modela) — vidi `docs/sessions/session_111.md` (s111).
 
-### Self-refine eksperiment — NEGATIVAN nalaz (s100)
-Hipoteza: dati pobjednika kao hint pri ponovnom prevodu (self-refine / MoA interakcija) poboljšava prevod. **Rezultat: ne radi na jakim seedovima.** Test J&H hr s1-100: refine head-to-head vs svoj seed = **0/100** (nikad bolji; avg delta -0.076). Win-rate 36/100 bio je artefakt selekcije iz šireg bazena, ne stvarno poboljšanje — head-to-head otkrio konfaund. Uzrok: seed je već pobjednik od 5 modela (blizu plafona), "popravi ovo" perturbuje optimalni anchor -> regresija. Infrastruktura (`bb_03 --refine`, `run_refine.sh`, pseudo-modeli `*-refine` id 12/13, `bb_08` fix) ostaje za buduće hipoteze. Detalji: `docs/sessions/session_100.md`.
-Otvoreno: (a) selektivni re-translate na SLABIM seedovima (apsolutni prag <0.85, jedini netestiran režim); (b) refaktor `OCJENJIVANI_MODELI` -> kolona `grupa` u bb_modeli.
+### Self-refine — NEGATIVAN nalaz starog para (s100), REVIDIRAN novim parom (s134)
+
+**s100 (stari par, gemma3/ministral):** hipoteza — pobjednik kao hint poboljšava prevod. **Rezultat: ne radi na jakim seedovima.** J&H hr s1-100: head-to-head vs svoj seed = **0/100** (avg delta −0,076). Win-rate 36/100 bio je artefakt selekcije iz šireg bazena — head-to-head otkrio konfaund. Uzrok: seed je već pobjednik od 5 modela (blizu plafona), "popravi ovo" perturbuje optimalni anchor → regresija. Detalji: `docs/sessions/session_100.md`.
+
+**s134 (novi par, mistral-large-3 + glm-5.2; k22/23/24 × de/hr/it/sr × 1–20, n=240):**
+
+| mjera | s100 (stari par) | s134 (novi par) |
+|---|---|---|
+| head-to-head vs seed | **0/100** | **60/240 = 25,0 %** (40 izjednačeno, 140 gore) |
+| win-rate (apsolutni) | 36/100 | 72/240 = 30,0 % (baseline 2/7 = **28,6 %**) |
+
+**Refine više nije mrtav, ali agregatno i dalje gubi** (win-rate ≈ slučajni baseline).
+
+**Ključni nalaz — headroom gradijent (izmjeren, ne pretpostavljen):** refine dobija tamo gdje seed ima prostora, gubi gdje je seed blizu plafona.
+- k23 Big Four Copy — **najslabiji seedovi, jedina knjiga s pozitivnom deltom na sva 4 jezika**. k23/sr: seed 0,9267 → delta **+0,0178**, 11/20 pobjeda. k23/it: seed 0,9535 → **+0,0226**.
+- k24 Frankenstein Copy — **najjači seedovi**: k24/de seed 0,9777 → −0,0093, **2/20**. k24/it → 1/20.
+
+To potvrđuje s100-ovu dijagnozu (plafon), ali je pretvara u **kontinuum umjesto presude**.
+
+> ⚠️ **Metodološka ograda (Flavio, s134):** ispravna formulacija nije *"refine kvari jak prevod"* nego **"naš sudija i embedder ne vide poboljšanje na jakom seedu"**. Ocjenjivač je jedina mjera koju imamo i mjeri sam sebe. Blizu plafona i "poboljšanje" i "kvarenje" gube sadržaj. Pravi zadatak: **izmjeriti gdje sudija prestaje da razlikuje** i tu povući granicu poboljšavanja — umjesto pretpostavljati da razlikuje.
+
+**OTVORENO (s134):** 40/240 refine prevoda (17 %) ima **identičan `finalni_score` kao seed** na 4 decimale → sumnja na **no-op refine** (model vratio doslovno isti tekst): trošen LLM poziv, lažni kandidat u bazenu. Neprovjereno.
+
+Otvoreno i dalje: (a) selektivni re-translate na SLABIM seedovima (prag <0,85) — s134 pokazuje da je to najizgledniji režim; (b) refaktor `OCJENJIVANI_MODELI` → kolona `grupa` u bb_modeli.
 
 
 ### Performanse — NLLB CTranslate2 int8 — URAĐENO (s93)
@@ -880,4 +937,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 13. jul 2026. (sesija 133)*
+*Flavio & Claude · Buchenberg · V3 · 13. jul 2026. (sesija 134)*

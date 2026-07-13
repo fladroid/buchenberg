@@ -186,9 +186,9 @@ def get_model_registry(cur):
 
 
 def get_phase_winners(cur, knjiga_id, lang_kod):
-    """Nivo B: za rečenice koje IMAJU faza-2 pobjednika, vrati fazno-pobjednički
-    prevod za SVAKU fazu (faza 1 i faza 2 su RAZLIČITI prevodi_recenica_id — različiti
-    modeli/faze — vezani preko iste rečenice). Za reader "prije/poslije".
+    """Nivo B: za rečenice koje imaju BAR JEDNU fazu iznad bazne, vrati fazno-pobjednički
+    prevod za SVAKU fazu (svaka faza = RAZLIČIT prevodi_recenica_id — različiti
+    modeli/faze — vezani preko iste rečenice). N faza, bez hardkoda (s134).
     finalni_score = 0.4*kompozit + 0.6*sudija (ista formula kao bb_xray_export)."""
     cur.execute("""
         SELECT r.pozicija,
@@ -217,7 +217,7 @@ def get_phase_winners(cur, knjiga_id, lang_kod):
         ORDER BY r.pozicija, prf.faza_id
     """, (knjiga_id, lang_kod))
 
-    # Pivot po poziciji; emituj SAMO pozicije koje imaju fazu 2.
+    # Pivot po poziciji; emituj SAMO pozicije koje imaju bar jednu fazu iznad bazne.
     po_poziciji = {}
     for pozicija, faza, model, prevod, ts, judge_avg, finalni, je_aps in cur.fetchall():
         d = po_poziciji.setdefault(pozicija, {"pos": pozicija})
@@ -232,7 +232,7 @@ def get_phase_winners(cur, knjiga_id, lang_kod):
             d["apsolutna_faza"] = faza
 
     return [po_poziciji[p] for p in sorted(po_poziciji)
-            if "faza2" in po_poziciji[p]]
+            if any(k.startswith("faza") and k != "faza1" for k in po_poziciji[p])]
 
 
 def get_stats(cur):

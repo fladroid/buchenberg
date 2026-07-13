@@ -3,7 +3,7 @@
 bb_aktivni_modeli.py — ispisuje aktivne modele zadane faze iz bb_modeli.
 Izlaz: jedna linija po modelu, format: naziv|temperatura
 Upotreba: venv/bin/python src/bb_aktivni_modeli.py --faza 1
-Koriste ga run_pipeline.sh i run_refine.sh (DB-vodjene petlje, s114).
+Koriste ga run_pipeline.sh i run_faza.sh (DB-vodjene petlje, s114/s134).
 """
 import os
 import sys
