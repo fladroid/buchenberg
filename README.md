@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 13. jul 2026. (sesija 132)  
+**Poslednje ažuriranje:** 13. jul 2026. (sesija 133)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -374,6 +374,25 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s133 snapshot (13. jul 2026):** **NER LINIJA ZATVORENA.** Kriterij (Flavio):
+> prihvatanje je TEHNIČKO (izvršava se / upisuje potpun sloj / izvoziv u web) — kvalitet
+> klasifikacije je NALAZ, ne kriterij. **Odluka o obimu: proba/test samo na knjigama
+> <2000 rečenica**; velike knjige idu sekvencijalno kad bude resursa (pokretanje, ne razvoj).
+> Sva tri metoda rade. DocRE proširen: **J&H 23 relacije (1:15), Flatland 101 (4:05)** —
+> daleko jeftinije od s130 procjene (28 min/knjiga; sitni promptovi iz s131). DocRE sad na
+> 4 knjige: Hound 78/29 fine, Alice 60/10, J&H 23/10, **Flatland 101/1** — Flatland je
+> najčistiji dokaz da ventil radi kao mjerni instrument (nema likova u karakternom smislu;
+> Massey je character-character → 100 u ventilu = **nalaz o žanru, ne kvar**).
+> **Web usklađen (stajalo razdvojeno od s131):** nlp.html KLASA_COLOR (P/M/O) →
+> COARSE_COLOR (social/familial/professional/other), klik-panel `fine · coarse [± afinitet]`,
+> **afinitet = stil linije (dashed = negative)**, pouzdanost zadržava debljinu; nav.js DocRE
+> kartica ×5 jezika prepisana (taksonomija + afinitet + **imenovan ventil**), bez imena modela
+> (s115). **Oba exporta pokrenuta:** `bb_web_export` (40s, ner_*.json nova shema) +
+> `bb_xray_export` (1:09, **168 fajlova** — pokriveni novi opsezi, otvoreno od s132).
+> Argumenti verifikovani u kodu: bb_09/bb_10/bb_10c + run_ner.sh svi imaju `--knjiga N|all`
+> + `--force`; exporti ih nemaju jer im ne trebaju (regenerišu sve, idempotentno).
+> **BB_VERSION s129.4 → s133.** Detalji: `docs/sessions/session_133.md`.
 >
 > **s132 snapshot (13. jul 2026):** ANALITIČKA sesija — kod/baza/web NETAKNUTI
 > (BB_VERSION ostaje s129.4). Korpus narastao Flaviovim runovima: 50.624 / **1.544.460**
@@ -861,4 +880,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 13. jul 2026. (sesija 132)*
+*Flavio & Claude · Buchenberg · V3 · 13. jul 2026. (sesija 133)*
