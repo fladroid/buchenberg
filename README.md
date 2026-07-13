@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 12. jul 2026. (sesija 131)  
+**Poslednje ažuriranje:** 13. jul 2026. (sesija 132)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -112,7 +112,7 @@ Utvrđen empirijski na uzorku s1–s350 (HR, BS) i s1–s100 (ostali):
 
 ### Paralelno izvršavanje
 
-**Ollama Cloud nalog je Pro tier (nadograđeno s free) — paralelni pozivi su podržani.** Najmanje posljednje dvije sedmice (od otprilike sredine/kraja juna 2026) svi pipeline runovi — i sa starim i sa novim modelima — redovno trče paralelno; sa starim (jeftinijim) modelima Flavio je često pokretao i 5 paralelnih tokova odjednom. Eksperiment s118/s119 (4 paralelne grupe) izmjerio je ~3.77× agregatno ubrzanje sa 4 paralelna toka naspram jednog solo. NLLB (lokalni CPU) i dalje radi nezavisno paralelno s bilo kojim cloud tokom.
+**Ollama Cloud nalog je Pro tier (nadograđeno s free) — paralelni pozivi su podržani.** Najmanje posljednje dvije sedmice (od otprilike sredine/kraja juna 2026) svi pipeline runovi — i sa starim i sa novim modelima — redovno trče paralelno; sa starim (jeftinijim) modelima Flavio je često pokretao i 5 paralelnih tokova odjednom. NLLB (lokalni CPU) i dalje radi nezavisno paralelno s bilo kojim cloud tokom. Eksperiment s118/s119 (4 paralelne grupe) izmjerio je ~3.77× agregatno ubrzanje sa 4 paralelna toka naspram jednog solo — **taj broj je KORIGOVAN u s132 na ~2.47×** (efikasnost ~62%, ne linearno skaliranje). s119 baseline (0.924 rec/min) bio je izveden iz drugog dana/knjige/jezika i sam degradiran; prvi kontrolisani A/B (iste knjige, isti jezici, susjedni opsezi) daje solo 1.33–1.48 rec/min. Pojedinačni proces usporen **1.5–1.7×** u četvorci. Dio usporenja je LOKALAN (NLLB na foxuno CPU: do 2.66× sporiji — nezavisan instrument, ne cloud). glm-5.2 pati znatno više od mistral-large-3 (2.6× vs 1.1×). ⚠️ Konfaund: paralelni prolaz uveče, sekvencijalni noću — režim i doba dana nisu razdvojeni. Kvalitet nepromijenjen u oba režima. Detalji: `docs/sessions/session_132.md`.
 
 > ⚠️ **Istorijska napomena:** do nadogradnje na Pro (sredina/kraj juna 2026) nalog je bio free tier s ograničenjem od jedne sesije u isto vrijeme — stariji session dokumenti (npr. do ~s100) pominju to ograničenje i tretiraju paralelne procese kao grešku za ispravljanje. To više NE VAŽI.
 
@@ -374,6 +374,24 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s132 snapshot (13. jul 2026):** ANALITIČKA sesija — kod/baza/web NETAKNUTI
+> (BB_VERSION ostaje s129.4). Korpus narastao Flaviovim runovima: 50.624 / **1.544.460**
+> prevoda / **301.368** pobjednika. **Prvi kontrolisani A/B paralelno-vs-sekvencijalno**
+> (iste knjige k22/k23/k24, isti jezici de/hr/it/sr, opseg 200, susjedni rasponi):
+> paralelni agregat 13.95 prevoda/min vs solo 5.64 → **2.47×, NE 3.77× (s119 korigovan)**.
+> Pojedinačni proces 1.5–1.7× sporiji u četvorci. **NLLB kao nezavisan instrument** (lokalni
+> CPU, ne dira Ollamu): do 2.66× sporiji → dio kontencije je na foxuno, ne u cloudu.
+> **Asimetrija modela:** glm-5.2 @0.1 2.63× sporiji pod paralelizmom, mistral-large-3 @0.1
+> samo 1.08× — neobjašnjeno. ⚠️ **Konfaund:** paralelni 17:31–22:06 CEST, sekvencijalni
+> 22:29–03:14 CEST — režim i doba dana NISU razdvojeni. **k24 obrazac nijansiran:** prvi put
+> mjeren na core-4 → glm 59.9% / mistral 37.3% (ranije ~48/48 na drugim jezičnim grupama);
+> efekat knjige realan ali **jezično moduliran** (interakcija sadržaj × jezik, ne prosto
+> "gotska proza"). Kvalitet nepromijenjen (0.962–0.971 oba režima). **Flaviova hipoteza
+> "umorna baza"** (autovacuum/autoanalyze poslije danâ mirovanja) — ne objašnjava A/B (isti
+> dan), ali objašnjava pomak baseline-a s119→s132; provjera `pg_stat_user_tables` otvorena.
+> SLJEDEĆE: RUNOVI.md zapis (čeka k24 201–400), pa s132 web (bb_web_export + nlp.html ZAJEDNO).
+> Detalji: `docs/sessions/session_132.md`.
 >
 > **s131 snapshot (12. jul 2026):** MASSEY IMPLEMENTIRAN kraj-do-kraja (baza+bb_10c).
 > Korpus nepromijenjen (50.624 / 1.518.170 / 296.578). **(1) Dijagnostika prije
@@ -843,4 +861,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 12. jul 2026. (sesija 131)*
+*Flavio & Claude · Buchenberg · V3 · 13. jul 2026. (sesija 132)*
