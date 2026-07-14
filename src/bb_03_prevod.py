@@ -466,6 +466,19 @@ def main():
 
             print(f"  Jezik {kod} gotov.")
 
+            cur.execute("""
+                SELECT COUNT(DISTINCT pr.recenica_id)
+                FROM bb_prevodi_recenica pr
+                JOIN bb_recenice r ON pr.recenica_id = r.id
+                WHERE pr.prevodi_knjige_id = %s AND r.pozicija BETWEEN %s AND %s
+            """, (prevodi_knjige_id, args.od, args.do))
+            stvarno = cur.fetchone()[0]
+            ocekivano = args.do - args.od + 1
+            if stvarno == ocekivano:
+                print(f"  ✅ Provjera opsega [{args.od}-{args.do}]: {stvarno}/{ocekivano} OK")
+            else:
+                print(f"  ❌ Provjera opsega [{args.od}-{args.do}]: {stvarno}/{ocekivano} — nedostaje {ocekivano - stvarno}")
+
     cur.close()
     conn.close()
     print("\nGotovo.")

@@ -357,13 +357,16 @@ def get_stats(cur):
 
 
     cur.execute("""
-        SELECT kn.naziv, j.kod, COUNT(*) AS cnt
+        SELECT kn.id, kn.naziv, j.kod, COUNT(*) AS cnt
     """ + base_from + """
-        GROUP BY kn.naziv, j.kod
+        GROUP BY kn.id, kn.naziv, j.kod
         ORDER BY kn.naziv, j.kod
     """)
-    coverage = [{"book": book, "lang": lang, "translated": int(cnt)}
-                for book, lang, cnt in cur.fetchall()]
+    coverage_raw = cur.fetchall()
+    book_totals = {bid: ukupno for bid, _, _, _, ukupno in get_books(cur)}
+    coverage = [{"book": book, "lang": lang, "translated": int(cnt),
+                 "total": book_totals.get(bid)}
+                for bid, book, lang, cnt in coverage_raw]
 
     cur.execute("""
         SELECT j.kod,

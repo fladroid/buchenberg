@@ -129,6 +129,49 @@ def check_postgres():
         row(ERR, "Konekcija", str(e))
         return False
 
+# ── 2b. Kompletnost prevoda (rupe po modelu) ─────────────────────────
+def check_kompletnost():
+    hdr("2b. Kompletnost prevoda (v_status_faza_model)")
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST"), port=int(os.getenv("DB_PORT", 5432)),
+            dbname="bb", user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"), connect_timeout=5
+        )
+        cur = conn.cursor()
+        cur.execute("""
+            WITH max_po_grupi AS (
+                SELECT knjiga_id, jezik_kod, faza_id, MAX(prevedeno) AS ocekivano
+                FROM v_status_faza_model
+                GROUP BY knjiga_id, jezik_kod, faza_id
+            )
+            SELECT vsm.knjiga_id, vsm.knjiga_naziv, vsm.jezik_kod,
+                   vsm.faza_id, vsm.faza_naziv, vsm.model_naziv,
+                   vsm.model_temperatura, vsm.prevedeno, m.ocekivano,
+                   (m.ocekivano - vsm.prevedeno) AS rupa
+            FROM v_status_faza_model vsm
+            JOIN max_po_grupi m USING (knjiga_id, jezik_kod, faza_id)
+            WHERE vsm.prevedeno < m.ocekivano
+            ORDER BY rupa DESC, vsm.knjiga_id, vsm.jezik_kod
+        """)
+        rows_data = cur.fetchall()
+        conn.close()
+
+        if not rows_data:
+            row(OK, "Rupe (model vs max u grupi)", "nema — svi modeli konzistentni")
+            return True
+
+        row(ERR, "Rupe pronadjene", f"{len(rows_data)} redova")
+        print(f"\n  {'─'*92}")
+        print(f"  {'ID':>3} {'Knjiga':<28} {'Jz':>2} {'FzID':>4} {'Faza':<10} {'Model':<20} {'Temp':>5} {'Ima':>5} {'Ocek':>5} {'Rupa':>5}")
+        print(f"  {'─'*92}")
+        for kid, naziv, jezik, fid, faza, model, temp, prevedeno, ocekivano, rupa in rows_data:
+            print(f"  {kid:>3} {naziv[:28]:<28} {jezik:>2} {fid:>4} {faza:<10} {model[:20]:<20} {temp:>5} {prevedeno:>5} {ocekivano:>5} {rupa:>5}")
+        return False
+    except Exception as e:
+        row(ERR, "Provjera kompletnosti", str(e))
+        return False
+
 # ── 3. Ollama Cloud — modeli ─────────────────────────────────────────
 def check_ollama():
     hdr("3. Ollama Cloud")
@@ -325,6 +368,7 @@ if __name__ == "__main__":
     env_ok = check_env()
     if env_ok:
         check_postgres()
+        check_kompletnost()
         check_ollama()
     check_nllb()
     check_venv()
