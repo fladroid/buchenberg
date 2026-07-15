@@ -43,6 +43,7 @@ DB = {
 OLLAMA_URL  = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
 OLLAMA_KEY  = os.getenv("OLLAMA_API_KEY", "")
 BATCH_SIZE  = 20
+REFINE_BATCH_SIZE = 5
 
 # NLLB engine: "fp32" = HF transformers (default), "ct2" = CTranslate2 int8 (brze na CPU)
 NLLB_ENGINE       = os.getenv("NLLB_ENGINE", "ct2").lower()
@@ -307,6 +308,35 @@ def upisi_prevod(cur, prevodi_knjige_id, recenica_id, prevod, back_translation, 
     """, (prevodi_knjige_id, recenica_id, prevod, back_translation, score, translation_score))
 
 
+def prevedi_refine_batch(parovi, jezik_naziv, model, temp):
+    numerirani = "\n".join(
+        f"{i+1}. English: {t}\n   Reference {jezik_naziv}: {seed}"
+        for i, (t, seed) in enumerate(parovi)
+    )
+    prompt = (
+        f"Translate the following English texts to {jezik_naziv}.\n"
+        f"For each item, a reference translation is provided. Produce a BETTER "
+        f"translation — more accurate and more natural.\n"
+        f"Output ONLY the translations as a numbered list, one per line, nothing else.\n\n"
+        f"{numerirani}"
+    )
+    try:
+        odgovor = ollama_chat(model, temp, [{"role": "user", "content": prompt}])
+        linije = [l.strip() for l in odgovor.splitlines() if l.strip()]
+        prevodi = []
+        for l in linije:
+            if l and l[0].isdigit() and ". " in l:
+                prevodi.append(l.split(". ", 1)[1].strip())
+            else:
+                prevodi.append(l)
+        if len(prevodi) == len(parovi):
+            return prevodi
+        return None
+    except Exception as e:
+        print(f"  [refine batch error] {e}")
+        return None
+
+
 def prevedi_refine_single(tekst, jezik_naziv, model, temp, seed):
     prompt = (
         f"Translate the following English text to {jezik_naziv}.\n"
@@ -422,7 +452,7 @@ def main():
                 todo = [x for x in todo if x[0] in seed_map]
                 print(f"  Refine: {len(todo)} rečenica sa seedom")
 
-            step = NLLB_CT2_BATCH if (is_nllb and NLLB_ENGINE == "ct2") else BATCH_SIZE
+            step = NLLB_CT2_BATCH if (is_nllb and NLLB_ENGINE == "ct2") else (REFINE_BATCH_SIZE if is_refine else BATCH_SIZE)
             for i in range(0, len(todo), step):
                 chunk = todo[i:i + step]
                 tekstovi = [t for _, _, t in chunk]
@@ -434,10 +464,18 @@ def main():
                     prevodi = nllb_batch(tekstovi, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
                     backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
                 elif is_refine:
-                    prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid])
-                               for rid, poz, t in chunk]
-                    backs   = [back_prevedi_single(p, jezik_naziv, ollama_naziv, temp)
-                               for p in prevodi]
+                    parovi = [(t, seed_map[rid]) for rid, poz, t in chunk]
+                    prevodi = prevedi_refine_batch(parovi, jezik_naziv, ollama_naziv, temp)
+                    if prevodi is None:
+                        print("    Fallback na single refine...")
+                        prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid])
+                                   for rid, poz, t in chunk]
+
+                    backs = back_prevedi_batch(prevodi, jezik_naziv, ollama_naziv, temp)
+                    if backs is None:
+                        print("    Fallback na single back-translation...")
+                        backs = [back_prevedi_single(p, jezik_naziv, ollama_naziv, temp)
+                                 for p in prevodi]
                 else:
                     prevodi = prevedi_batch(tekstovi, jezik_naziv, args.model, temp)
                     if prevodi is None:
