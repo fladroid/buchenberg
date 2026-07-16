@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 15. jul 2026. (sesija 138)  
+**Poslednje ažuriranje:** 16. jul 2026. (sesija 139)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -409,6 +409,41 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s139 snapshot (16. jul 2026):** KONCEPTUALNA sesija — nula izmjena koda/baze
+> (korpus 50.624/1.595.460/302.168, sve READ-ONLY). Dva bloka. **(1) Potvrda mehanike
+> self-refine** (Flavio provjerava razumijevanje, svaka tvrdnja verifikovana čitanjem
+> koda/baze): svaki refine korak traži samo da faza 1 ima pobjednika; bilo koja faza
+> se pokreće ako pobjednik postoji (pobjednik je pobjednik, nezavisno od redoslijeda —
+> argmax je argmax; redoslijed mijenja samo SADRŽAJ SIDRA za budući poziv, ne
+> ispravnost selekcije); idempotentnost po (model,temp,faza) preko
+> UNIQUE(naziv,temp,faza_id) — ista trojka u fazi 2/3 su različiti redovi; faza mora
+> biti registrovana u bb_faze (guard exit 1) pa se faza 999 ne može pokrenuti a 2/3
+> mogu; **faze 2 i 3 su tehnički identične** (isti metod_id=2, isti modeli — faza 3
+> uvedena samo zbog UNIQUE ograničenja da isti model+temp prevede drugi put).
+> **(2) NALAZ — prompt je neregistrovan parametar:** prompt utiče na prevod jednako kao
+> model/temp, ali živi samo kao string-literal u bb_03; nije u (model,temp,faza) trojci
+> → promjena prompta (npr. s135 klon-fix) je NEVIDLJIVA jer already_done() preskače
+> rečenicu → ne možemo ni uporediti ni koegzistirati stari-vs-novi-prompt prevod.
+> Idempotentnost aktivno sakriva efekat promjene prompta. Tri mjesta za prompt
+> (analiza, bez odluke): A=bb_faze, B=bb_metode (Claudeov stav — najčišće, "self-refine
+> s promptom A/B" = dva metoda, po s134 disciplini sadržaj-u-metod), C=bb_modeli.
+> **(3) IDEJA (horizont, ne plan) — random selekcija s evoluirajućim preferencama:**
+> random izbor (2 modela × temp × prompt × redovi) → "šarolik" prevod; iz šarolikosti
+> čitati preference za sljedeći "dirigovani random". Anti-elitizam: bolji element dobija
+> ŠIRI ali NENULTI interval slučajnih brojeva (0.8 pobjeđuje 70% → interval 70%, 0.1 →
+> 30%; slabiji nikad ne ispada). Jumping-genes analogija (McClintock, web-provjereno):
+> čitala šaru zrna kukuruza kao podatak o mehanizmu — tačno "iz šarolikog prevoda čitaj
+> preference". **Claudeova analiza:** ovo je kanonski **fitness-proportionate
+> (roulette-wheel) selection** (Holland); Flaviov instinkt pogodio alat I motiv. Dvije
+> poznate zamke pogađaju baš ovaj slučaj: prerana konvergencija (povratna sprega
+> zaključa favorita prije poštenog uzorkovanja) i nekonzistentan pritisak (preslab blizu
+> plafona = projektov s134 pejsmejker). Popravka: **rank selection** (interval ∝ rang,
+> ne sirovi score) radi i na 0.95+ korpusu. **Trajna ograda:** interval dolazi od pobjeda
+> PO NAŠEM SUDIJI → preferenca je X-Ray vlastitog ocjenjivanja, ne istina o jeziku
+> (McClintock imala nezavisnu istinu, mi imamo sudiju koji je i igrač i mjerni
+> instrument). Sve ostaje horizont; s138 Odluka 2 (web glačanje) i dalje važi. Detalji:
+> `docs/sessions/session_139.md`.
 >
 > **s138 snapshot (15. jul 2026):** Dvije web izmjene + konceptualno istraživanje ZATVORENO negativnim nalazom. **Web:** (1) reader.html X-Ray Full mod sad prikazuje FAZU po svakom kandidatu (ne samo pobjedniku) — `bb_xray_export.py` je fazu izvozio od s114, samo se nije prikazivala; jedan red u `renderXrayPage()`, postojeci `reader_phase_n` i18n kljuc, bez backend izmjene (buchenweb 5feb09e). (2) nlp.html metod-kartice (Classic/With LLM/DocRE) postale KLIKABILNI birac — stari sitni tasteri (`.nlp-method-btn`) skriveni `display:none`, kartice `.nlp-mcard` proksiraju klik na skriveni taster (nula duplikacije logike), veci font/hover/jaci active indikator (buchenweb 4270b02). BB_VERSION s136->s138.2. **Istrazivanje (NER<->prevod, sazetak<->prevod — kontekst-injection za kvalitet prevoda):** invarijanta cijelo vrijeme — sudija slijep/fiksan, kontekst SAMO prevodiocu (s124). Svi testovi standalone, van produkcije, NULA upisa u bazu. Nalaz: (a) NER (DocRE relacije) daje STRUKTURU odnosa ali zadatak (ti/vi registar) trazi EPOHU/registar — pogresna osa informacije, nije los alat nego pogresan (Flaviova odluka: odustajemo od NER-prevod veze). (b) Sazetak (deepseek-v4-pro "prevodilacki brief") je izvanredan artefakt (hvata epohu/registar/oslovljavanje) ALI ne mijenja prevod pouzdano; Gutenbergov sadrzajni sazetak ~ gol prompt (ne sluzi svrsi). (c) **GLAVNI NALAZ: signal ispod suma** — ista recenica (Holmes->Watson "Don't move, I beg you") PREOKRENULA ti/vi izbor izmedju dva prolaza istog prompta na temp 0.8; varijacija poziva > razlika promptova, pa je svaki "efekat" iz jednog poziva bio slucajnost. (d) Flaviov uvid rusi premisu: "prijatelji->ti" NIJE univerzalno ispravno (Holmes/Watson na njemackom = "Sie"; viktorijanski registar formalan uprkos prijateljstvu) — cilj sam po sebi nejasan. **ODLUKA 1: kontekst-injection za kvalitet prevoda ZATVOREN** (i NER i sazetak). **ODLUKA 2: sljedecih nekoliko sesija = web stabilizacija i estetsko glacanje.** Korpus netaknut (50.624/1.582.660/302.168). Detalji: `docs/sessions/session_138.md`.
 
@@ -946,4 +981,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 15. jul 2026. (sesija 138)*
+*Flavio & Claude · Buchenberg · V3 · 16. jul 2026. (sesija 139)*
