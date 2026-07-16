@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 16. jul 2026. (sesija 139)  
+**Poslednje ažuriranje:** 17. jul 2026. (sesija 140)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -409,6 +409,43 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s140 snapshot (17. jul 2026):** KONCEPTUALNA sesija — nula izmjena koda/baze
+> (korpus 50.624/1.595.460/302.168, READ-ONLY osim web dodatka). Nastavak s139 horizonta.
+> **Tri okvirne odluke (Flavio):** (1) "web glačanje" NIJE trajni horizont ("nikad neće
+> biti gotovo, ne ponavljati") — web izmjene ad-hoc uz konkretan povod; (2) ti/vi +
+> NER/sažetak kontekst-injection nit ZATVORENA ("ne radimo"); (3) fokus na dva s139
+> koncepta. **(A) PROMPT KAO ATRIBUT FAZE:** EAV (atribut,vrijednost po redu) razmotren
+> i ODBAČEN — Flaviov argument: shemu moraš i ČITATI, ako za to treba priručnik izgubili
+> smo; gubi tipsku sigurnost (temp NUMERIC, s110) i UNIQUE(naziv,temp,faza_id) garanciju.
+> Prompt ide na `bb_faze` kao TEXT kolona (Claudeov s139 stav "bb_metode" ISPRAVLJEN):
+> "tanka faza" nikad nije značila "zabranjeno dodavati atribute" nego ergonomski čitljiv
+> redni broj; **faza = SVI atributi koji je opisuju**, prompt je jedan od njih (finiji od
+> metoda; metod ostaje krupna kategorija base/self-refine). Mehanika = **slowly changing
+> dimension Tip 1** (UPDATE prepiše tekući prompt; istorija živi u prevodima, ne u fazi).
+> `\d bb_faze` potvrdio: `bb_faze_root_jednom` (partial UNIQUE metod_id=1) OSTAJE — root
+> je JEDAN red, mijenja se sadržaj ne broj redova; nov refine prompt = nova refine faza
+> (metod_id=2, novi redoslijed). PRAZNINA (Flavio prihvatio): prompt trag za stare prevode
+> ne postoji → ručni upis u istoriju. Posao kad se gradi: ADD COLUMN + UPDATE + bb_03 čita
+> iz baze + header loga + sve što se radi s modelom/temp radi se i s promptom.
+> **(B) RANDOM SELEKCIJA S MARGINALNIM PREFERENCAMA:** faza 1 = temelj bez filozofije
+> (deterministična, seed za sve iznad); random tek od refine faza. Mehanika = traži-ili-
+> kreiraj fazu po skupu atributa (postoji→nastavi, ne→INSERT). **KLJUČNO: preferenca je
+> MARGINALNA PO ATRIBUTU, ne po kombinaciji** (MB favorit-model, TA favorit-temp, PB
+> favorit-prompt, kombinuju se NEZAVISNO → MB+TA+PB možda nikad nije postojao) — održava
+> raznolikost po konstrukciji, ne konvergira u jedan vrh; anti-elitizam "niko 100% ni 0%".
+> Mutacija = odvojen korak POSLIJE izbora (jeftina, zatvoren skup). Strop protiv preuzimanja
+> (~50% rečenica/knjiga max jedne kombinacije) = anti-konvergencija kao tvrdo pravilo.
+> **Granularnost uspjeha:** tri nivoa Biblioteka/Jezik/Knjiga ponderisano (kao finalni_score
+> filozofija), **Knjiga najviše/Biblioteka najmanje**; ponder raste s količinom podataka
+> (rani prevod → biblioteka vodi; zreo → knjiga). Klasa/žanr NE preko LLM (nova crna kutija)
+> — knjiga-kao-svoja-klasa zaobilazi definisanje. Prag ulaska = **proporcionalan ~10%**
+> (ne apsolutnih 400 — ne skalira); ispod praga uniformni random, iznad vođeni.
+> **FLAVIOVA OGRAĐA:** "ne simuliramo evoluciju" — jumping-genes (McClintock) je ANALOGIJA
+> ne specifikacija; X-Ray je promatranje pojave kad se desi, ne teorijsko predviđanje kvara.
+> "Sve što se događa je naš cilj, sve radimo zbog nas, i dobro i loše." **Web:** McClintock
+> u about.html + Key Concepts kartica (`Barbara_McClintock`). BB_VERSION s138→s140. Detalji:
+> `docs/sessions/session_140.md`.
 >
 > **s139 snapshot (16. jul 2026):** KONCEPTUALNA sesija — nula izmjena koda/baze
 > (korpus 50.624/1.595.460/302.168, sve READ-ONLY). Dva bloka. **(1) Potvrda mehanike
@@ -981,4 +1018,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 16. jul 2026. (sesija 139)*
+*Flavio & Claude · Buchenberg · V3 · 17. jul 2026. (sesija 140)*
