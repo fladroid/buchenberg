@@ -410,6 +410,31 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
 >
+> **s141 snapshot (17. jul 2026):** PLANSKA sesija — nula izmjena koda/baze
+> (korpus 50.624/1.608.260/302.168, READ-ONLY), samo snimljen plan-dokument
+> `docs/PLAN-KONFIGURACIJA.md`. Spojena dva s140 prioriteta (prompt-kao-atribut +
+> random selekcija) u jedan zahvat sa zavisnošću A→B (random bira prompt kao atribut
+> → prompt-kao-atribut je temelj). **KONCEPTUALNI POMAK (kroz tri iteracije plana):
+> zahvat narastao od "dodaj prompt na bb_faze" u REDEFINICIJU FAZE.** s140 odluka
+> (prompt = TEXT kolona na bb_faze) NADOGRAĐENA: random zahtijeva katalošku tabelu
+> promptova (bira iz nje), pa prompt postaje TABELA + veza, ne kolona. **Faza =
+> konfiguracija = kombinacija izbora iz TRI NEZAVISNE OSE** (a1=model, a2=temperatura,
+> a3=prompt). Model prestaje biti "model+temperatura" (slijepljivanje a1+a2 u jedan
+> bb_modeli red = ad-hoc odluka s početka, ISPRAVLJA se). **Ciljna shema:** tri
+> kataloga (`bb_modeli` čist naziv, `bb_temperature` nova, `bb_promptovi` nova — svaki
+> prompt = svi tekstovi prevod+back batch+single) + tri odvojene simetrične veze
+> (`bb_faze_a1/a2/a3`, faza_id+izbor+aktivan, NIJEDNA spojena — faza bira svaku osu
+> NEZAVISNO). **Migracija:** raspakuj 25 bb_modeli redova u tri ose, prebaci 1.268
+> bb_prevodi_knjige FK na eksplicitne veze; `bb_prevodi_recenica` (1.6M) netaknut (ispod
+> knjiga-nivoa). Pun redoslijed 0–8 u planu; Korak 5 (migracija traga) najveći/najrizičniji.
+> Base=UPDATE (SCD Tip 1, root ostaje); refine=traži-ili-kreiraj po skupu (nikad namjerni
+> duplikat; isti skup na više faza → min id). **LEKCIJA (Claude, 3×):** semantika imena
+> ("temperatura","faza","broj faze") natovaruje lažne pretpostavke na strukturu (sprega
+> model↔temp, "parovi", redoslijed faza) — a1/a2/a3 okvir ih skida. Plan sa "otvorenim
+> pitanjima" koja su MOJA zbunjenost (ne rupa u konceptu) nije plan: prvo raščistiti
+> razumijevanje, PA plan. Zatečeni podaci ≠ koncept. BB_VERSION ostaje s138 (web netaknut).
+> Detalji: `docs/sessions/session_141.md`.
+>
 > **s140 snapshot (17. jul 2026):** KONCEPTUALNA sesija — nula izmjena koda/baze
 > (korpus 50.624/1.595.460/302.168, READ-ONLY osim web dodatka). Nastavak s139 horizonta.
 > **Tri okvirne odluke (Flavio):** (1) "web glačanje" NIJE trajni horizont ("nikad neće
