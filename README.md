@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 18. jul 2026. (sesija 142)  
+**Poslednje ažuriranje:** 18. jul 2026. (sesija 143)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -205,7 +205,7 @@ if parts is None:
 | `bb_faze` | **Faza = jedno izvršavanje metoda** (s134): redni broj + jedinstveni identifikator. `metod_id` FK → `bb_metode` (**1 metod : M faza**). Partial UNIQUE `WHERE metod_id=1` čuva ROOT-invarijantu u SHEMI. |
 | `bb_modeli` | **s142: ČIST katalog imena** (`id, naziv, aktivan`, UNIQUE(naziv)) — a1 osa. Slijepljivanje s temperaturom/fazom (staro, do s142) UKLONJENO. |
 | `bb_temperature` | **NOVO s142** — a2 osa. `id, vrijednost REAL UNIQUE`. |
-| `bb_promptovi` | **NOVO s142** — a3 osa. `id, naziv UNIQUE, prompt_prevod_batch, prompt_prevod_single, prompt_back_batch, prompt_back_single` (TEXT, `.format()` template s placeholderima `{jezik_naziv}`,`{numerirani}`,`{tekst}`,`{seed}`,`{prevod}`). Trenutno 2 reda: `base`, `refine`. |
+| `bb_promptovi` | **NOVO s142** — a3 osa. `id, naziv UNIQUE, prompt_prevod_batch, prompt_prevod_single, prompt_back_batch, prompt_back_single` (TEXT, `.format()` template s placeholderima `{jezik_naziv}`,`{numerirani}`,`{tekst}`,`{seed}`,`{prevod}`). **s143:** 4 reda: `base`, `refine`, `refine-lenient` (pre-s135 stil, "keep if optimal"), `refine-strict` ("must be better or meaningfully different") — nijedan od zadnja dva još nije vezan za fazu preko `bb_faze_a3`. |
 | `bb_faze_a1` / `bb_faze_a2` / `bb_faze_a3` | **NOVO s142** — tri simetrične veze faza↔osa: `faza_id` FK + izbor FK (`model_id`/`temperatura_id`/`prompt_id`) + `aktivan`, UNIQUE(faza_id, izbor). Faza bira iz svake ose NEZAVISNO — nema sprege, nema "parova" u shemi. `bb_aktivni_modeli.py` i dalje vraća samo istorijski korišćene (model,temp) parove (Flaviova odluka s142) — orkestratori NE rade pun unakrsni proizvod a1×a2. |
 | `bb_embeddings` | Embedder definicije |
 | `bb_knjige` | Knjige (naziv, autor, gutenberg_id UNIQUE) |
@@ -427,6 +427,35 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s143 snapshot (18. jul 2026):** RAZRADA DIJELA B (mjerenje + konkretizacija
+> dizajna), nastavak istog dana nakon s142. Korpus NEPROMIJENJEN (50.624/1.608.271/
+> 302.168) — samo `bb_promptovi` 2→4 reda, dokumentacija. BB_VERSION ostaje s138.
+> **Mjerenje (nove kanonske upite trajno u docs/ANALIZA.md):** faze `root=false`
+> (metod_id→bb_metode, NE `faza_id>1` — otporno na buduće faze bilo kog porijekla)
+> čine 2.44% obima svih prevoda (39.286/1.608.271) ali samo 1.73% apsolutnih
+> pobjednika (5.217/302.168) na CIJELOM korpusu — konzistentno gubi agregatno,
+> slaže se s malim uzorcima s134-138. **Tri nivoa granularnosti razjašnjena:**
+> Knjiga 50% (knjiga+jezik+root=false) / Jezik 25% (jezik+root=false, sve knjige) /
+> Biblioteka 25% (samo root=false, sve knjige i jezici) — dimenzije se puštaju
+> POSTEPENO šire, ne dodaju svugdje; ponder FIKSAN za sada (revizija nakon analize
+> par hiljada refine prevoda). Demonstrisano na Alice/hr: temperatura DEGENERISANA
+> (100% na sva tri nivoa — refine je ikad aktivirao samo 0.8), model (a1) pokazao
+> STVARNU razliku (Knjiga nivo = samo stari retired par, Jezik/Biblioteka = i novi
+> par) → otkrilo da anti-elitizam/strop ima smisla SAMO kad osa ima ≥2 PODOBNE
+> vrijednosti u kontekstu; inače je 100% deterministički izbor, ne kršenje pravila.
+> **NLLB isključen iz a1 za refine faze** preko postojećeg
+> `bb_model_registar.vrsta<>'namenski MT model'` filtera (registry iz s123, samo
+> povezan za novu svrhu) — BEZ nove tabele/kolone (Flavio: "mijenjamo strukturu
+> baze najmanje moguće"). Sudija potvrđen potpuno van a1/a2/a3 rotacije (fiksna
+> konstanta). **bb_promptovi popunjen sa sve tri refine varijante:** `refine`
+> (postojeći), `refine-lenient` (pre-s135 tekst, single citiran tačno iz
+> bb_03_prevod.py.bak_s114, batch konstruisan po analogiji jer je batch-refine
+> uveden tek u s137), `refine-strict` (nov tekst, Flavio odobrio). Nijedna od tri
+> refine varijante još nije vezana za fazu preko bb_faze_a3 — mehanizam selekcije
+> Dijela B nije građen, samo katalog + dizajn. Sesija zatvorena SAMOSTALNO od
+> Claudea (Flavio unaprijed autorizovao, odsutan od PC-a). Detalji:
+> `docs/sessions/session_143.md`, `docs/PLAN-KONFIGURACIJA.md` (§4 dopunjen).
 >
 > **s142 snapshot (18. jul 2026):** DIO A PLANA (konfiguracija kao faza) IZVRŠEN
 > kraj-do-kraja. Korpus 50.624/1.608.271(+11 test)/302.168. Shema: `bb_modeli`
@@ -1082,4 +1111,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 18. jul 2026. (sesija 142)*
+*Flavio & Claude · Buchenberg · V3 · 18. jul 2026. (sesija 143)*

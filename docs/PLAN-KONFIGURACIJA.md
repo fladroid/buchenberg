@@ -1,9 +1,9 @@
 # Plan implementacije — Konfiguracija kao faza
 
-**Datum:** 17. jul 2026. (sesija 141)
+**Datum:** 17. jul 2026. (sesija 141), dopunjeno 18. jul 2026. (s142 izvršenje, s143 razrada Dijela B)
 **Autori:** Flavio & Claude
-**Status:** PLAN IZVRŠENJA. Koncept ispro-diskutovan i zatvoren. Nema otvorenih
-pitanja. Nijedna komanda još nije pokrenuta.
+**Status:** DIO A IZVRŠEN (s142). DIO B dizajn konkretizovan (s143), mehanizam
+selekcije nije građen. Vidi §6 Status za detalje.
 
 ---
 
@@ -252,6 +252,79 @@ Tek kad prevodi više ne zavise od slijepljenog model_id: raščisti bb_modeli n
 
 ---
 
+### 4.6 Konkretizacija dizajna — odluke iz s143 (18. jul 2026)
+
+Nakon što je Dio A izvršen (s142), sljedeća sesija (s143) razradila je nekoliko
+otvorenih pitanja iz §4 na konkretne odluke — sve bez izmjene sheme.
+
+**Filter za "sve faze koje ulaze u random tretman":**
+```sql
+-- ISPRAVNO (otporno na buduće faze bilo kog porijekla):
+... JOIN bb_faze f ON f.id = X.faza_id JOIN bb_metode m ON m.id = f.metod_id
+WHERE m.root = false
+
+-- POGREŠNO (lomi se čim postoji faza čiji id nije uzastopan/veći):
+... WHERE X.faza_id > 1
+```
+Nema posebnog tretmana po porijeklu faze (random vs ručno kreirana) — sve
+`root=false` faze rade identično.
+
+**Izmjereno na cijelom korpusu (kanonski upiti u `docs/ANALIZA.md`):** faze
+`root=false` = 2.44% obima svih prevoda, 1.73% apsolutnih pobjednika —
+konzistentno gubi agregatno, slaže se s malim uzorcima s134-138.
+
+**Tri nivoa granularnosti (§4.3) — precizna definicija filtera:**
+
+| Nivo | Ponder | Filter |
+|---|---|---|
+| Knjiga | 50% | `knjiga_id=K AND jezik_id=L AND root=false` |
+| Jezik | 25% | `jezik_id=L AND root=false` (sve knjige) |
+| Biblioteka | 25% | `root=false` (sve knjige, svi jezici) |
+
+Dimenzije (knjiga, jezik) se puštaju POSTEPENO šire prema širem nivou — ne
+dodaju se svugdje. Ponder OSTAJE FIKSAN (50/25/25) do empirijske revizije
+nakon analize par hiljada refine prevoda — adaptivni/shrinkage prijedlog iz
+§4.3 nije odbačen, samo odgođen.
+
+**Preduslov prije anti-elitizma (§4.2) — podobnost po osi:**
+Anti-elitizam/strop ima smisla SAMO kad osa ima ≥2 podobne vrijednosti u
+datom kontekstu. Ako 1, deterministički izbor (nije kršenje "niko 100% ni
+0%" — nema alternative). Provjeriti broj podobnih vrijednosti PRIJE računanja
+marginalne preference. (Empirijski dokaz: temperatura u postojećim refine
+fazama je degenerisana — samo 0.8 ikad aktivirana, 100% na sva tri nivoa.)
+
+**a1 podobnost za refine faze — NLLB isključen, bez nove sheme:**
+```sql
+SELECT m.id, m.naziv FROM bb_modeli m
+JOIN bb_model_registar r ON r.naziv = m.naziv
+WHERE m.aktivan = true AND r.vrsta <> 'namenski MT model'
+```
+Koristi POSTOJEĆI `bb_model_registar` (s123) umjesto nove tabele/kolone —
+Flaviov princip: "mijenjamo strukturu baze najmanje moguće, iskoristimo
+maksimalno ono što imamo." Razlog za isključenje NLLB: (a) uvijek već
+pokriven u root fazi; (b) tehnička zavisnost a1→a2 — NLLB nema pojam
+sampling temperature (uvijek 0.0, CTranslate2 beam decode), pa slobodan
+izbor a2 preko svih 5 vrijednosti ne bi bio smislen za taj a1.
+
+**Sudija van sistema:** `gemma4:31b` potpuno van a1/a2/a3 rotacije — fiksna
+pipeline konstanta (KONCEPT.md: tačno 1 sudija), nikad ne konkuriše u
+izboru, nema "grupu temperatura za sudiju" (njegova temp=0.0 živi
+hardkodovano u `bb_08_sudija.py`, van ovog sistema).
+
+**Prompt katalog (a3) popunjen — tri refine varijante:** `refine` (id 2,
+postojeći), `refine-lenient` (id 3, pre-s135 tekst), `refine-strict` (id 4,
+nova). Nijedna od tri još nije vezana za fazu preko `bb_faze_a3` — katalog
+spreman, mehanizam selekcije NIJE građen.
+
+**Još otvoreno (za sljedeću sesiju kad se gradi mehanizam):**
+- Izvršni redoslijed za Dio B (analogan §3.2 Korak 0-8 iz Dijela A) —
+  konkretan generator koji stvarno bira a1/a2/a3 i radi traži-ili-kreiraj.
+- Formalizacija "širi ali nenulti interval" (s139 pominje rank selection).
+- Operativna definicija praga ~10% (koji upit/view).
+- Kad se strop ~50% provjerava — u trenutku izbora ili naknadno.
+
+Detalji cijele rasprave: `docs/sessions/session_143.md`.
+
 ## 5. Sažetak redoslijeda
 
 ```
@@ -277,9 +350,12 @@ DIO B (na temelju A):
 
 ## 6. Status
 
-- Ovaj dokument = plan izvršenja. Nijedna komanda nije pokrenuta.
-- Koncept zatvoren, nema otvorenih pitanja.
-- Kreće se od Koraka 0 (backup) kad Flavio odluči.
+- **Dio A: IZVRŠEN kraj-do-kraja (s142, 18. jul 2026).** Svih 9 koraka (0-8)
+  izvršeno i verifikovano. Detalji: `docs/sessions/session_142.md`.
+- **Dio B: dizajn konkretizovan (s143, 18. jul 2026), mehanizam NIJE građen.**
+  Vidi §4.6 za odluke. Detalji: `docs/sessions/session_143.md`.
+- Sljedeći korak kad Flavio odluči: izvršni redoslijed za Dio B mehanizam
+  selekcije, analogan §3.2 za Dio A.
 
 ---
-*Flavio & Claude · Buchenberg · Plan konfiguracije v3 · 17. jul 2026.*
+*Flavio & Claude · Buchenberg · Plan konfiguracije v3 · 17. jul 2026., dopunjeno 18. jul 2026. (s143)*
