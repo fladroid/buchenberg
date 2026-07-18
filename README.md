@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 17. jul 2026. (sesija 140)  
+**Poslednje ažuriranje:** 18. jul 2026. (sesija 142)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -202,12 +202,15 @@ if parts is None:
 |--------|------|
 | `bb_jezik` | 14 jezika |
 | `bb_metode` | **Metod = tip operacije** (s134). `root` boolean: `base` (root, izvršiv tačno jednom) i `self-refine` (ponovljiv M puta). Metod nosi SADRŽAJ (šta se radi, koji seed); faza nosi REDOSLIJED. |
-| `bb_faze` | **Faza = jedno izvršavanje metoda** (s134): redni broj + jedinstveni identifikator. `metod_id` FK → `bb_metode` (**1 metod : M faza**). Partial UNIQUE `WHERE metod_id=1` čuva ROOT-invarijantu u SHEMI — druga bazna faza je fizički nemoguća. |
-| `bb_modeli` | Modeli × temperature × faza; `aktivan` boolean; UNIQUE(naziv, temperatura, faza_id) — s114. Isti model+temp može postojati u SVAKOJ fazi (npr. `glm-5.2@0.8` = id 20 faza 1, id 23 faza 2, id 27 faza 3). |
+| `bb_faze` | **Faza = jedno izvršavanje metoda** (s134): redni broj + jedinstveni identifikator. `metod_id` FK → `bb_metode` (**1 metod : M faza**). Partial UNIQUE `WHERE metod_id=1` čuva ROOT-invarijantu u SHEMI. |
+| `bb_modeli` | **s142: ČIST katalog imena** (`id, naziv, aktivan`, UNIQUE(naziv)) — a1 osa. Slijepljivanje s temperaturom/fazom (staro, do s142) UKLONJENO. |
+| `bb_temperature` | **NOVO s142** — a2 osa. `id, vrijednost REAL UNIQUE`. |
+| `bb_promptovi` | **NOVO s142** — a3 osa. `id, naziv UNIQUE, prompt_prevod_batch, prompt_prevod_single, prompt_back_batch, prompt_back_single` (TEXT, `.format()` template s placeholderima `{jezik_naziv}`,`{numerirani}`,`{tekst}`,`{seed}`,`{prevod}`). Trenutno 2 reda: `base`, `refine`. |
+| `bb_faze_a1` / `bb_faze_a2` / `bb_faze_a3` | **NOVO s142** — tri simetrične veze faza↔osa: `faza_id` FK + izbor FK (`model_id`/`temperatura_id`/`prompt_id`) + `aktivan`, UNIQUE(faza_id, izbor). Faza bira iz svake ose NEZAVISNO — nema sprege, nema "parova" u shemi. `bb_aktivni_modeli.py` i dalje vraća samo istorijski korišćene (model,temp) parove (Flaviova odluka s142) — orkestratori NE rade pun unakrsni proizvod a1×a2. |
 | `bb_embeddings` | Embedder definicije |
 | `bb_knjige` | Knjige (naziv, autor, gutenberg_id UNIQUE) |
 | `bb_recenice` | Rečenice (pozicija, tekst, knjiga_id) |
-| `bb_prevodi_knjige` | UNIQUE(knjiga, jezik, model, embedder) |
+| `bb_prevodi_knjige` | **s142:** `faza_id, model_id, temperatura_id, prompt_id` sad EKSPLICITNE kolone (ranije samo `model_id` slijepljen). UNIQUE(knjiga, jezik, faza, model, temperatura, prompt, embedder) — 7 kolona. |
 | `bb_prevodi_recenica` | Prevod + back_translation + score + translation_score + prevod_vektor + sudija ocjene |
 | `bb_prev_knjige` | Finalni prevod knjige UNIQUE(knjiga, jezik) |
 | `bb_prev_recenica` | FK na ukupnog pobjednika u bb_prevodi_recenica |
@@ -330,15 +333,25 @@ ORDER BY jezik, pobjede DESC;
 INSERT INTO bb_jezik (kod, naziv) VALUES ('xx', 'naziv') ON CONFLICT DO NOTHING;
 ```
 
-### Kako dodati novi model i temperaturu
+### Kako dodati novi model i temperaturu (s142: tri nezavisne ose)
 
 ```sql
-INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1) ON CONFLICT DO NOTHING;
--- aktivan je DEFAULT true; deaktivacija: UPDATE bb_modeli SET aktivan=false WHERE id=N;
+-- a1 (model, katalog): novo ime u bb_modeli
+INSERT INTO bb_modeli (naziv, aktivan) VALUES ('model:tag', true) ON CONFLICT (naziv) DO NOTHING;
+
+-- a2 (temperatura, katalog): nova vrijednost u bb_temperature
+INSERT INTO bb_temperature (vrijednost) VALUES (0.5) ON CONFLICT (vrijednost) DO NOTHING;
+
+-- registruj IZBOR za konkretnu fazu (npr. faza 1) preko bb_faze_a1 / bb_faze_a2
+INSERT INTO bb_faze_a1 (faza_id, model_id, aktivan)
+    SELECT 1, id, true FROM bb_modeli WHERE naziv='model:tag';
+INSERT INTO bb_faze_a2 (faza_id, temperatura_id, aktivan)
+    SELECT 1, id, true FROM bb_temperature WHERE ROUND(vrijednost::numeric,4)=ROUND(0.5::numeric,4);
 ```
 
-> ⚠️ `bb_03_prevod.py` traži model po trojci `naziv + temperatura + faza_id` (s114). Ako trojka nije u bazi — greška.
-> ⚠️ Pri kopiranju `faza_id` iz postojećeg modela (`INSERT...SELECT...WHERE temperatura=X`) UVIJEK `ROUND(temperatura::numeric,4)=X` i u SELECT-izvoru — bez toga float precision tiho vraća `INSERT 0 0`, bez greške. Otkriveno s110.
+> ⚠️ `bb_03_prevod.py` traži model+temp preko `EXISTS` na `bb_faze_a1`/`bb_faze_a2`/`bb_faze_a3` za zadatu fazu (s142). Ako kombinacija nije aktivna na sve tri ose za tu fazu — preskače uz poruku.
+> ⚠️ Float precision (temperatura REAL): UVIJEK `ROUND(vrijednost::numeric,4)` pri poređenju — bez toga tiho vraća 0 redova bez greške (s110 lekcija, i dalje važi).
+> ⚠️ `bb_aktivni_modeli.py` vraća samo ISTORIJSKI korišćene (model,temp) parove za fazu (čita iz `bb_prevodi_knjige`, ne pun unakrsni proizvod a1×a2) — novododata kombinacija se pojavljuje u orkestratoru tek nakon prvog stvarnog prevoda njome.
 
 ### Kako pokrenuti NOVU FAZU (s134)
 
@@ -349,9 +362,14 @@ INSERT INTO bb_modeli (naziv, temperatura, faza_id) VALUES ('model:tag', 0.5, 1)
 INSERT INTO bb_faze (naziv, redoslijed, metod_id, opis)
 VALUES ('refine-2', 3, 2, 'Drugi prolaz self-refine metoda.');
 
--- 2) registruj modele TE faze (isti model+temp smije se ponoviti u novoj fazi)
-INSERT INTO bb_modeli (naziv, temperatura, faza_id, aktivan)
-VALUES ('mistral-large-3:675b', 0.8, 3, true), ('glm-5.2', 0.8, 3, true);
+-- 2) registruj a1/a2/a3 izbore TE faze (s142: tri nezavisne ose, katalozi bez
+--    faza_id — isti model/temp/prompt smije se ponoviti u novoj fazi bez sukoba)
+INSERT INTO bb_faze_a1 (faza_id, model_id, aktivan)
+    SELECT 3, id, true FROM bb_modeli WHERE naziv IN ('mistral-large-3:675b','glm-5.2');
+INSERT INTO bb_faze_a2 (faza_id, temperatura_id, aktivan)
+    SELECT 3, id, true FROM bb_temperature WHERE ROUND(vrijednost::numeric,4)=ROUND(0.8::numeric,4);
+INSERT INTO bb_faze_a3 (faza_id, prompt_id, aktivan)
+    SELECT 3, id, true FROM bb_promptovi WHERE naziv='refine';
 ```
 
 ```bash
@@ -409,6 +427,27 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s142 snapshot (18. jul 2026):** DIO A PLANA (konfiguracija kao faza) IZVRŠEN
+> kraj-do-kraja. Korpus 50.624/1.608.271(+11 test)/302.168. Shema: `bb_modeli`
+> čist katalog (25→9 redova); nove `bb_temperature`, `bb_promptovi`; nove
+> `bb_faze_a1/a2/a3` (tri nezavisne ose, faza bira svaku nezavisno — nema
+> sprege/parova u shemi); `bb_prevodi_knjige` dobio eksplicitne
+> `faza_id/model_id/temperatura_id/prompt_id` + pun UNIQUE (7 kolona). Backup
+> `/tmp/bb_backup_pre_konfiguracija_20260718.dump` prije DDL. **View sloj**:
+> `v_prevodi`, `v_pobjednici`, `v_prevodi_po_modelu`, `v_prevodi_full`
+> prepisani (`CREATE OR REPLACE`, isti izlaz) — 6 izvedenih pogleda
+> (`v_pobjednici_full`, `v_status_faza*`, itd.) nastavilo raditi bez izmjene
+> (Postgres prati zavisnost po koloni, ne imenu). **Kod**: `bb_aktivni_modeli.py`
+> vraća istorijske (model,temp) parove (Flaviova odluka — ne pun unakrsni
+> proizvod a1×a2); `bb_03_prevod.py` čita a1/a2/a3 iz baze i radi `.format()`
+> na prompt šablonima umjesto hardkoda; `bb_web_export.py`/`bb_xray_export.py`
+> otkriveni polomljeni (čitali stare `m.temperatura`/`.faza_id`) i popravljeni
+> (testirano u `/tmp`, NIJE pokrenuto na živi export). E2E test na k22
+> (baza+refine, stvarni Ollama pozivi) potvrdio identitet kroz cijeli lanac.
+> NER export (classic/LLM/DocRE) potvrđeno nepogođen. `health_check.py` 2b
+> radi na novoj šemi. BB_VERSION ostaje s138 (buchenweb netaknut; export kod
+> popravljen ali živi JSON nije regenerisan). Detalji: `docs/sessions/session_142.md`.
 >
 > **s141 snapshot (17. jul 2026):** PLANSKA sesija — nula izmjena koda/baze
 > (korpus 50.624/1.608.260/302.168, READ-ONLY), samo snimljen plan-dokument
@@ -1034,7 +1073,7 @@ Neki modeli (capability `thinking`: gpt-oss, nemotron, deepseek, glm, qwen3.5…
 
 ### Prije usvajanja novog modela — pusti sondu
 `venv/bin/python src/sandbox_model_probe.py --models "MODEL" --jezik hr`
-Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. Kvalitet ide zasebno kroz pravi `bb_03`+`bb_08` na malom opsegu. Registracija u `bb_modeli` (naziv+temperatura+faza_id) je preduslov za pravi run.
+Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. Kvalitet ide zasebno kroz pravi `bb_03`+`bb_08` na malom opsegu. Registracija u `bb_modeli` (a1 katalog) + `bb_faze_a1`/`bb_faze_a2` izbor za ciljanu fazu (s142) je preduslov za pravi run.
 
 ### Radni ritam — očekivano opterećenje po dobu dana
 
@@ -1043,4 +1082,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 17. jul 2026. (sesija 140)*
+*Flavio & Claude · Buchenberg · V3 · 18. jul 2026. (sesija 142)*

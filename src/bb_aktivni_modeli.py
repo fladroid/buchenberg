@@ -28,11 +28,16 @@ def main():
 
     conn = psycopg2.connect(**DB)
     cur = conn.cursor()
-    cur.execute(
-        "SELECT naziv, ROUND(temperatura::numeric,4) FROM bb_modeli "
-        "WHERE aktivan AND faza_id=%s ORDER BY naziv, temperatura DESC",
-        (args.faza,)
-    )
+    cur.execute("""
+        SELECT DISTINCT m.naziv, ROUND(t.vrijednost::numeric,4) AS temp
+        FROM bb_prevodi_knjige pk
+        JOIN bb_modeli m ON pk.model_id = m.id
+        JOIN bb_temperature t ON pk.temperatura_id = t.id
+        JOIN bb_faze_a1 a1 ON a1.faza_id = pk.faza_id AND a1.model_id = pk.model_id AND a1.aktivan
+        JOIN bb_faze_a2 a2 ON a2.faza_id = pk.faza_id AND a2.temperatura_id = pk.temperatura_id AND a2.aktivan
+        WHERE pk.faza_id = %s
+        ORDER BY m.naziv, temp DESC
+    """, (args.faza,))
     rows = cur.fetchall()
     conn.close()
     if not rows:

@@ -83,7 +83,7 @@ def get_translations(cur, knjiga_id, lang_kod):
             r.tekst             AS original,
             pr.prevod           AS translation,
             m.naziv             AS model,
-            m.temperatura       AS temperatura,
+            t.vrijednost        AS temperatura,
             ROUND(pr.score::numeric, 4)             AS back_score,
             ROUND(pr.translation_score::numeric, 4) AS ts,
             ROUND(pr.sudija_avg::numeric, 4)        AS judge_avg,
@@ -92,13 +92,14 @@ def get_translations(cur, knjiga_id, lang_kod):
             ROUND(pr.sudija_grammar::numeric, 4)    AS sudija_grammar,
             ROUND(pr.sudija_naturalness::numeric, 4) AS sudija_naturalness,
             ROUND(pr.sudija_fidelity::numeric, 4)   AS sudija_fidelity,
-            m.faza_id                                AS faza
+            ppk.faza_id                              AS faza
         FROM bb_prev_knjige pk
         JOIN bb_jezik j            ON j.id  = pk.jezik_id
         JOIN bb_prev_recenica pvr  ON pvr.prev_knjige_id = pk.id
         JOIN bb_prevodi_recenica pr ON pr.id = pvr.prevodi_recenica_id
         JOIN bb_prevodi_knjige ppk  ON ppk.id = pr.prevodi_knjige_id
         JOIN bb_modeli m            ON m.id  = ppk.model_id
+        JOIN bb_temperature t       ON t.id  = ppk.temperatura_id
         JOIN bb_recenice r          ON r.id  = pr.recenica_id
         WHERE pk.knjiga_id = %s AND j.kod = %s
         ORDER BY r.pozicija
@@ -244,6 +245,7 @@ def get_stats(cur):
         JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
         JOIN bb_jezik j ON pk.jezik_id = j.id
         JOIN bb_modeli m ON pk.model_id = m.id
+        JOIN bb_temperature t ON pk.temperatura_id = t.id
         JOIN bb_recenice r ON pvr.recenica_id = r.id
         JOIN bb_knjige kn ON r.knjiga_id = kn.id
     """
@@ -290,9 +292,9 @@ def get_stats(cur):
     }
 
     cur.execute("""
-        SELECT m.naziv, m.temperatura, m.faza_id, COUNT(*) AS cnt
+        SELECT m.naziv, t.vrijednost, pk.faza_id, COUNT(*) AS cnt
     """ + base_from + """
-        GROUP BY m.naziv, m.temperatura, m.faza_id
+        GROUP BY m.naziv, t.vrijednost, pk.faza_id
         ORDER BY cnt DESC
     """)
     win_rows = cur.fetchall()
@@ -301,11 +303,12 @@ def get_stats(cur):
     # (svi prevodi, ne samo pobjednici). Odvojen izvor od base_from (koji ide
     # kroz pobjednike) -> nema fan-outa, dva nezavisna agregata spojena u Pythonu.
     cur.execute("""
-        SELECT m.naziv, m.temperatura, m.faza_id, COUNT(*) AS cnt
+        SELECT m.naziv, t.vrijednost, pk.faza_id, COUNT(*) AS cnt
         FROM bb_prevodi_recenica pvr
         JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
         JOIN bb_modeli m ON pk.model_id = m.id
-        GROUP BY m.naziv, m.temperatura, m.faza_id
+        JOIN bb_temperature t ON pk.temperatura_id = t.id
+        GROUP BY m.naziv, t.vrijednost, pk.faza_id
     """)
     cand_map = {(model, float(temp) if temp is not None else None, faza): int(cnt)
                 for model, temp, faza, cnt in cur.fetchall()}

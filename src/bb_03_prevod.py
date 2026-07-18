@@ -190,13 +190,9 @@ def ollama_chat(model, temperature, messages, max_retries=3, wait=30):
                 raise
 
 
-def prevedi_batch(tekstovi, jezik_naziv, model, temp):
+def prevedi_batch(tekstovi, jezik_naziv, model, temp, tpl):
     numerirani = "\n".join(f"{i+1}. {t}" for i, t in enumerate(tekstovi))
-    prompt = (
-        f"Translate the following English texts to {jezik_naziv}.\n"
-        f"Output ONLY the translations as a numbered list, one per line, nothing else.\n\n"
-        f"{numerirani}"
-    )
+    prompt = tpl.format(jezik_naziv=jezik_naziv, numerirani=numerirani)
     try:
         odgovor = ollama_chat(model, temp, [{"role": "user", "content": prompt}])
         linije = [l.strip() for l in odgovor.splitlines() if l.strip()]
@@ -214,22 +210,14 @@ def prevedi_batch(tekstovi, jezik_naziv, model, temp):
         return None
 
 
-def prevedi_single(tekst, jezik_naziv, model, temp):
-    prompt = (
-        f"Translate the following English text to {jezik_naziv}.\n"
-        f"Output only the translation, nothing else.\n\n"
-        f"{tekst}"
-    )
+def prevedi_single(tekst, jezik_naziv, model, temp, tpl):
+    prompt = tpl.format(jezik_naziv=jezik_naziv, tekst=tekst)
     return ollama_chat(model, temp, [{"role": "user", "content": prompt}])
 
 
-def back_prevedi_batch(prevodi, jezik_naziv, model, temp):
+def back_prevedi_batch(prevodi, jezik_naziv, model, temp, tpl):
     numerirani = "\n".join(f"{i+1}. {t}" for i, t in enumerate(prevodi))
-    prompt = (
-        f"Translate the following {jezik_naziv} texts to English.\n"
-        f"Output ONLY the translations as a numbered list, one per line, nothing else.\n\n"
-        f"{numerirani}"
-    )
+    prompt = tpl.format(jezik_naziv=jezik_naziv, numerirani=numerirani)
     try:
         odgovor = ollama_chat(model, temp, [{"role": "user", "content": prompt}])
         linije = [l.strip() for l in odgovor.splitlines() if l.strip()]
@@ -247,12 +235,8 @@ def back_prevedi_batch(prevodi, jezik_naziv, model, temp):
         return None
 
 
-def back_prevedi_single(prevod, jezik_naziv, model, temp):
-    prompt = (
-        f"Translate the following {jezik_naziv} text to English.\n"
-        f"Output only the translation, nothing else.\n\n"
-        f"{prevod}"
-    )
+def back_prevedi_single(prevod, jezik_naziv, model, temp, tpl):
+    prompt = tpl.format(jezik_naziv=jezik_naziv, prevod=prevod)
     return ollama_chat(model, temp, [{"role": "user", "content": prompt}])
 
 
@@ -265,20 +249,20 @@ def cosine(a, b):
 
 # ── DB helpers ──────────────────────────────────────────────────────────────
 
-def get_or_create_prevodi_knjige(cur, knjiga_id, jezik_id, model_id, embeddings_id):
+def get_or_create_prevodi_knjige(cur, knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id):
     cur.execute("""
-        INSERT INTO bb_prevodi_knjige (knjiga_id, jezik_id, model_id, embeddings_id)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (knjiga_id, jezik_id, model_id, embeddings_id) DO NOTHING
+        INSERT INTO bb_prevodi_knjige (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id) DO NOTHING
         RETURNING id
-    """, (knjiga_id, jezik_id, model_id, embeddings_id))
+    """, (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id))
     row = cur.fetchone()
     if row:
         return row[0]
     cur.execute("""
         SELECT id FROM bb_prevodi_knjige
-        WHERE knjiga_id=%s AND jezik_id=%s AND model_id=%s AND embeddings_id=%s
-    """, (knjiga_id, jezik_id, model_id, embeddings_id))
+        WHERE knjiga_id=%s AND jezik_id=%s AND faza_id=%s AND model_id=%s AND temperatura_id=%s AND prompt_id=%s AND embeddings_id=%s
+    """, (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id))
     return cur.fetchone()[0]
 
 
@@ -308,18 +292,12 @@ def upisi_prevod(cur, prevodi_knjige_id, recenica_id, prevod, back_translation, 
     """, (prevodi_knjige_id, recenica_id, prevod, back_translation, score, translation_score))
 
 
-def prevedi_refine_batch(parovi, jezik_naziv, model, temp):
+def prevedi_refine_batch(parovi, jezik_naziv, model, temp, tpl):
     numerirani = "\n".join(
         f"{i+1}. English: {t}\n   Reference {jezik_naziv}: {seed}"
         for i, (t, seed) in enumerate(parovi)
     )
-    prompt = (
-        f"Translate the following English texts to {jezik_naziv}.\n"
-        f"For each item, a reference translation is provided. Produce a BETTER "
-        f"translation — more accurate and more natural.\n"
-        f"Output ONLY the translations as a numbered list, one per line, nothing else.\n\n"
-        f"{numerirani}"
-    )
+    prompt = tpl.format(jezik_naziv=jezik_naziv, numerirani=numerirani)
     try:
         odgovor = ollama_chat(model, temp, [{"role": "user", "content": prompt}])
         linije = [l.strip() for l in odgovor.splitlines() if l.strip()]
@@ -337,15 +315,8 @@ def prevedi_refine_batch(parovi, jezik_naziv, model, temp):
         return None
 
 
-def prevedi_refine_single(tekst, jezik_naziv, model, temp, seed):
-    prompt = (
-        f"Translate the following English text to {jezik_naziv}.\n"
-        f"A reference translation is provided. Produce a BETTER translation — "
-        f"more accurate and more natural.\n"
-        f"Output only the translation, nothing else.\n\n"
-        f"English: {tekst}\n"
-        f"Reference {jezik_naziv}: {seed}"
-    )
+def prevedi_refine_single(tekst, jezik_naziv, model, temp, seed, tpl):
+    prompt = tpl.format(jezik_naziv=jezik_naziv, tekst=tekst, seed=seed)
     return ollama_chat(model, temp, [{"role": "user", "content": prompt}])
 
 
@@ -405,22 +376,40 @@ def main():
         sys.exit(1)
     embeddings_id = row[0]
 
+    # a3: aktivni prompt za ovu fazu (base ili refine) — čita se JEDNOM za cijeli run
+    cur.execute("""
+        SELECT p.naziv, p.prompt_prevod_batch, p.prompt_prevod_single, p.prompt_back_batch, p.prompt_back_single
+        FROM bb_faze_a3 a3
+        JOIN bb_promptovi p ON a3.prompt_id = p.id
+        WHERE a3.faza_id = %s AND a3.aktivan
+    """, (args.faza,))
+    prow = cur.fetchone()
+    if not prow:
+        print(f"Nema aktivnog prompta (a3) za fazu {args.faza}!")
+        sys.exit(1)
+    PROMPT_NAZIV, TPL_PREVOD_BATCH, TPL_PREVOD_SINGLE, TPL_BACK_BATCH, TPL_BACK_SINGLE = prow
+
     recenice = get_recenice(cur, args.knjiga, args.od, args.do)
     print(f"Rečenica za obradu: {len(recenice)} (pozicije {args.od}–{args.do})")
 
     for temp in args.temp:
-        cur.execute(
-            "SELECT id FROM bb_modeli WHERE naziv=%s AND ROUND(temperatura::numeric,4)=ROUND(%s::numeric,4) AND faza_id=%s",
-            (args.model, temp, args.faza)
-        )
+        cur.execute("""
+            SELECT m.id, t.id, p.id
+            FROM bb_modeli m, bb_temperature t, bb_promptovi p
+            WHERE m.naziv = %s
+              AND ROUND(t.vrijednost::numeric,4) = ROUND(%s::numeric,4)
+              AND EXISTS (SELECT 1 FROM bb_faze_a1 a1 WHERE a1.faza_id=%s AND a1.model_id=m.id AND a1.aktivan)
+              AND EXISTS (SELECT 1 FROM bb_faze_a2 a2 WHERE a2.faza_id=%s AND a2.temperatura_id=t.id AND a2.aktivan)
+              AND EXISTS (SELECT 1 FROM bb_faze_a3 a3 WHERE a3.faza_id=%s AND a3.prompt_id=p.id AND a3.aktivan)
+        """, (args.model, temp, args.faza, args.faza, args.faza))
         row = cur.fetchone()
         if not row:
-            print(f"Model '{args.model}' temp={temp} faza={args.faza} nije u bb_modeli! Preskačem.")
+            print(f"Model '{args.model}' temp={temp} faza={args.faza} nije aktivna kombinacija! Preskačem.")
             continue
-        model_id = row[0]
+        model_id, temperatura_id, prompt_id = row
 
         engine = "NLLB" if is_nllb else "Ollama"
-        print(f"\n═══ Model: {args.model} | temp: {temp} | engine: {engine} ═══")
+        print(f"\n═══ Model: {args.model} | temp: {temp} | engine: {engine} | prompt: {PROMPT_NAZIV} ═══")
 
         for kod in args.jezici:
             jezik_naziv = JEZIK_NAZIVI.get(kod)
@@ -436,7 +425,7 @@ def main():
             jezik_id = cur.fetchone()[0]
 
             prevodi_knjige_id = get_or_create_prevodi_knjige(
-                cur, args.knjiga, jezik_id, model_id, embeddings_id
+                cur, args.knjiga, jezik_id, args.faza, model_id, temperatura_id, prompt_id, embeddings_id
             )
             conn.commit()
 
@@ -465,28 +454,28 @@ def main():
                     backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
                 elif is_refine:
                     parovi = [(t, seed_map[rid]) for rid, poz, t in chunk]
-                    prevodi = prevedi_refine_batch(parovi, jezik_naziv, ollama_naziv, temp)
+                    prevodi = prevedi_refine_batch(parovi, jezik_naziv, ollama_naziv, temp, TPL_PREVOD_BATCH)
                     if prevodi is None:
                         print("    Fallback na single refine...")
-                        prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid])
+                        prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid], TPL_PREVOD_SINGLE)
                                    for rid, poz, t in chunk]
 
-                    backs = back_prevedi_batch(prevodi, jezik_naziv, ollama_naziv, temp)
+                    backs = back_prevedi_batch(prevodi, jezik_naziv, ollama_naziv, temp, TPL_BACK_BATCH)
                     if backs is None:
                         print("    Fallback na single back-translation...")
-                        backs = [back_prevedi_single(p, jezik_naziv, ollama_naziv, temp)
+                        backs = [back_prevedi_single(p, jezik_naziv, ollama_naziv, temp, TPL_BACK_SINGLE)
                                  for p in prevodi]
                 else:
-                    prevodi = prevedi_batch(tekstovi, jezik_naziv, args.model, temp)
+                    prevodi = prevedi_batch(tekstovi, jezik_naziv, args.model, temp, TPL_PREVOD_BATCH)
                     if prevodi is None:
                         print("    Fallback na single prevod...")
-                        prevodi = [prevedi_single(t, jezik_naziv, args.model, temp)
+                        prevodi = [prevedi_single(t, jezik_naziv, args.model, temp, TPL_PREVOD_SINGLE)
                                    for t in tekstovi]
 
-                    backs = back_prevedi_batch(prevodi, jezik_naziv, args.model, temp)
+                    backs = back_prevedi_batch(prevodi, jezik_naziv, args.model, temp, TPL_BACK_BATCH)
                     if backs is None:
                         print("    Fallback na single back-translation...")
-                        backs = [back_prevedi_single(p, jezik_naziv, args.model, temp)
+                        backs = [back_prevedi_single(p, jezik_naziv, args.model, temp, TPL_BACK_SINGLE)
                                  for p in prevodi]
 
                 en_vektori     = embedder.encode(tekstovi)

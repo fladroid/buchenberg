@@ -80,8 +80,8 @@ def get_all_candidates(cur, knjiga_id, lang_kod):
             r.tekst AS original,
             pr.id AS prevod_id,
             m.naziv AS model,
-            ROUND(m.temperatura::numeric, 4) AS temperatura,
-            m.faza_id AS faza,
+            ROUND(t.vrijednost::numeric, 4) AS temperatura,
+            pk.faza_id AS faza,
             pr.prevod,
             pr.back_translation,
             ROUND(pr.translation_score::numeric, 4) AS ts,
@@ -98,6 +98,7 @@ def get_all_candidates(cur, knjiga_id, lang_kod):
         JOIN bb_prevodi_knjige pk ON pk.id = pr.prevodi_knjige_id
         JOIN bb_jezik j ON j.id = pk.jezik_id
         JOIN bb_modeli m ON m.id = pk.model_id
+        JOIN bb_temperature t ON t.id = pk.temperatura_id
         JOIN bb_recenice r ON r.id = pr.recenica_id
         WHERE pk.knjiga_id = %s AND j.kod = %s
         ORDER BY r.pozicija, finalni_score DESC NULLS LAST
