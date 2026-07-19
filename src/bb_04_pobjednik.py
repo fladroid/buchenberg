@@ -166,16 +166,18 @@ def main():
 
         # ── Fazni pobjednik → bb_prev_recenica_faza ──
         # Isti skup kandidata, ali pobjednik po (rečenica × faza).
-        # faza = svojstvo modela (bb_modeli.faza_id); NULL faze (sudija/mrtvi) isključene.
+        # s142+: faza je eksplicitna kolona na bb_prevodi_knjige (pk.faza_id), NE
+        # svojstvo modela — bb_modeli vise nema faza_id/temperatura (cist a1 katalog).
         cur.execute("""
-            SELECT DISTINCT ON (r.pozicija, m.faza_id)
+            SELECT DISTINCT ON (r.pozicija, pk.faza_id)
                 pr.id AS prevodi_recenica_id,
-                m.faza_id
+                pk.faza_id
             FROM bb_recenice r
             JOIN bb_prevodi_knjige pk ON pk.knjiga_id = r.knjiga_id
             JOIN bb_prevodi_recenica pr ON pr.prevodi_knjige_id = pk.id
                                       AND pr.recenica_id = r.id
             JOIN bb_modeli m ON pk.model_id = m.id
+            JOIN bb_temperature t ON pk.temperatura_id = t.id
             JOIN bb_jezik j  ON pk.jezik_id = j.id
             JOIN bb_embeddings e ON pk.embeddings_id = e.id
             WHERE r.knjiga_id = %s
@@ -183,8 +185,8 @@ def main():
               AND j.kod = %s
               AND e.naziv = 'multilingual-e5-large'
               AND pr.translation_score IS NOT NULL
-              AND m.faza_id IS NOT NULL
-            ORDER BY r.pozicija, m.faza_id,
+              AND pk.faza_id IS NOT NULL
+            ORDER BY r.pozicija, pk.faza_id,
                      (CASE
                           WHEN pr.sudija_avg IS NOT NULL THEN
                               %s * (pr.score + pr.translation_score) / 2.0
@@ -192,7 +194,7 @@ def main():
                           ELSE
                               (pr.score + pr.translation_score) / 2.0
                       END) DESC,
-                     m.naziv ASC, m.temperatura DESC, pr.id ASC
+                     m.naziv ASC, t.vrijednost DESC, pr.id ASC
         """, (args.knjiga, args.od, args.do, kod, W_KOMPOZITNI, W_SUDIJA))
 
         fazni = cur.fetchall()

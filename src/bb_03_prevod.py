@@ -324,15 +324,11 @@ def get_seed_map(cur, kod, rids):
     if not rids:
         return {}
     cur.execute("""
-        SELECT pvr.recenica_id, pvr.prevod
-        FROM bb_prev_recenica pr
-        JOIN bb_prevodi_recenica pvr ON pr.prevodi_recenica_id = pvr.id
-        JOIN bb_prevodi_knjige pk ON pvr.prevodi_knjige_id = pk.id
-        JOIN bb_jezik j ON pk.jezik_id = j.id
-        JOIN bb_modeli m ON pk.model_id = m.id
-        WHERE pvr.recenica_id = ANY(%s) AND j.kod = %s
+        SELECT recenica_id, prevod, finalni_score
+        FROM v_pobjednici_full
+        WHERE recenica_id = ANY(%s) AND jezik_kod = %s
     """, (rids, kod))
-    return {r[0]: r[1] for r in cur.fetchall()}
+    return {r[0]: (r[1], r[2]) for r in cur.fetchall()}
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -352,6 +348,8 @@ def main():
     parser.add_argument("--jezici",   type=str,   nargs="+", required=True)
     parser.add_argument("--faza", type=int, default=1,
                         help="Faza pipeline-a (1=base, 2+=refine: pobjednik kao hint)")
+    parser.add_argument("--prag", type=float, default=0.95,
+                        help="Prag finalni_score seeda ispod kojeg se refine pokusava (samo faza 2+)")
     args = parser.parse_args()
 
     is_nllb = (args.model == "nllb-600M")
@@ -438,8 +436,11 @@ def main():
             seed_map = {}
             if is_refine:
                 seed_map = get_seed_map(cur, kod, [rid for rid, _, _ in todo])
+                pre_seed = len(todo)
                 todo = [x for x in todo if x[0] in seed_map]
-                print(f"  Refine: {len(todo)} rečenica sa seedom")
+                pre_prag = len(todo)
+                todo = [x for x in todo if seed_map[x[0]][1] < args.prag]
+                print(f"  Refine: {pre_seed} sa seedom -> {pre_prag}; ispod praga {args.prag}: {len(todo)} (preskoceno {pre_prag - len(todo)})")
 
             step = NLLB_CT2_BATCH if (is_nllb and NLLB_ENGINE == "ct2") else (REFINE_BATCH_SIZE if is_refine else BATCH_SIZE)
             for i in range(0, len(todo), step):
@@ -453,11 +454,11 @@ def main():
                     prevodi = nllb_batch(tekstovi, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
                     backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
                 elif is_refine:
-                    parovi = [(t, seed_map[rid]) for rid, poz, t in chunk]
+                    parovi = [(t, seed_map[rid][0]) for rid, poz, t in chunk]
                     prevodi = prevedi_refine_batch(parovi, jezik_naziv, ollama_naziv, temp, TPL_PREVOD_BATCH)
                     if prevodi is None:
                         print("    Fallback na single refine...")
-                        prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid], TPL_PREVOD_SINGLE)
+                        prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid][0], TPL_PREVOD_SINGLE)
                                    for rid, poz, t in chunk]
 
                     backs = back_prevedi_batch(prevodi, jezik_naziv, ollama_naziv, temp, TPL_BACK_BATCH)

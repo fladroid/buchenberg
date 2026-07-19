@@ -1,9 +1,12 @@
 # Plan implementacije — Konfiguracija kao faza
 
-**Datum:** 17. jul 2026. (sesija 141), dopunjeno 18. jul 2026. (s142 izvršenje, s143 razrada Dijela B)
+**Datum:** 17. jul 2026. (sesija 141), dopunjeno 18. jul 2026. (s142 izvršenje,
+s143 razrada Dijela B), preokrenuto 19. jul 2026. (s144 — random zamijenjen
+fiksnim gated fazama)
 **Autori:** Flavio & Claude
-**Status:** DIO A IZVRŠEN (s142). DIO B dizajn konkretizovan (s143), mehanizam
-selekcije nije građen. Vidi §6 Status za detalje.
+**Status:** DIO A IZVRŠEN (s142) i NEDIRNUT ovim preokretom. DIO B: random
+selekcija NAPUŠTENA (s144) — zamijenjena s tri fiksne gated faze (prag
+seed_score<0.95). IZVRŠENO i testirano. Vidi §4.7 i §6 Status za detalje.
 
 ---
 
@@ -201,6 +204,11 @@ Tek kad prevodi više ne zavise od slijepljenog model_id: raščisti bb_modeli n
 
 ## 4. DIO B — random selekcija atributa (STOJI NA A)
 
+> ⚠️ **PREOKRENUTO s144 — vidi §4.7.** Ovaj dizajn (§4.1-§4.6) je NAPUŠTEN i
+> zamijenjen fiksnim gated fazama. Ostaje ispod kao istorijski trag
+> rasuđivanja (X-Ray princip — proces vidljiv, ne obrisan), ne kao aktivan
+> plan. Za trenutno stanje čitaj §4.7.
+
 > Dizajn iz s139/s140. Gradi se TEK kad A radi. Manje kod, više dizajn.
 
 ### 4.1 Mehanika
@@ -325,6 +333,79 @@ spreman, mehanizam selekcije NIJE građen.
 
 Detalji cijele rasprave: `docs/sessions/session_143.md`.
 
+---
+
+## 4.7 PREOKRET (s144): random napušten, fiksne gated faze usvojene
+
+Flavio je, testirajući ideju kroz sopstveno iskustvo ("6 minuta po rečenici" —
+istorijska mjera nedopustivo dugog procesa), postavio provokativno pitanje:
+zašto graditi GA-stil random selekciju (§4.1-§4.6) kad katalog ima samo
+2 aktivna LLM-a × 3 gotova prompta × 1 istorijski korišćena temperatura (0.8)
+= 6 smislenih kombinacija? Genetski algoritam (mutacija, marginalna
+preferenca, anti-elitizam) opravdan je kad je prostor pretrage OGROMAN — kad
+ga ne možeš iscrpiti. Sa 6 fiksnih, ručno-kuriranih kombinacija, to nije taj
+slučaj: to je katalog koji se može prstom prebrojati, ne prostor koji treba
+evoluirati.
+
+**Pravi problem nikad nije bio "koju od N kombinacija probati" nego "da li
+uopšte vrijedi probati OVU rečenicu."** Mjerenje (bucket-analiza
+`seed_score` vs. win-rate refine-a, cijeli korpus, potvrđeno i na čistom
+novi-model-vs-novi-model presjeku da konfaund miješanja generacija modela ne
+mijenja oblik nalaza) pokazalo je čist, monoton gradijent: ispod seed_score
+~0.85 refine pobjeđuje ~8/10 puta, iznad ~0.97 gubi ~9/10 puta. Prag
+**0.95** usvojen kao gate.
+
+**Nova arhitektura Dijela B — potpuno unutar postojeće a1/a2/a3 sheme
+(Dio A), BEZ NOVE STRUKTURE:**
+
+- Tri nove faze (`refine-gated`=4, `refine-lenient-gated`=5,
+  `refine-strict-gated`=6), svaka: a1={mistral-large-3:675b, glm-5.2},
+  a2={0.8}, a3=jedan od tri postojeća prompta (`refine`/`refine-lenient`/
+  `refine-strict`). Kreirane po IDENTIČNOM obrascu kao faza 2/3 (README
+  "Kako pokrenuti NOVU FAZU") — nijedan novi tip reda, nijedna nova tabela.
+- Redoslijed faza je proizvoljan (Flavio: "svejedno") — jer gate mehanika
+  sama sužava posao: svaka faza gleda TRENUTNOG apsolutnog pobjednika
+  (ne originalni seed), pa ako ranija gated faza popravi rečenicu iznad
+  praga, sljedeća je automatski preskače. Samo-sužavajući lijevak bez ijedne
+  random komponente.
+- **Implementacija gate-a: jedan novi CLI parametar** `--prag` (default 0.95)
+  u `bb_03_prevod.py`. `get_seed_map()` sad vraća `(prevod, finalni_score)`
+  iz `v_pobjednici_full` (bilo: ručni tro-tabelarni JOIN); filter
+  `seed_score < prag` primijenjen PRIJE poziva modela (štedi pozive, ne samo
+  upis).
+
+**Šta je napušteno (§4.1-§4.6 ostaju kao istorijski trag rasuđivanja, ne
+kao aktivan plan):** traži-ili-kreiraj generator, marginalna preferenca po
+osi, anti-elitizam/strop ~50%, mutacija kao odvojen korak, tri nivoa
+granularnosti (Biblioteka/Jezik/Knjiga) ponderisano, prag ~10% pokrivenosti.
+Sve je zamijenjeno jednim pragom kvaliteta seeda i fiksnim skupom faza.
+**Dio A (a1/a2/a3 nezavisne ose) OSTAJE NEDIRNUT kao temelj** — ovaj
+preokret mijenja samo KAKO se faze biraju/pokreću, ne strukturu koja ih
+opisuje.
+
+**Mjerenja (kanonski upiti, cijeli korpus + novi-vs-novi presjek):**
+- Cijeli korpus (svi seed-ovi, mješani modeli): 50% win-rate prag ≈ 0.92.
+- Čist presjek (seed I refine oba iz {glm-5.2, mistral-large-3:675b}):
+  50% win-rate prag ≈ 0.95 — usvojeno kao operativni prag (konzervativnije,
+  usklađeno s modelima koji su jedini aktivni ubuduće).
+- Buduće opterećenje ako se korpus prevodi isključivo novim modelima: samo
+  **15.41%** rečenica (5.898/38.286, gdje je najbolji root kandidat od
+  novog modela) padne ispod praga 0.95 — refine se pokreće na ~1 od 6-7
+  rečenica, ne na svakoj.
+
+**Nuspojava pronađena i ispravljena tokom testiranja:** `bb_04_pobjednik.py`
+(fazni pobjednik → `bb_prev_recenica_faza`) je od s142 imao neotkriven
+zaostatak — čitao `m.faza_id`/`m.temperatura` sa `bb_modeli` (uklonjeno u
+s142 Koraku 6), nikad testiran jer nijedan refine nije pokretan između s142
+i ovog testa. Popravljeno: `pk.faza_id` (direktno na `bb_prevodi_knjige`) +
+`bb_temperature` join za tie-break. Vidi `docs/sessions/session_144.md`.
+
+**Operativna napomena (README):** potpuno nova faza bez ijednog istorijskog
+prevoda čini da `run_faza.sh` TIHO ne radi ništa (`bb_aktivni_modeli.py`
+vraća prazno, petlja se izvrši nula puta, "ZAVRŠENO" se ispiše bez greške).
+Prije prvog `run_faza.sh` poziva na novu fazu: "zasadi" historiju
+direktnim `bb_03_prevod.py` pozivom po svakom (model,temp) paru.
+
 ## 5. Sažetak redoslijeda
 
 ```
@@ -339,11 +420,16 @@ DIO A (temelj):
   7. Kod (bb_03 + orkestratori + export) čita iz baze
   8. Verifikacija (broj po osi identičan; view sloj; test run k22)
 
-DIO B (na temelju A):
-  - Mjerenje/promatranje preferenci PRIJE mehanizma
-  - Traži-ili-kreiraj fazu po marginalno izabranim osama (svaka nezavisno)
-  - Prag ~10%: uniformni random ispod, ponderisan iznad
-  - Mutacija odvojen korak; strop protiv preuzimanja
+DIO B (na temelju A) — PREOKRENUTO s144, vidi §4.7:
+  0. Mjerenje: bucket-analiza seed_score vs. win-rate (cijeli korpus +
+     novi-vs-novi presjek) -> prag = 0.95
+  1. Tri nove faze (bb_faze + a1/a2/a3, isti obrazac kao faza 2/3):
+     refine-gated(4) / refine-lenient-gated(5) / refine-strict-gated(6)
+  2. bb_03_prevod.py: nov --prag CLI (default 0.95), get_seed_map vraca
+     (prevod, finalni_score), filter PRIJE poziva modela
+  3. Bootstrap: direktan bb_03 poziv po (faza,model) prije prvog run_faza.sh
+  4. Verifikacija: run_faza.sh end-to-end (bb_03->sudija->bb_04) na k22
+     (usput otkriven i ispravljen bb_04_pobjednik.py zaostatak iz s142)
 ```
 
 ---
@@ -352,10 +438,14 @@ DIO B (na temelju A):
 
 - **Dio A: IZVRŠEN kraj-do-kraja (s142, 18. jul 2026).** Svih 9 koraka (0-8)
   izvršeno i verifikovano. Detalji: `docs/sessions/session_142.md`.
-- **Dio B: dizajn konkretizovan (s143, 18. jul 2026), mehanizam NIJE građen.**
-  Vidi §4.6 za odluke. Detalji: `docs/sessions/session_143.md`.
-- Sljedeći korak kad Flavio odluči: izvršni redoslijed za Dio B mehanizam
-  selekcije, analogan §3.2 za Dio A.
+- **Dio B: random selekcija (§4.1-§4.6) NAPUŠTENA (s144, 19. jul 2026).**
+  Zamijenjena s tri fiksne gated faze (4/5/6), prag seed_score<0.95.
+  IZVRŠENO i testirano kraj-do-kraja (bb_03->sudija->bb_04 na k22, sve tri
+  faze). Vidi §4.7. Detalji: `docs/sessions/session_144.md`.
+- Sljedeći korak kad Flavio odluči: pokrenuti gated faze na širem korpusu
+  (van test-knjige k22); health_check "opseg"/rupa logika za gated faze
+  ostavljena namjerno kao poznata razlika (Flaviova odluka s144), ne
+  popravljena.
 
 ---
-*Flavio & Claude · Buchenberg · Plan konfiguracije v3 · 17. jul 2026., dopunjeno 18. jul 2026. (s143)*
+*Flavio & Claude · Buchenberg · Plan konfiguracije v4 · 17. jul 2026., preokrenuto 19. jul 2026. (s144)*

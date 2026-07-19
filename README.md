@@ -386,6 +386,8 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 
 > ⚠️ **`nextval` NIJE transakcijski.** Ako INSERT u `bb_faze` padne pa se ponovi, sekvenca je odmakla i faza dobija pogrešan `id` (s134: dobila 5 umjesto 3). Poslije pale transakcije sa `serial` PK — **provjeri `id` prije nego se osloniš na njega**; po potrebi `setval('bb_faze_id_seq', N)`.
 
+> ⚠️ **Potpuno nova faza (bez ijednog istorijskog prevoda) → `run_faza.sh` TIHO NE RADI NIŠTA.** `bb_aktivni_modeli.py` vraća prazan string (čita samo istorijski korišćene parove iz `bb_prevodi_knjige`, s142), petlja u `run_faza.sh` se izvrši nula puta, skripta ipak ispiše "ZAVRŠENO" bez greške — izgleda uspješno, a nije uradila ništa. Prije prvog `run_faza.sh` poziva na novu fazu, "zasadi" historiju direktnim `bb_03_prevod.py` pozivom za SVAKI aktivan (model,temp) par te faze (mali opseg, npr. 10 rečenica, dovoljan). Otkriveno pri uvođenju gated refine faza 4/5/6 (s144).
+
 ---
 
 ## 8. Knjige (bb korpus)
