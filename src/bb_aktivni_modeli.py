@@ -39,6 +39,26 @@ def main():
         ORDER BY m.naziv, temp DESC
     """, (args.faza,))
     rows = cur.fetchall()
+
+    if not rows:
+        # s145: nova faza bez ijednog prevoda nema istoriju. Pad na katalog
+        # (bb_faze_a1 x bb_faze_a2) je ispravan JEDINO kad je tacno 1 aktivna
+        # temperatura po fazi (vazi za sve self-refine faze: 2,3,4,5,6,7...).
+        # Faza 1 (root) ima >1 temperaturu + nllb determinizam -> uvijek ima
+        # punu istoriju, nikad ne bi trebalo da stigne ovdje.
+        print(f"[bb_aktivni_modeli] Nema istorije za fazu {args.faza} - "
+              f"padam na katalog (bb_faze_a1 x bb_faze_a2).", file=sys.stderr)
+        cur.execute("""
+            SELECT DISTINCT m.naziv, ROUND(t.vrijednost::numeric,4) AS temp
+            FROM bb_faze_a1 a1
+            JOIN bb_modeli m ON m.id = a1.model_id
+            JOIN bb_faze_a2 a2 ON a2.faza_id = a1.faza_id
+            JOIN bb_temperature t ON t.id = a2.temperatura_id
+            WHERE a1.faza_id = %s AND a1.aktivan AND a2.aktivan
+            ORDER BY m.naziv, temp DESC
+        """, (args.faza,))
+        rows = cur.fetchall()
+
     conn.close()
     if not rows:
         print(f"Nema aktivnih modela za fazu {args.faza}!", file=sys.stderr)

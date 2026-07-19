@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 18. jul 2026. (sesija 143)  
+**Poslednje ažuriranje:** 19. jul 2026. (sesija 145)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -386,7 +386,7 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 
 > ⚠️ **`nextval` NIJE transakcijski.** Ako INSERT u `bb_faze` padne pa se ponovi, sekvenca je odmakla i faza dobija pogrešan `id` (s134: dobila 5 umjesto 3). Poslije pale transakcije sa `serial` PK — **provjeri `id` prije nego se osloniš na njega**; po potrebi `setval('bb_faze_id_seq', N)`.
 
-> ⚠️ **Potpuno nova faza (bez ijednog istorijskog prevoda) → `run_faza.sh` TIHO NE RADI NIŠTA.** `bb_aktivni_modeli.py` vraća prazan string (čita samo istorijski korišćene parove iz `bb_prevodi_knjige`, s142), petlja u `run_faza.sh` se izvrši nula puta, skripta ipak ispiše "ZAVRŠENO" bez greške — izgleda uspješno, a nije uradila ništa. Prije prvog `run_faza.sh` poziva na novu fazu, "zasadi" historiju direktnim `bb_03_prevod.py` pozivom za SVAKI aktivan (model,temp) par te faze (mali opseg, npr. 10 rečenica, dovoljan). Otkriveno pri uvođenju gated refine faza 4/5/6 (s144).
+> ⚠️ **s144→ISPRAVLJENO s145:** raniji opis ovdje ("run_faza.sh TIHO NE RADI NIŠTA") bio je netačan — live test (s145) pokazao da `bb_aktivni_modeli.py` uvijek imao `exit(1)` zaštitu, pa `set -e` u `run_faza.sh` zaustavlja skriptu GLASNO (greška na stderr, bez "ZAVRŠENO"), ne tiho. Pravi uzrok: `bb_aktivni_modeli.py` čita AKTIVNE modele/temperature iz ISTORIJE (`bb_prevodi_knjige`), ne iz kataloga (`bb_faze_a1`/`bb_faze_a2`) — za potpuno novu fazu istorija je prazna. **Popravljeno u kodu (s145):** ako je istorija prazna, skripta sad pada na katalog (`bb_faze_a1` × `bb_faze_a2`) kao fallback — ispravno za sve self-refine faze (uvijek tačno 1 aktivna temperatura po fazi). Bootstrap direktnim `bb_03_prevod.py` pozivima **više nije potreban** za takve faze. Faza 1 (root) ostaje netaknuta — ima >1 temperaturu (nllb determinizam), uvijek ima punu istoriju, nikad ne stiže do fallback grane. Detalji: `docs/PLAN-KONFIGURACIJA.md` §4.8.
 
 ---
 
@@ -429,6 +429,56 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s145 snapshot (19. jul 2026):** Analiza + dvije popravke, NULA uticaja na
+> korpus (Flavio je samostalno pustio faze 4/5/6 na Hound (k1) 200 rečenica ×
+> de/hr/it/sr prije sesije). **Analiza:** od 800 rečenica-jezik parova, gate se
+> otvorio na 62 (7.75%); novi gated refine pobijedio **79%** (49/62) kad je gate
+> otvoren — snažna potvrda gating dizajna (naspram ranijeg ne-gated head-to-head
+> 25%, s134). Poslije 4/5/6, gate bi se ponovo otvorio na 22/800 (2.75%) — tvrd
+> rep, uglavnom skorovi 0.92–0.95. **Ispravka 1 — bootstrap problem (s144)
+> pogrešno OPISAN, sad ispravno objašnjen i STVARNO POPRAVLJEN:** live test
+> (`bash -c 'set -e; x=$(exit 1); echo NEDOSTIŽNO'`) pokazao da `run_faza.sh`
+> NE pada tiho — `bb_aktivni_modeli.py` je oduvijek imao `exit(1)` zaštitu, pod
+> `set -e` to zaustavlja skriptu GLASNO. Pravi uzrok: skripta čita AKTIVNE
+> modele/temperature iz ISTORIJE (`bb_prevodi_knjige`), ne iz kataloga
+> (`bb_faze_a1`/`bb_faze_a2`) — jer za fazu 1 (root) katalog nije jednoznačan
+> (nllb determinizam, samo 5 od 9 mogućih model×temp kombinacija stvarno
+> korišteno). Popravka: fallback na katalog kad je istorija prazna — ispravno
+> za sve self-refine faze (uvijek 1 aktivna temperatura). Bootstrap ručnim
+> pozivima više nije potreban za takve faze. Testirano (py_compile, faza 4
+> nepromijenjena, fallback grana kroz rollback-transakciju) — kod izmijenjen,
+> NEKOMITOVAN. **Ispravka 2 — "runda" dizajn razrađen i testiran, NIJE
+> implementiran:** Flaviova ideja — alternativa klon-triku (faza 7/8/9) za
+> ponovno pokretanje iste konfiguracije: nov atribut `runda` na
+> `bb_prevodi_knjige`, uključen u UNIQUE umjesto novog `faza_id` po pokušaju.
+> Testirano pravom DDL migracijom (ADD COLUMN + UNIQUE zamjena) u
+> rollback-transakciji na produkcionoj tabeli — duplikat na runda=1 pao kao i
+> prije, isti tuple na runda=2 prošao čisto, `v_prevodi_full` nastavio raditi,
+> `ROLLBACK` potvrđen (0 zaostalih redova). Dokumentovano kao spremna opcija
+> (PLAN-KONFIGURACIJA.md §4.9), implementacija odložena po Flaviovoj odluci.
+> Korpus nepromijenjen (50.624/1.608.553/302.168). BB_VERSION ostaje s138.
+> Sesija zatvorena SAMOSTALNO (Flavio unaprijed autorizovao, odsutan od PC-a).
+> Detalji: `docs/sessions/session_145.md`, `docs/PLAN-KONFIGURACIJA.md` §4.8-4.9.
+>
+> **s144 snapshot (19. jul 2026):** **DIO B PREOKRENUT** — random selekcija
+> (plan §4.1-§4.6) NAPUŠTENA, zamijenjena s tri fiksne gated faze
+> (`refine-gated`=4, `refine-lenient-gated`=5, `refine-strict-gated`=6),
+> prag `seed_score<0.95`. Flaviova provokacija o sopstvenom istorijskom
+> iskustvu ("6 minuta po rečenici") razotkrila da GA mašinerija (mutacija,
+> anti-elitizam, marginalna preferenca) ima smisla samo za OGROMAN prostor
+> pretrage — sa fiksnim katalogom od 6 kombinacija (2 modela × 3 prompta ×
+> 1 temperatura), taj problem ne postoji. Pravi problem reformulisan: ne
+> "koju kombinaciju", nego "vrijedi li uopšte probati OVU rečenicu" — headroom
+> gate. Prag 0.95 usvojen na čistom novi-model-vs-novi-model presjeku (mješani
+> agregat davao 0.92, konfaund starih penzionisanih modela). Svaka gated faza
+> gleda TRENUTNOG apsolutnog pobjednika (ne originalni seed) — samo-sužavajući
+> lijevak. Otkriven i popravljen PRAVI bug u `bb_04_pobjednik.py` (čitao
+> obrisane `m.faza_id`/`m.temperatura` kolone iz s142 migracije — nikad
+> testirano jer nijedan refine nije pokretan između s142 i ovog testa).
+> Testirano kraj-do-kraja (`bb_03`→sudija→`bb_04`) na k22. Korpus
+> 50.624/1.608.277(+6 test)/302.168. BB_VERSION ostaje s138. Detalji:
+> `docs/sessions/session_144.md`, `docs/PLAN-KONFIGURACIJA.md` §4.7.
 >
 > **s143 snapshot (18. jul 2026):** RAZRADA DIJELA B (mjerenje + konkretizacija
 > dizajna), nastavak istog dana nakon s142. Korpus NEPROMIJENJEN (50.624/1.608.271/
@@ -1113,4 +1163,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 18. jul 2026. (sesija 143)*
+*Flavio & Claude · Buchenberg · V3 · 19. jul 2026. (sesija 145)*

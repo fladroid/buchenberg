@@ -2,11 +2,15 @@
 
 **Datum:** 17. jul 2026. (sesija 141), dopunjeno 18. jul 2026. (s142 izvršenje,
 s143 razrada Dijela B), preokrenuto 19. jul 2026. (s144 — random zamijenjen
-fiksnim gated fazama)
+fiksnim gated fazama), dopunjeno 19. jul 2026. (s145 — bootstrap fix +
+"runda" dizajn testiran)
 **Autori:** Flavio & Claude
 **Status:** DIO A IZVRŠEN (s142) i NEDIRNUT ovim preokretom. DIO B: random
 selekcija NAPUŠTENA (s144) — zamijenjena s tri fiksne gated faze (prag
-seed_score<0.95). IZVRŠENO i testirano. Vidi §4.7 i §6 Status za detalje.
+seed_score<0.95). IZVRŠENO i testirano. s145: bootstrap problem iz §4.7
+ISPRAVLJEN u kodu (nije bio tih no-op kako je opisano — vidi §4.8). "Runda"
+kao alternativa klon-triku RAZMATRANA i TESTIRANA (§4.9), NIJE
+implementirana. Vidi §4.7-§4.9 i §6 Status za detalje.
 
 ---
 
@@ -400,11 +404,114 @@ s142 Koraku 6), nikad testiran jer nijedan refine nije pokretan između s142
 i ovog testa. Popravljeno: `pk.faza_id` (direktno na `bb_prevodi_knjige`) +
 `bb_temperature` join za tie-break. Vidi `docs/sessions/session_144.md`.
 
-**Operativna napomena (README):** potpuno nova faza bez ijednog istorijskog
-prevoda čini da `run_faza.sh` TIHO ne radi ništa (`bb_aktivni_modeli.py`
-vraća prazno, petlja se izvrši nula puta, "ZAVRŠENO" se ispiše bez greške).
-Prije prvog `run_faza.sh` poziva na novu fazu: "zasadi" historiju
-direktnim `bb_03_prevod.py` pozivom po svakom (model,temp) paru.
+**Operativna napomena (README) — ISPRAVLJENA s145, vidi §4.8:** opis iznad
+("tiho ne radi ništa") nije bio tačan; ispravan opis i kod fix u §4.8.
+
+## 4.8 Bootstrap problem — ispravka opisa i kod fix (s145, 19. jul 2026.)
+
+Live test (s145) je pokazao da opis iz prethodnog pasusa NIJE tačan:
+`run_faza.sh` se NE zaustavlja tiho. `bb_aktivni_modeli.py` je oduvijek
+(već u s142 verziji, provjereno diff-om) imao `if not rows: exit(1)`
+zaštitu — pod `set -e` na vrhu `run_faza.sh`, to zaustavlja cijelu
+skriptu odmah, s greškom na stderr ("Nema aktivnih modela za fazu N!"),
+bez "ZAVRŠENO". Prethodna sesija je vjerovatno pretpostavila poznatu bash
+`set -e` + command-substitution zamku umjesto da je uživo testira — ovdje
+se ispostavilo da zamka ne važi (potvrđeno: `bash -c 'set -e; x=$(exit 1);
+echo NEDOSTIŽNO'` zaista stane prije echo-a).
+
+**Pravi uzrok (i dalje stoji, samo ne kao "tihi" bug nego kao "glasan"
+preduslov):** `bb_aktivni_modeli.py` ne čita "koji model/temp JE AKTIVAN
+za fazu N" iz kataloga (`bb_faze_a1`/`bb_faze_a2`) — čita "koji model/temp
+je VEĆ KORIŠTEN za fazu N" iz `bb_prevodi_knjige` (istorija). Za potpuno
+svježu fazu (0 redova) to je uvijek prazno → glasna greška, ne tih no-op.
+
+**Zašto je istorijski pristup uopšte izabran (otkriveno pri provjeri prije
+kod-izmjene):** za fazu 1 (root), katalog (`bb_faze_a1` × `bb_faze_a2`)
+NIJE jednoznačan — sve tri temperature (0.0/0.1/0.8) su "aktivne" za sva
+tri modela (glm-5.2, mistral-large-3:675b, nllb-600M), ali stvarno
+korištenih kombinacija je samo 5 od mogućih 9 (nllb je deterministički,
+nikad zvan na 0.1/0.8). a1/a2 osе po dizajnu (§0) nemaju spregu u shemi —
+tako da čist katalog-cross-product NIJE ispravan odgovor za fazu 1. Za sve
+self-refine faze (2,3,4,5,6...) katalog UVIJEK ima tačno 1 aktivnu
+temperaturu → cross-product je tamo potpuno jednoznačan i tačan.
+
+**Popravka:** `bb_aktivni_modeli.py` prvo pokuša istoriju (nepromijenjeno
+ponašanje — faza 1 uvijek ima punu istoriju, nikad ne stiže do nove
+grane). Ako je istorija prazna, PADA na katalog
+(`bb_faze_a1` × `bb_faze_a2`, oba aktivan) kao fallback. Za sve buduće
+proste self-refine faze (uvijek 1 temperatura) to je uvijek tačno —
+bootstrap direktnim `bb_03_prevod.py` pozivima više NIJE potreban.
+
+**Testirano (s145):**
+- `py_compile` prošao.
+- Faza 4 (ima istoriju od s144 bootstrapa): rezultat nepromijenjen
+  (`glm-5.2|0.8`, `mistral-large-3:675b|0.8`).
+- Fallback grana: testirana kroz SIGURNU DB transakciju (privremena test-
+  faza + a1/a2 katalog redovi, upit identičan fallback grani u kodu,
+  `ROLLBACK` na kraju — nula trajnih upisa). Vratila tačno očekivane
+  parove iz kataloga.
+- Faza 999 (ne postoji nigdje): i dalje pada s greškom kao i prije.
+
+**Status:** kod izmijenjen u `src/bb_aktivni_modeli.py`, testiran,
+NEKOMITOVAN na kraju s145 (čeka Flaviov redovan git ritual). README
+operativna napomena treba ažuriranje da odražava popravku (vidi README
+"Kako pokrenuti NOVU FAZU").
+
+## 4.9 "Runda" — alternativa klon-triku za ponovno izvršavanje faze (razmatrano i testirano, NIJE implementirano, s145)
+
+**Problem koji rješava:** ponovno pokretanje iste gated refine faze (npr.
+kad se prag 0.95 ponovo primijeni na već-poboljšan tekst) zahtijeva danas
+klon-trik — nova faza (7/8/9 = klon 4/5/6) samo da zaobiđe
+`UNIQUE(..., faza_id, ...)` na `bb_prevodi_knjige`. Isti obrazac kao faza
+2→3 (s139: "faze 2 i 3 su tehnički identične"). Ovo utiskuje BROJ POKUŠAJA
+u IDENTITET faze (`faza_id`), što je u napetosti s KONCEPT.md principom
+"identitet = minimumi + proces, NE komponente" — broj pokušaja je proces,
+ne identitet.
+
+**Predložena alternativa (Flaviova ideja, s145):** dodati atribut `runda`
+(cijeli broj, default 1) na `bb_prevodi_knjige`, uključen u UNIQUE
+ograničenje umjesto novog `faza_id` po pokušaju. `faza_id` ostaje
+"koja konfiguracija" (metod + a1/a2/a3); `runda` postaje "koji pokušaj te
+iste konfiguracije". Druga posljedica (logička, ne namjeravana ali
+tačna): fazni pobjednik (`bb_prev_recenica_faza`, grupisan po
+(rečenica, faza)) bi automatski gledao najbolji rezultat PREKO SVIH
+RUNDI te faze — bliže konceptu "najbolji pokušaj ove konfiguracije" nego
+klon-trik koji pravi potpuno odvojene bazene pobjednika po faza_id.
+
+**Cijena:** `bb_prevodi_knjige` ADD COLUMN + zamjena UNIQUE ograničenja
+(jeftino — tabela ima 1.268 redova, ne 1.6M); `--runda` CLI parametar u
+`bb_03_prevod.py` (isti obrazac kao `--temp`/`--prag`), uključen u
+`already_done()` provjeru; `--runda` passthrough u `run_faza.sh`; view
+sloj (`v_prevodi_full` i nasljednici) treba novu kolonu izloženu — sigurna
+ADDITIVE izmjena (dodavanje na kraj SELECT liste), ne kida downstream za
+razliku od preimenovanja iz s142.
+
+**Testirano (s145) — prava DDL migracija u transakciji, ROLLBACK na
+kraju, nula trajnih izmjena:**
+```sql
+ALTER TABLE bb_prevodi_knjige ADD COLUMN runda INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE bb_prevodi_knjige DROP CONSTRAINT bb_prevodi_knjige_full_key;
+ALTER TABLE bb_prevodi_knjige ADD CONSTRAINT bb_prevodi_knjige_full_key
+  UNIQUE (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id, runda);
+```
+- Duplikat na runda=1 (isti tuple kao postojeći red faze 4): PAO kao i
+  prije (nema promjene ponašanja za default rundu).
+- Isti tuple na runda=2: PROŠAO čisto (novi red, `RETURNING id=14793,
+  runda=2`).
+- `v_prevodi_full` view nastavio raditi ispravno poslije ADD COLUMN
+  (COUNT provjeren, 132 kandidata za fazu 4, netaknuto).
+- `ROLLBACK` potvrđen — 0 zaostalih test-redova u bazi.
+
+**Preporuka (Claude):** runda je konceptualno čistija (izbjegava
+ponavljanje faza-2/3 "broj pokušaja kao identitet" problema), ali klon
+i dalje potpuno radi i već je dokazan na 4/5/6. Nije hitna odluka — cijena
+čekanja je samo gomilanje `bb_faze` redova (kozmetičko, ne funkcionalno).
+Vrijedi implementirati ako ponovno pokretanje gated refine faza postane
+rutina; ako ostaje rijetka stvar, klon je sasvim pragmatično OK.
+
+**Status:** NIJE implementirano. Flavio: "implementacija za sada u drugom
+planu." Dizajn i test ostaju ovdje kao spremna, provjerena opcija za kad
+odluka padne.
 
 ## 5. Sažetak redoslijeda
 
@@ -448,4 +555,4 @@ DIO B (na temelju A) — PREOKRENUTO s144, vidi §4.7:
   popravljena.
 
 ---
-*Flavio & Claude · Buchenberg · Plan konfiguracije v4 · 17. jul 2026., preokrenuto 19. jul 2026. (s144)*
+*Flavio & Claude · Buchenberg · Plan konfiguracije v4 · 17. jul 2026., preokrenuto 19. jul 2026. (s144), dopunjeno 19. jul 2026. (s145)*
