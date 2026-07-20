@@ -12,6 +12,7 @@ Referentna tabela svih HTML stranica web portala, njihove menu tačke i vidljivo
 | about.html | About | About Buchenberg |
 | stats.html | Stats (od s120, bilo "X-Ray Stats") | Statistics (od s120, bilo "X-Ray Statistics") |
 | books.html | Library | Library |
+| limits.html | Limits (s146) | What We Don't Measure (s146) |
 | nlp.html | Entities (od s127, bilo "NLP") | Named Entities & Relations (od s127, bilo "Natural Language Processing"; word cloud uklonjen, dodan classic/with-llm toggle) |
 | reader.html | Reader | *(nema fiksni)* — dinamički, ime trenutno otvorene knjige (`#book-title`) |
 | learn.html | Learn | Language Learning |
@@ -19,6 +20,12 @@ Referentna tabela svih HTML stranica web portala, njihove menu tačke i vidljivo
 | art.html | Art (od s120: `art_title` i18n ključ × 5 jezika, prije hardkod bez ključa) | Art |
 
 (Vrijednosti su EN — izvor `NAV_I18N.en` u `nav.js`. Menu tačka i naslov postoje na svih 5 jezika osim gdje je niže navedeno drugačije.)
+
+**s146 dodatak — `limits.html`:** menu tačka i h1 prevedeni su na svih 5 jezika kroz `NAV_I18N`
+(`limits`, `limits_title`), ali je **tijelo stranice EN-only** — svjestan izuzetak, isti obrazac kao
+X-Ray legenda i Key Concepts kartice. Razlog: sadržaj je tehnički i raste. Stranica ima vlastiti
+scoped `<style>` blok (infoboxovi u desnoj koloni, kao sidebar na `about.html`) da ne dira dijeljeni
+`buchenberg.css`. Nije u `CONCEPT_PAGES` — nema Key Concepts kartice.
 
 ## Neskladi otkriveni s116 — SVI RIJEŠENI u s120 (WEB-FAZA1.md → Faza 2 implementacija)
 
@@ -32,4 +39,4 @@ Referentna tabela svih HTML stranica web portala, njihove menu tačke i vidljivo
 Nakon više od 100 sesija postalo je jasno da Claude — kao tekstualni AI bez pristupa vizuelnom prikazu stranice — ne može pouzdano znati koja je menu tačka povezana s kojom HTML stranicom, niti koji je naslov prikazan na kojoj stranici, osim ako to eksplicitno ne provjeri na serveru svaki put. Ovaj dokument je konsolidovana referenca umjesto oslanjanja na razbacane odluke iz pojedinačnih sesija — pisan svjesno protiv tog ograničenja.
 
 ---
-*Flavio & Claude · Buchenberg · STRANICE.md · 6. jul 2026.*
+*Flavio & Claude · Buchenberg · STRANICE.md · nastalo 6. jul 2026. · ažurirano 20. jul 2026. (s146)*

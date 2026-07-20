@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 19. jul 2026. (sesija 145)  
+**Poslednje ažuriranje:** 20. jul 2026. (sesija 146)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -429,6 +429,35 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
+>
+> **s146 snapshot (20. jul 2026):** ANALITIČKA sesija + nova web stranica.
+> Korpus NEPROMIJENJEN (50.624/1.617.141/302.168 — nula pipeline poziva, sve READ-ONLY).
+> **(1) Gated refine potvrđen na širem uzorku** (k20 Dracula + k21 Flatland,
+> de/hr/it/sr, 1–1000, faze 4/5/6): gate otvoren 2.337/8.000 (29,2%), gated refine
+> pobjeđuje **93,4%** kad je otvoren, delta **+0,047**, klon-stopa 0,7%. Flaviova
+> sumnja da stara faza 2 kvari rane rečenice — provjerena i uglavnom oborena
+> (6+21 od 1.200); niži gate u ranim poglavljima je svojstvo teksta, ne kontaminacija.
+> **(2) PRVI AUDIT MJERNOG APARATA** (glavna nit, sve trajno u `docs/ANALIZA.md`):
+> **prag šuma sudije = 0,003** mjeren na 212.443 klon-grupe (98,74% identična ocjena)
+> → ⚠️ obara s137 nalaz o nedeterminizmu sudije (n=30 bio premali), i znači da je
+> rasipanje unutar grupe kandidata STVARNA razlika. **sd sudija 0,2065 vs sd cosinus
+> 0,0277** → formula 0,4/0,6 u praksi rangira **~8% cosinusom, ~92% sudijom**.
+> **Cosinusove strukturne slijepe tačke:** neprevedeni fragment 0,99 (2.784 sl.),
+> latinično `w/y` u ćirilici 0,95 (1.466 sr prevoda), slomljena gramatika 0,97 —
+> sve tri sudija hvata pouzdano. Sudijine nule NISU sentinel (provjereno u kodu).
+> ⚠️ **ODLUKA: NE standardizovati komponente** (z-score bi promijenio 24,98%
+> pobjednika u smjeru slijepih tačaka) — nesklad 8/92 trenutno ŠTITI izbor.
+> **(3) Jedini pravi negativan nalaz:** sudija mjeri tečnost, književnost je namjerno
+> krši — Abbott *Flatland* de, autorova namjerna složenica izbrisana refine-om i
+> nagrađena **+0,157 (najveća delta u uzorku)**. "Ne mjerimo vjernost autoru nego
+> vjernost normi jezika." **(4) NOVA STRANICA `limits.html`** ("What We Don't Measure",
+> menu **Limits** iza Stats) — publikovani svi negativni nalazi i granice: slijepe
+> tačke, sistematsko kažnjavanje autorskog odstupanja, sve iznad rečenice (prelom
+> stiha, ilustracije — jedinica je rečenica), kontekst, poznata nepotpunost.
+> EN-only tijelo (svjestan izuzetak), meni+naslov ×5 jezika. **BB_VERSION s140 → s146**
+> (buchenweb 921efe6 — prvi put dirnut od s140). OTVORENO: `bb_sr_cirilica.py` w/y fix,
+> Key Concepts za novu stranicu, permutacijski eksperiment faza 4/5/6.
+> Detalji: `docs/sessions/session_146.md`, `docs/ANALIZA.md`.
 >
 > **s145 snapshot (19. jul 2026):** Analiza + dvije popravke, NULA uticaja na
 > korpus (Flavio je samostalno pustio faze 4/5/6 na Hound (k1) 200 rečenica ×
@@ -914,6 +943,7 @@ Oba backupa mogu dodatno opteretiti server tokom tih prozora — uzeti u obzir p
 | `index.html` | Landing page | Čist pitch: hero (heksagon + MT Lab), Key Concepts kartice, How it works (3 stuba), open-source nota. Current status (kartice + funnel) preseljen na stats.html (s101). |
 | `about.html` | O projektu | Detaljna dokumentacija: pipeline, modeli, scoring, infrastruktura |
 | `stats.html` | Stats (od s120, bilo "X-Ray Stats") | Corpus funnel (38k rečenice → kandidati → izabrani prevodi + full-14), definiciona nota ("kako čitati brojeve": prevod=rečenica-jezik par, engine vs konfiguracija, NLLB=dedicated MT), 5 summary kartica (uklj. 14 jezika i 126 kombinacija), winner distribution, coverage, avg scoreovi. **DB-side agregacija (s99):** čita `data/stats.json` (generiše `bb_web_export.py:get_stats()` — od s101 +total_sentences/total_candidates/total_languages/full_all_langs). |
+| `limits.html` | Limits (s146) | **What We Don't Measure** — publikovane granice i negativni nalazi mjernog aparata: slijepe tačke cosinusa (neprevedeno / slomljeno pismo / slomljena gramatika), deklarisane naspram stvarnih težina komponenti (8/92 umjesto 40/60), sistematsko kažnjavanje namjernog autorskog odstupanja (Abbott slučaj), sve iznad rečenice (prelom stiha, ilustracije), kontekst, poznata nepotpunost. **Tijelo EN-only** (svjestan izuzetak); meni i naslov ×5 jezika. Vlastiti scoped `<style>` blok — dijeljeni CSS netaknut. Nije u `CONCEPT_PAGES`. |
 | `books.html` | Library | Kartice s lang badges i brojem prevedenih jezika; Word cloud radi za sve knjige (neprevedene prikazuju EN original); linkovi: Read, Gutenberg, NLP, Word cloud |
 | `nlp.html` | Named Entities & Relations | TRI ravnopravna pogleda (s129): Classic \| With LLM \| DocRE. Entity Network graph (D3 force); DocRE mod = usmjeren graf (strelica+boja po klasi P/M/O, legenda, klik→opis+dokaz). Tri infoboxa (šta+kako, DocRE naglašava vlastitu implementaciju, i18n ×5). Named Entities lista + Original tekst s highlight/navigacijom. Word cloud uklonjen (s127). |
 | `reader.html` | Čitač | Prima `?book=ID` URL param; X-Ray Full mod — paginacija po 25 rečenica, svih 5 kandidata s kompletnim scoreovima i back translationom |
@@ -1163,4 +1193,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 19. jul 2026. (sesija 145)*
+*Flavio & Claude · Buchenberg · V3 · 20. jul 2026. (sesija 146)*
