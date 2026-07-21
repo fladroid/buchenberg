@@ -8,7 +8,7 @@
 # --force je svojstvo PROLAZA (kao u run_ner.sh) -> prosljeđuje se sudiji (ponovno ocjenjivanje).
 # Primjer: bash run_faza.sh --faza 2 --knjiga 22 --jezici "de hr" --od 1 --do 20
 set -e
-FAZA=""; KNJIGA=""; JEZICI=""; OD=""; DO=""; FORCE=""
+FAZA=""; KNJIGA=""; JEZICI=""; OD=""; DO=""; FORCE=""; RUNDA="1"
 while [[ $# -gt 0 ]]; do
     case $1 in
         --faza)   FAZA="$2"; shift 2 ;;
@@ -17,6 +17,7 @@ while [[ $# -gt 0 ]]; do
         --od)     OD="$2"; shift 2 ;;
         --do)     DO="$2"; shift 2 ;;
         --force)  FORCE="--force"; shift ;;
+        --runda)  RUNDA="$2"; shift 2 ;;
         *) echo "Nepoznat argument: $1"; exit 1 ;;
     esac
 done
@@ -38,7 +39,7 @@ IFS='|' read -r METOD_ID METOD_NAZIV METOD_ROOT <<< "$INFO"
 MODELI=$(venv/bin/python src/bb_aktivni_modeli.py --faza "$FAZA")
 
 echo ">>> FAZA $FAZA | metod: $METOD_NAZIV (id=$METOD_ID, root=$METOD_ROOT)" | tee -a "$LOG"
-echo ">>> k${KNJIGA} | $JEZICI | $OD-$DO | ${FORCE:+force} $(date)" | tee -a "$LOG"
+echo ">>> k${KNJIGA} | $JEZICI | $OD-$DO | runda=$RUNDA ${FORCE:+force} $(date)" | tee -a "$LOG"
 echo ">>> Modeli (aktivni, faza $FAZA):" | tee -a "$LOG"
 echo "$MODELI" | sed 's/^/    /' | tee -a "$LOG"
 
@@ -47,7 +48,7 @@ while IFS='|' read -r MODEL TEMP; do
     echo ">>> Prevod [$METOD_NAZIV]: $MODEL @ temp=$TEMP" | tee -a "$LOG"
     time venv/bin/python src/bb_03_prevod.py \
         --knjiga "$KNJIGA" --od "$OD" --do "$DO" \
-        --model "$MODEL" --temp "$TEMP" --faza "$FAZA" \
+        --model "$MODEL" --temp "$TEMP" --faza "$FAZA" --runda "$RUNDA" \
         --embedder "$EMBEDDER" \
         --jezici $JEZICI 2>&1 | tee -a "$LOG"
 done <<< "$MODELI"

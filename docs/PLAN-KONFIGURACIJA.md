@@ -3,14 +3,17 @@
 **Datum:** 17. jul 2026. (sesija 141), dopunjeno 18. jul 2026. (s142 izvršenje,
 s143 razrada Dijela B), preokrenuto 19. jul 2026. (s144 — random zamijenjen
 fiksnim gated fazama), dopunjeno 19. jul 2026. (s145 — bootstrap fix +
-"runda" dizajn testiran)
+"runda" dizajn testiran), dopunjeno 21. jul 2026. (s147 — "runda" IZVRŠENA)
 **Autori:** Flavio & Claude
 **Status:** DIO A IZVRŠEN (s142) i NEDIRNUT ovim preokretom. DIO B: random
 selekcija NAPUŠTENA (s144) — zamijenjena s tri fiksne gated faze (prag
 seed_score<0.95). IZVRŠENO i testirano. s145: bootstrap problem iz §4.7
 ISPRAVLJEN u kodu (nije bio tih no-op kako je opisano — vidi §4.8). "Runda"
-kao alternativa klon-triku RAZMATRANA i TESTIRANA (§4.9), NIJE
-implementirana. Vidi §4.7-§4.9 i §6 Status za detalje.
+kao alternativa klon-triku RAZMATRANA i TESTIRANA (§4.9), IMPLEMENTIRANA
+(s147, 21. jul 2026) — DDL + view + bb_03_prevod.py + run_faza.sh, testirano
+kraj-do-kraja na k22. Seed-lock (potreban za mjerenje uticaja redoslijeda
+refine koraka po rundi) OSTAJE NEIMPLEMENTIRAN — posebna, kasnija odluka.
+Vidi §4.7-§4.9 i §6 Status za detalje.
 
 ---
 
@@ -457,7 +460,7 @@ NEKOMITOVAN na kraju s145 (čeka Flaviov redovan git ritual). README
 operativna napomena treba ažuriranje da odražava popravku (vidi README
 "Kako pokrenuti NOVU FAZU").
 
-## 4.9 "Runda" — alternativa klon-triku za ponovno izvršavanje faze (razmatrano i testirano, NIJE implementirano, s145)
+## 4.9 "Runda" — alternativa klon-triku za ponovno izvršavanje faze (razmatrano i testirano s145, IMPLEMENTIRANO s147)
 
 **Problem koji rješava:** ponovno pokretanje iste gated refine faze (npr.
 kad se prag 0.95 ponovo primijeni na već-poboljšan tekst) zahtijeva danas
@@ -509,9 +512,10 @@ i dalje potpuno radi i već je dokazan na 4/5/6. Nije hitna odluka — cijena
 Vrijedi implementirati ako ponovno pokretanje gated refine faza postane
 rutina; ako ostaje rijetka stvar, klon je sasvim pragmatično OK.
 
-**Status:** NIJE implementirano. Flavio: "implementacija za sada u drugom
-planu." Dizajn i test ostaju ovdje kao spremna, provjerena opcija za kad
-odluka padne.
+**Status:** IMPLEMENTIRANO (s147, 21. jul 2026) — vidi §6 za pun opis
+izvršenja i testa. Seed-lock (izolacija seed-a po rundi, potreban da bi
+runda mogla mjeriti uticaj redoslijeda refine koraka na ocjenu prevoda —
+vidi raspravu s147) ostaje posebna, neimplementirana odluka.
 
 ## 5. Sažetak redoslijeda
 
@@ -553,6 +557,21 @@ DIO B (na temelju A) — PREOKRENUTO s144, vidi §4.7:
   (van test-knjige k22); health_check "opseg"/rupa logika za gated faze
   ostavljena namjerno kao poznata razlika (Flaviova odluka s144), ne
   popravljena.
+- **"Runda" (§4.9): IMPLEMENTIRANA kraj-do-kraja (s147, 21. jul 2026).**
+  `bb_prevodi_knjige.runda` (INTEGER, default 1) u UNIQUE ograničenju;
+  `v_prevodi_full` dopunjen kolonom `runda` (additive, kraj SELECT liste);
+  `bb_03_prevod.py --runda` (default 1, `already_done()` automatski
+  runda-svjestan preko `prevodi_knjige_id`); `run_faza.sh --runda`
+  passthrough. Testirano na k22/hr/faza4/pozicija109: runda=1 bez
+  regresije (already_done ispravno preskočio), runda=2 napravio nezavisan
+  nov red, refine izvršen, sudija ocijenila, bb_04 argmax ispravno odabrao
+  bolji rezultat preko obje runde. Backup prije DDL-a:
+  `/tmp/bb_backup_pre_runda_20260721.dump`. Health check poslije: sve
+  zeleno, nijedan izvedeni pogled ni export skripta nije pogođena (nema
+  `SELECT *` ni zavisnosti na `v_prevodi_full` u bb_web_export.py/
+  bb_xray_export.py). **Seed-lock (§4.9 dio o izolaciji seed-a po rundi,
+  potreban za mjerenje uticaja redoslijeda refine koraka) NIJE
+  implementiran** — namjerno odvojen kao posebna, kasnija odluka.
 
 ---
-*Flavio & Claude · Buchenberg · Plan konfiguracije v4 · 17. jul 2026., preokrenuto 19. jul 2026. (s144), dopunjeno 19. jul 2026. (s145)*
+*Flavio & Claude · Buchenberg · Plan konfiguracije v4 · 17. jul 2026., preokrenuto 19. jul 2026. (s144), dopunjeno 19. jul 2026. (s145), dopunjeno 21. jul 2026. (s147)*

@@ -249,20 +249,20 @@ def cosine(a, b):
 
 # ── DB helpers ──────────────────────────────────────────────────────────────
 
-def get_or_create_prevodi_knjige(cur, knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id):
+def get_or_create_prevodi_knjige(cur, knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id, runda):
     cur.execute("""
-        INSERT INTO bb_prevodi_knjige (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id) DO NOTHING
+        INSERT INTO bb_prevodi_knjige (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id, runda)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id, runda) DO NOTHING
         RETURNING id
-    """, (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id))
+    """, (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id, runda))
     row = cur.fetchone()
     if row:
         return row[0]
     cur.execute("""
         SELECT id FROM bb_prevodi_knjige
-        WHERE knjiga_id=%s AND jezik_id=%s AND faza_id=%s AND model_id=%s AND temperatura_id=%s AND prompt_id=%s AND embeddings_id=%s
-    """, (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id))
+        WHERE knjiga_id=%s AND jezik_id=%s AND faza_id=%s AND model_id=%s AND temperatura_id=%s AND prompt_id=%s AND embeddings_id=%s AND runda=%s
+    """, (knjiga_id, jezik_id, faza_id, model_id, temperatura_id, prompt_id, embeddings_id, runda))
     return cur.fetchone()[0]
 
 
@@ -350,6 +350,8 @@ def main():
                         help="Faza pipeline-a (1=base, 2+=refine: pobjednik kao hint)")
     parser.add_argument("--prag", type=float, default=0.95,
                         help="Prag finalni_score seeda ispod kojeg se refine pokusava (samo faza 2+)")
+    parser.add_argument("--runda", type=int, default=1,
+                        help="Runda ponavljanja iste konfiguracije (faza/model/temp/prompt) - default 1")
     args = parser.parse_args()
 
     is_nllb = (args.model == "nllb-600M")
@@ -407,7 +409,7 @@ def main():
         model_id, temperatura_id, prompt_id = row
 
         engine = "NLLB" if is_nllb else "Ollama"
-        print(f"\n═══ Model: {args.model} | temp: {temp} | engine: {engine} | prompt: {PROMPT_NAZIV} ═══")
+        print(f"\n═══ Model: {args.model} | temp: {temp} | engine: {engine} | prompt: {PROMPT_NAZIV} | runda: {args.runda} ═══")
 
         for kod in args.jezici:
             jezik_naziv = JEZIK_NAZIVI.get(kod)
@@ -423,7 +425,7 @@ def main():
             jezik_id = cur.fetchone()[0]
 
             prevodi_knjige_id = get_or_create_prevodi_knjige(
-                cur, args.knjiga, jezik_id, args.faza, model_id, temperatura_id, prompt_id, embeddings_id
+                cur, args.knjiga, jezik_id, args.faza, model_id, temperatura_id, prompt_id, embeddings_id, args.runda
             )
             conn.commit()
 

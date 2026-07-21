@@ -430,6 +430,39 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
 >
+> **s147 snapshot (21. jul 2026):** Tri niti, sve ANALITIČKE/INFRASTRUKTURNE
+> (nula pipeline poziva osim malog testa u niti 3). Korpus 50.624/1.647.363/
+> 307.768 (živo, Flaviovi pozadinski runovi). **(1) Permutacijski eksperiment**
+> (Flaviov ručni prevod + refine, k20 Dracula, 2801-3400, hr/de/it/sr, 6 blokova
+> po 100 rečenica, svih 6 permutacija redoslijeda faza 4/5/6): pozicija u lancu
+> ima jasan, monoton efekat na ocjenu (gate otvoren 21,0%→13,9%→11,3% kroz
+> 1./2./3. korak, prosječan pomak +0,0237→+0,0077→+0,0080 kad otvoren) —
+> samo-sužavajući lijevak radi kako je dizajniran. Konkretna faza (4 vs 5 vs 6,
+> kontrolisano za poziciju zahvaljujući uravnoteženom dizajnu) pokazuje slab,
+> nekonzistentan efekat. Efekat REDOSLIJEDA (bloka) ostaje nerazdvojiv od
+> sadržaja rečenica u ovom dizajnu (between-block, ne within-sentence) — vodi
+> direktno u nit 3. **(2) NER export provjera** (Flaviov zahtjev): web JSON
+> sloj (`ner_*.json`) potvrđen 100% sinhronizovan s bazom (brojevi entiteta i
+> DocRE relacija provjereni tačno po knjizi). Ono što NIJE sinhronizovano je
+> sam NER pipeline: DocRE relacije postoje na samo 5/12 knjiga (Hound, Alice,
+> J&H, Flatland, Hound Copy); Big Four/Frankenstein/Moby Dick/Romeo&Juliet/
+> Dracula imaju classic+llm ali ne DocRE (otvoreno od s133 — "kad bude
+> resursa"); **The Big Four Copy (23) i Frankenstein Copy (24) nemaju NIJEDAN
+> NER sloj** — `run_ner.sh` nikad pokrenut na njima. Flavio pokreće samostalno.
+> **(3) "Runda" IMPLEMENTIRANA kraj-do-kraja** (odgovor na nit 1: runda sama
+> NE mjeri uticaj redoslijeda bez dodatnog seed-lock mehanizma — detaljno
+> raspravljeno i dizajnirano, ali NEIMPLEMENTIRANO, posebna buduća odluka).
+> `bb_prevodi_knjige.runda` (INTEGER, default 1) u UNIQUE ograničenju;
+> `v_prevodi_full` dopunjen (additive); `bb_03_prevod.py --runda` + `run_faza.sh
+> --runda` passthrough; `already_done()` automatski runda-svjestan preko
+> `prevodi_knjige_id`. Backup prije DDL: `/tmp/bb_backup_pre_runda_20260721.
+> dump`. Testirano na k22/hr/faza4/pozicija109: runda=1 bez regresije,
+> runda=2 napravio nezavisan red, refine izvršen, bb_04 argmax ispravno
+> odabrao bolji rezultat (glm-5.2 runda=2, final=0,9344) preko obje runde.
+> Health check poslije: sve zeleno, web/xray export skripte nedodirnute
+> (nema `SELECT *` ni zavisnost na `v_prevodi_full`). Web nedirnut → BB_VERSION
+> ostaje s146. Detalji: `docs/sessions/session_147.md`, `docs/PLAN-KONFIGURACIJA.md` §4.9/§6.
+>
 > **s146 snapshot (20. jul 2026):** ANALITIČKA sesija + nova web stranica.
 > Korpus NEPROMIJENJEN (50.624/1.617.141/302.168 — nula pipeline poziva, sve READ-ONLY).
 > **(1) Gated refine potvrđen na širem uzorku** (k20 Dracula + k21 Flatland,
