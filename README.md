@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 20. jul 2026. (sesija 146)  
+**Poslednje ažuriranje:** 22. jul 2026. (sesija 148)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -428,6 +428,44 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+>
+> **s148 snapshot (22. jul 2026):** Status-provjera (Flaviov zahtjev) + tri
+> zadatka, jedan vraćen nakon incidenta. Korpus 50.624/1.660.725/310.168
+> (zadatak 1 = UPDATE postojećih redova, ne novi upisi). **(1)
+> bb_sr_cirilica.py fix:** w/y/q/x dodani u LAT_CIR mapu; PRAVI uzrok bio
+> `is_cirilica()` — `cir>=lat` lažno preskakala tekst s većinski ćirilicom +
+> par zalutalih latiničnih slova, ispravljeno na strogi uslov (nema NIJEDNO
+> latinično slovo). 3.959 prevoda ispravljeno (više od procijenjenih 1.466 —
+> is_cirilica fix otkrio i druge zaboravljene ostatke, npr. skraćenice).
+> **(2) Key Concepts kartice za limits.html:** Goodhart's law, Untranslatability,
+> Construct validity — dodano u concepts.json + CONCEPT_PAGES u nav.js, slugovi
+> provjereni HTTP 200 prije upisa, Flavio potvrdio u browseru. BB_VERSION bump
+> NAMJERNO PRESKOČEN (Flaviova odluka — concepts.json ima automatski cache-bust,
+> bump nije ritual za svaku izmjenu nego garancija svježine kad je stvarno
+> potrebna). **(3) bb_web_export.py refaktor NA VIEW — POKUŠANO, VRAĆENO NA
+> ORIGINAL:** 4 funkcije prebačene na v_pobjednici_full/v_pobjednici_faza_full,
+> ekvivalentnost upita verifikovana EXCEPT testom na k22/23/24 PRIJE izmjene
+> (metod ispravan) — ALI `get_phase_winners()` cross-view JOIN
+> (`v_pobjednici_faza_full LEFT JOIN v_pobjednici_full`) tjera Postgres na pun
+> sequential scan bb_prevodi_recenica (696.773 reda), otkriveno tek nakon što
+> je proces zastao bez greške (dva paralelna zaboravljena procesa,
+> pg_terminate_backend). Ukupno trajanje do pucanja na DRUGOM propustu
+> (get_stats coverage/scores i dalje stari aliasi) 84.79s naspram Flaviovog
+> baseline-a <30s. CIJELI refaktor vraćen (`git checkout`), original čist test
+> 46.49s (sporije od starog baseline-a zbog prirodnog rasta korpusa, ali duplo
+> brže od nedovršenog refaktora). Backlog stavka ostaje otvorena s
+> upozorenjem: cross-view JOIN dva `_full` view-a je skup, budući pokušaj
+> treba materijalizovan view ili indeks, ili ostati na direktnim JOIN-ovima za
+> funkcije koje kombinuju apsolutne+fazne pobjednike. **Kritika procesa
+> (Flavio, zapisano bez ublažavanja):** poređenje 46s/30s (prirodni rast)
+> predstavljeno u istom dahu kad 84s+/46s (tada još neotkrivena greška)
+> ostalo neizmjereno — opravdanje stiglo prije otkrića greške; protokol
+> (prikaži→OK→izvrši) NIJE primjenjivan tokom debagovanja incidenta
+> (kill/terminate/explain/revert/čišćenje izvršeni direktno) — isti obrazac
+> kao s125/s135/s136 (memorija #24), POJAČAN pod stresom umjesto popravljen.
+> TRAJNA POUKA: greška u toku je razlog za VIŠE provjere ne manje. Detalji:
+> `docs/sessions/session_148.md`.
 >
 >
 > **s147 snapshot (21. jul 2026):** Tri niti, sve ANALITIČKE/INFRASTRUKTURNE
@@ -1164,7 +1202,7 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 2. ✅ **MT Lab identitet** (s96) — `<title>Buchenberg — MT lab</title>` + `.bb-hero-lab` red "Machine Translation Lab" ispod home loga (Xpong RL Lab paralela, nepreveden EN).
 3. ✅ **Home hero ikona** (s96) — heksagon `favicon.svg` (64×64) lijevo od loga; `.bb-hero-logo` flex-centriran.
 4. ✅ **X-Ray Key Concepts kartice** (s96, dodano) → **OBRISANE s120** (Flaviova odluka): 🩻 X-ray style art + 🎸 Rock Art and the X-Ray Style uklonjene sa index/about/stats (`data/concepts.json`). "Key Concepts" naslov se i dalje ne prevodi.
-5. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici` view
+5. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici_full`/`v_pobjednici_faza_full` view (POKUŠANO s148, VRAĆENO — cross-view JOIN dva `_full` view-a tjera pun sequential scan; sljedeći pokušaj treba materijalizovan view ili indeks, ne direktan LEFT JOIN. Vidi §9 s148 snapshot)
 6. ✅ **Stats dvije tabele + fazni pobjednik** — KOMPLETNO (s123, vidi §9 s123 snapshot)
 3. **Cache-Control za JS/CSS**
 
@@ -1226,4 +1264,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 20. jul 2026. (sesija 146)*
+*Flavio & Claude · Buchenberg · V3 · 22. jul 2026. (sesija 148)*
