@@ -58,6 +58,10 @@ LAT_CIR = [
     ("u",  "у"), ("U",  "У"),
     ("v",  "в"), ("V",  "В"),
     ("z",  "з"), ("Z",  "З"),
+    ("w",  "в"), ("W",  "В"),
+    ("y",  "и"), ("Y",  "И"),
+    ("q",  "к"), ("Q",  "К"),
+    ("x",  "кс"), ("X", "Кс"),
 ]
 
 # Ćirilični Unicode raspon — za detekciju je li tekst već ćirilica
@@ -66,10 +70,8 @@ LAT_ALPHA    = re.compile(r'[a-zA-ZšŠžŽčČćĆđĐ]')
 
 
 def is_cirilica(text):
-    """Vraća True ako tekst ima više ćiriličnih nego latiničnih slova."""
-    cir = len(CIR_PATTERN.findall(text))
-    lat = len(LAT_ALPHA.findall(text))
-    return cir >= lat
+    """Vraća True ako tekst nema nijedno latinično slovo (već potpuno ćirilica)."""
+    return not LAT_ALPHA.search(text)
 
 
 def transliteriraj(text):
