@@ -1189,7 +1189,7 @@ Svaka sesija završava:
 **Drugi retirement talas (5. jul, kompletna Ollama lista) povukao i gemma3:27b i ministral-3:8b — prva s112 odluka nevažeća.** Novi par kroz sandbox sondu (6 kandidata, 2 kruga): **mistral-large-3:675b + glm-5.2** (oba ne-misleća/gase thinking, temp-živa, 10–13 tok, različite familije). Rezerve: deepseek-v4-flash (temp-mrtav), kimi-k2.6. Zamjena i refaktor idu zajedno ("jedan dah"), prije 15. jula — po principima iz `docs/KONCEPT.md` i mapi iz `docs/sessions/session_112.md` (koraci: backup → shema → skripte → test → web; puna lista povučenih + sonda u dodacima s112). Istorijat starog testa ispod.
 Test na Dracula/bs (42 rečenice, swap-dizajn A/B/C): prosjek finalni_score stari>novi u obje porodice (gemma3 0.9085 vs 0.8742; ministral 0.8500 vs 0.8346), ali uparen t-test slab (t≈1.23/0.70, n=42) — statistički neodlučivo. Head-to-head skoro 50/50. Nedovoljno za odluku u bilo kom smjeru. Sljedeće: veći uzorak (100+ rečenica) ili ponavljanje na drugoj knjizi prije 15. jula, istim receptom (`bb_08_sudija1.py`, swap A/B/C). Poslije odluke: pravi refaktor `OCJENJIVANI_MODELI` → kolona u `bb_modeli`. Kompletna mapa svih pogođenih skripti i tabela (nezavisno od finalnog izbora modela) — vidi `docs/sessions/session_111.md` (s111).
 
-### Self-refine — NEGATIVAN nalaz starog para (s100), REVIDIRAN novim parom (s134)
+### Self-refine — NEGATIVAN nalaz starog para (s100), REVIDIRAN novim parom (s134), REDIZAJNIRAN gated fazama (s144)
 
 **s100 (stari par, gemma3/ministral):** hipoteza — pobjednik kao hint poboljšava prevod. **Rezultat: ne radi na jakim seedovima.** J&H hr s1-100: head-to-head vs svoj seed = **0/100** (avg delta −0,076). Win-rate 36/100 bio je artefakt selekcije iz šireg bazena — head-to-head otkrio konfaund. Uzrok: seed je već pobjednik od 5 modela (blizu plafona), "popravi ovo" perturbuje optimalni anchor → regresija. Detalji: `docs/sessions/session_100.md`.
 
@@ -1213,6 +1213,51 @@ To potvrđuje s100-ovu dijagnozu (plafon), ali je pretvara u **kontinuum umjesto
 **RIJEŠENO (s135):** no-op refine sumnja iz s134 POTVRĐENA i ISPRAVLJENA. SQL provjera (seed=faza-1 pobjednik JOIN najbolji faza-2 kandidat po rečenici) pokazala **39/40 "izjednačenih" slučajeva su bukvalno identičan tekst** kao seed, ne koincidencija scorea (samo 1/40 stvarna slučajnost). Uzrok: `bb_03_prevod.py :: prevedi_refine_single()` prompt sadržavao "Keep the reference only if it is already optimal." — eksplicitna dozvola LLM-u da vrati klon. Live test (3 kratke rečenice/naslova, izvan baze) potvrdio uzrok i pokazao trade-off: agresivnija zabrana ("do NOT repeat verbatim") rješava 0/3 klona ALI rizikuje promjenu ZNAČENJA na kratkim/trivijalnim rečenicama ("Frankenstein;"→"Čudovište Frankensteina"). Flaviova odluka (izbjegavanje scope-creepa): minimalna izmjena — samo uklonjena "keep if optimal" rečenica, bez dodate eksplicitne zabrane. Primijenjeno u kodu, necommitovano do kraja s135. Detalji: `docs/sessions/session_135.md`.
 
 Otvoreno i dalje: (a) selektivni re-translate na SLABIM seedovima (prag <0,85) — s134 pokazuje da je to najizgledniji režim; (b) refaktor `OCJENJIVANI_MODELI` → kolona `grupa` u bb_modeli; (c) novi horizont (s135): NER+relacije kao kontekst-injection za refine kvalitet — zaseban budući session. **s137 napredak:** batch-refine implementiran i mehanički testiran (`REFINE_BATCH_SIZE=5`, vidi §9 s137) — head-to-head 16.75% na produkcionom testu, nije kontrolisano razdvojeno od batch-efekta. NER-kao-kontekst prvi tehnički test urađen (standalone, van produkcionog koda) — mehanizam radi, ali čisto-NER (bez seeda) nije samostalno pouzdano upravljao ti/vi formalnošću; otvoreno je li seed potreban uz NER kontekst kao hibridni pristup. **s138 ZATVARA nit (kontekst-injection za kvalitet prevoda):** prošireno i na sažetak-kao-kontekst (deepseek-v4-pro brief + Gutenberg sažetak). GLAVNI NALAZ — signal ispod šuma: ista rečenica preokrenula ti/vi izbor između dva prolaza istog prompta na temp 0.8 (varijacija poziva > razlika promptova). Plus: NER daje strukturu ne registar; cilj sam nejasan ("prijatelji→ti" nije univerzalno — viktorijanski registar formalan). ODLUKA: kontekst-injection za kvalitet prevoda ZATVOREN (i NER i sažetak). Ako se vrati, treba drugačiji režim (niža temp / deterministički), ne prompt-na-temp-0.8. Vidi §9 s138 + session_138.md.
+
+**Nastavak (s141-147) — arhitektura redizajnirana, Dio B preokrenut:**
+
+s141-142 (Dio A): faza redefinisana kao kombinacija tri nezavisne ose — a1=model
+(`bb_modeli`), a2=temperatura (`bb_temperature`), a3=prompt (`bb_promptovi`) —
+vidi §7 "Kako dodati novi model i temperaturu" i `docs/PLAN-KONFIGURACIJA.md`.
+
+**s144 — DIO B PREOKRENUT:** plan za random selekciju (fitness-proportionate
+izbor a1/a2/a3, GA-stil mutacija/anti-elitizam, dizajniran s139-143) je NAPUŠTEN.
+Uzrok: ta mašinerija ima smisla samo za ogroman prostor pretrage, a stvarni
+katalog ima samo 6 kombinacija (2 modela × 3 prompta × 1 temperatura). Pravo
+pitanje reformulisano iz "koju kombinaciju izabrati" u "da li uopšte pokušati
+refine na OVOJ rečenici" — headroom gate. Zamjena: **tri fiksne gated faze**
+(`refine-gated`=4, `refine-lenient-gated`=5, `refine-strict-gated`=6), prag
+`seed_score<0.95` (svaka rečenica ispod praga ulazi u refine pokušaj; iznad
+praga se preskače — direktna implementacija s134 headroom-gradijent nalaza kao
+ugrađeni filter, ne naknadna dijagnoza). Svaka gated faza gleda TRENUTNOG
+apsolutnog pobjednika (ne originalni faza-1 seed) — samo-sužavajući lijevak.
+
+**s145:** bootstrap bug u `run_faza.sh` STVARNO popravljen (fallback na katalog
+`bb_faze_a1`×`bb_faze_a2` kad je istorija prazna — vidi §7 upozorenje). "Runda"
+dizajn (alternativa klon-triku za ponovno pokretanje iste konfiguracije,
+`bb_prevodi_knjige.runda` u UNIQUE) razrađen i testiran DDL migracijom, tada
+ODLOŽEN.
+
+**s146:** gated refine potvrđen na širem uzorku (Dracula+Flatland, 8.000
+rečenica) — gate otvoren 29,2%, gated refine pobjeđuje 93,4% kad otvoren, delta
++0,047, klon-stopa 0,7%. Isti session je proizveo AUDIT MJERNOG APARATA
+(`docs/ANALIZA.md`) direktno relevantan za čitanje refine rezultata: sudija
+nosi ~92% finalnog scorea, ne deklarisanih 60%; sudija kažnjava namjernu
+autorsku devijaciju (Flatland de primjer, +0,157 delta za brisanje autorove
+složenice).
+
+**s147:** permutacijski eksperiment (6 blokova × 6 permutacija faza 4/5/6) —
+POZICIJA u lancu ima jasan monoton efekat na stopu otvaranja gate-a
+(21,0%→13,9%→11,3% kroz 1./2./3. korak); KONKRETNA faza (4 vs 5 vs 6) ima slab,
+nekonzistentan efekat kontrolisano za poziciju. "Runda" IMPLEMENTIRANA
+kraj-do-kraja (kolona + UNIQUE + `--runda` flag) — seed-lock mehanizam (za
+izolaciju efekta redoslijeda od sadržaja rečenica) dizajniran, NEIMPLEMENTIRAN.
+
+Otvorene stavke (a)/(b) iz gornjeg pasusa (selektivni re-translate na slabim
+seedovima; refaktor `OCJENJIVANI_MODELI`) su superseded s144 gated-fazama i
+s142 tro-osnom arhitekturom — ne prate se više odvojeno.
+
+Detalji: `docs/sessions/session_141.md` – `session_147.md`, `docs/PLAN-KONFIGURACIJA.md`.
 
 
 ### Performanse — NLLB CTranslate2 int8 — URAĐENO (s93)
