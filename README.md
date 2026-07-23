@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 22. jul 2026. (sesija 148)  
+**Poslednje ažuriranje:** 23. jul 2026. (sesija 149)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -428,6 +428,47 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 > **s106 snapshot (1. jul 2026):** 38.333 rečenice · 1.049.545 prevoda · 204.793 pobjednika (nepromijenjeno od s105). **bb_04 sad SAM puni `bb_prev_recenica_faza`** (horizont #1 iz s105) — faza-blok bira faznog pobjednika po (rečenica, faza) preko `bb_modeli.faza_id`, DELETE+INSERT po opsegu, idempotentno; kraj ručne rekonstrukcije. Fazni pobjednik se od sada osvježava pri svakom pipeline runu. Hound (id 1) refine proširen na 1–200 (prvi izuzetak od "refine samo na prvih 100"). Read-path (web/xray export) provjeren — Reader X-Ray prikazuje sve kandidate, ali fazni pobjednik još NEMA web prikaz (sljedeća sesija). Web nedirnut → BB_VERSION s102.
 >
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
+>
+>
+> **s149 snapshot (23. jul 2026):** ANALITIČKA/DIZAJNERSKA sesija — nula
+> pipeline poziva, jedan probni fajl kreiran necommitovan
+> (`src/predlog_root_DRAFT.py`). Korpus na početku 50.624/1.680.725/314.168
+> (živ, Flaviovi pozadinski runovi). **Potvrđeno:** `bb_web_export.py`/
+> `bb_xray_export.py` rade na starom s142 kodu, s148 pokušaj refaktora nije
+> ostavio nijedan trag (grep + git log na oba fajla). **Fokus: Flaviova uloga
+> u odabiru šta se prevodi** — formalizovana hijerarhija jezičnih grupa (G1
+> de/hr/it/sr, G2 bg/bs/mk/sl, G3 es/fr/pt/ro, G4 af/nl): radi se unutar
+> grupe dok ima ijedna nepotpuna knjiga, tek onda sljedeća grupa. Šira ideja
+> o "agentima" (planer/worker/refine-worker/supervizor kao producer-consumer
+> red poslova, uz pomen MQTT-a) razmotrena i namjerno SUŽENA — nova web
+> stranica ODBIJENA kao nepotrebna, cilj sveden na jednu funkciju: iz
+> `run_pipeline.sh --knjiga KK --jezici JJ --od OD --do DO` odrediti
+> KK/JJ/OD/DO za sljedeći ROOT korak (1 knjiga, 1 jezik, opseg max 200;
+> paralelizam/cijepanje ODLOŽENI). **Ključna Flaviova korekcija (2 pokušaja):**
+> knjiga+jezik pokrivena do pozicije N ako je BILO KOJI model u root fazi
+> (ne nužno aktivan/nov) preveo tu poziciju — po poziciji, ne po
+> (model,temp) kombinaciji. Ovo je uklonilo petlju po aktivnim kombinacijama
+> iz prve, pogrešne verzije frontier računanja. `predlog_root_DRAFT.py`:
+> `generate_series` + `LEFT JOIN` nalazi prvu nedostajuću poziciju po
+> (knjiga,jezik,faza=1) preko BILO KOJEG modela → frontier; OD=frontier+1,
+> DO=min(frontier+200,total); petlja kroz grupe redom. Validirano naspram
+> health checka (Hound/de 3852/3852 ispravno preskočen nakon korekcije;
+> Moby Dick/de frontier=1800/9764 poklapa se tačno sa "Stanje prevoda"
+> tabelom). **OTVOREN dizajnerski problem — "u toku" stanje:** baza zna samo
+> "prevedeno"/"nije prevedeno", nema treće stanje za posao koji je pokrenut a
+> nije završen → ponovljen poziv predloga dok je posao u toku daje IDENTIČAN
+> predlog (demonstrirano uživo). Flaviova odluka: treba I tabela I nezavisan
+> proces koji je ažurira — eksplicitno upozorenje protiv naivne simulacije DB
+> transakcija samo tabelom+indikatorima; da li je taj proces čovjek ili
+> "inteligentan" agent ostaje OTVORENO, dizajn odložen. Ollama Cloud usage/quota
+> API i dalje ne postoji zvanično (provjereno pretragom, tri otvorena GitHub
+> feature requesta 2026, nijedan implementiran) — ručni unos za sada. Kratak
+> prekid `balsam`/`foxuno` konektora usred sesije (van kontrole oboje, riješeno
+> Flaviovim ručnim reconnect-om) — infrastrukturna bilješka. Nije dodat nov
+> memorijski zapis za "refaktoring poslije dokumentacije" — pravilo već
+> postoji (METHOD.md §5, memorija s126). BB_VERSION ostaje s146 (web
+> nedirnut). Sesija zatvorena SAMOSTALNO od Claudea (Flavio eksplicitno
+> autorizovao, odsutan od PC-a). Detalji: `docs/sessions/session_149.md`.
 >
 >
 > **s148 snapshot (22. jul 2026):** Status-provjera (Flaviov zahtjev) + tri
@@ -1264,4 +1305,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 22. jul 2026. (sesija 148)*
+*Flavio & Claude · Buchenberg · V3 · 23. jul 2026. (sesija 149)*
