@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 24. jul 2026. (sesija 151)  
+**Poslednje ažuriranje:** 24. jul 2026. (sesija 152)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -450,6 +450,20 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s152 snapshot (24. jul 2026):** Prva "generalni predlog" sesija — izvršenje
+> svih 5 nalaza iz `docs/PREGLED-teksta-s150.md`. Korpus 50.624/1.704.725/318.968
+> (nula pipeline poziva, raslo Flaviovim pozadinskim runovima). **(1)** "Tačno 2
+> faze" pretpostavka ispravljena na 6 mjesta: `about.html` dijagram, `index.html`
+> proza, `reader.html` dvije X-Ray legende (EN-only), `nav.js` tri ključa × 5
+> jezika (uklj. `about_p_refine4` koji je opisivao napušten pre-s144 dizajn).
+> **(2)** Nova README `§4b` sekcija za NER/DocRE (tri sloja, orkestracija, tabele,
+> pokrivenost, kriterij zatvaranja, web prikaz) — numeracija §5-15 netaknuta.
+> **(3)** `limits.html` "236 coverage gaps" → opisna tvrdnja bez fluktuirajućeg
+> broja. **(4)** `limits.html` "measurably different stylistic signature" →
+> omekšano ("cause has not been isolated"), s137 nikad nije dokazao uzrok.
+> `PREGLED-teksta-s150.md` označen zatvorenim. BB_VERSION s146 → **s152**.
+> Detalji: `docs/sessions/session_152.md`.
 
 > ⚠️ Koristiti `SELECT * FROM v_status_knjige;` ili `health_check.py` za tačno stanje — server je source of truth. Tabela ispod je ilustrativna (snapshot s87) i ne ažurira se mid-run.
 >
