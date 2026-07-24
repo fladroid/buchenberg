@@ -1,5 +1,7 @@
 # Pregled teksta — s150 (23. jul 2026)
 
+> ✅ **SVI nalazi zatvoreni u sesiji 151 (24. jul 2026)** — vidi `session_151.md`. Sve četiri stavke iz "Nalazi koji traže akciju" su izmijenjene i pushovane (buchenweb commits `50b6a5f`, `85d9248`; buchenberg `5eec0db`). Dokument ostaje kao istorijski trag analize, ne kao otvorena stavka.
+
 ## Svrha
 Ulazni materijal za buduću sesiju "generalni predlog" — izmjena web teksta nakon
 finalne kontrole projekta (s150). Ovaj dokument samo popisuje nalaze, ništa nije
