@@ -406,3 +406,164 @@ Ovaj dokument raste — svaki novi run (pipeline ili refine) dodaje novu sekciju
 - **k23_dehritsr ostaje vrlo stabilan** — glm dominacija 63.1% u ovom opsegu (2001–2500), skoro identično prethodnom (62.9% za 1501–2000) — dosljedan obrazac za tu kombinaciju knjiga+core4 kroz uzastopne opsege.
 - **Throughput (prevoda/min) bez noć/dan razlike** — nakon korekcije za broj jezika po grupi, sve četiri grupe (2.45–3.47) padaju u isti raspon kao prethodni dnevni run (2.76–3.76); pozicijska "rečenica/min" metrika NIJE uporediva preko grupa s različitim brojem jezika (2 kod afnl naspram 4 kod esfrptro/dehritsr).
 - Kvalitet (avg final 0.9606–0.9690) dosljedan i za af/nl kao i za core-4 i esfrptro iz prethodnog runa — nema pada kvaliteta na bilo kojoj od novoaktiviranih jezičkih grupa.
+
+## Run: 22–23. jul 2026 — Knjiga 20 (Dracula), jezici de/hr/it/sr, opseg 4801–6600, faza 1 (baza) — PO-JEZIKU paralelizam
+
+*Za razliku od ranijih "4 paralelne grupe" eksperimenata (s119/s120, gdje je svaka grupa bila 4 jezika sekvencijalno unutar sebe), ovaj run koristi PO-JEZIKU paralelizam: svaki jezik je zaseban proces koji napreduje nezavisno. Šest start-batch-eva kroz dva dana, uključujući period gdje je samo `de` radio solo (bez hr/it/sr) i sam sebe cijepao na 2–4 paralelna pod-procesa. Sva vremena UTC u zagradama; glavni prikaz CEST (Vienna, jul) = UTC+2. Analiza pokrenuta u s151 povodom Flaviovog utiska da su "noćne" sesije performantnije.*
+
+### Batch 1 — sva 4 jezika paralelno, opseg 4801–5000 (22. jul, jutro/prijepodne)
+
+**Tabela 1 — Identifikacija & vrijeme**
+
+| Jezik | Start (CEST) | Kraj (CEST) | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| de | 09:57 | 11:49 | 1:52:02 | 1.79 |
+| hr | 09:57 | 12:02 | 2:04:06 | 1.61 |
+| it | 09:57 | 11:55 | 1:57:59 | 1.70 |
+| sr | 09:57 | 12:01 | 2:03:42 | 1.62 |
+| **ZBIR** | | | | **6.72** |
+
+**Tabela 2 — Kvalitet & pobjede**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| de | 0.9643 | 0.9415 | 0.9795 | 102 (51.0%) | 84 (42.0%) | 14 (7.0%) |
+| hr | 0.9652 | 0.9455 | 0.9784 | 116 (58.0%) | 76 (38.0%) | 8 (4.0%) |
+| it | 0.9681 | 0.9467 | 0.9824 | 86 (43.0%) | 98 (49.0%) | 16 (8.0%) |
+| sr | 0.9643 | 0.9420 | 0.9792 | 126 (63.0%) | 65 (32.5%) | 9 (4.5%) |
+
+### Batch 2 — DE solo (bez hr/it/sr), opseg 5001–5800, sam-sebe-paralelan (22. jul, podne)
+
+*de je nastavio odmah nakon Batch-a 1 dok su hr/it/sr bili neaktivni do 15:46 CEST — 4h prozor gdje je samo de trošio Ollama Cloud kapacitet. Unutar ovog prozora, de je sam sebe cijepao: solo (5001–5200), zatim 2 paralelna pod-procesa (5201–5300 + 5301–5400), zatim 4 paralelna pod-procesa (5401–5500 do 5701–5800).*
+
+**Tabela 1**
+
+| Opseg | Start (CEST) | Kraj (CEST) | Trajanje | Rečenica/min | Paralelnih de-procesa |
+|---|---|---|---|---|---|
+| 5001–5200 | 12:03 | 12:51 | 0:48:43 | 4.11 | 1 (solo) |
+| 5201–5300 | 13:48 | 14:41 | 0:52:24 | 1.91 | 2 |
+| 5301–5400 | 13:48 | 14:42 | 0:53:53 | 1.86 | 2 |
+| 5401–5500 | 14:45 | 15:25 | 0:40:15 | 2.48 | 4 |
+| 5501–5600 | 14:45 | 15:19 | 0:34:26 | 2.90 | 4 |
+| 5601–5700 | 14:45 | 15:32 | 0:47:51 | 2.09 | 4 |
+| 5701–5800 | 14:45 | 15:27 | 0:42:24 | 2.36 | 4 |
+
+**Tabela 2**
+
+| Opseg | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| 5001–5200 | 0.9650 | 0.9470 | 0.9771 | 108 (54.0%) | 86 (43.0%) | 6 (3.0%) |
+| 5201–5300 | 0.9668 | 0.9430 | 0.9827 | 59 (59.0%) | 38 (38.0%) | 3 (3.0%) |
+| 5301–5400 | 0.9632 | 0.9460 | 0.9747 | 51 (51.0%) | 47 (47.0%) | 2 (2.0%) |
+| 5401–5500 | 0.9672 | 0.9496 | 0.9791 | 51 (51.0%) | 47 (47.0%) | 2 (2.0%) |
+| 5501–5600 | 0.9614 | 0.9440 | 0.9730 | 56 (56.0%) | 37 (37.0%) | 7 (7.0%) |
+| 5601–5700 | **0.9515** | 0.9443 | **0.9564** | 50 (50.0%) | 44 (44.0%) | 6 (6.0%) |
+| 5701–5800 | 0.9623 | 0.9453 | 0.9737 | 46 (46.0%) | 50 (50.0%) | 4 (4.0%) |
+
+*Zapažanje: 5601–5700 (4. paralelni pod-proces) ima primjetno niži avg_sudija (0.9564 naspram ~0.97-0.98 kod ostalih) — vjerovatno sadržajni šum na malom uzorku (n=100), ne sistematski efekat pozicije.*
+
+### Batch 3 — hr/it/sr paralelno (de već ispred, izostavljen), opseg 5001–5400 (22. jul, popodne)
+
+**Tabela 1**
+
+| Jezik | Start (CEST) | Kraj (CEST) | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| hr | 15:47 | 19:37 | 3:50:43 | 1.73 |
+| it | 15:47 | 19:35 | 3:48:21 | 1.75 |
+| sr | 15:47 | 19:37 | 3:49:56 | 1.74 |
+| **ZBIR (3 jez.)** | | | | **5.22** |
+
+**Tabela 2**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| hr | 0.9662 | 0.9495 | 0.9773 | 229 (57.2%) | 153 (38.2%) | 18 (4.5%) |
+| it | 0.9674 | 0.9497 | 0.9793 | 211 (52.8%) | 166 (41.5%) | 23 (5.8%) |
+| sr | 0.9632 | 0.9474 | 0.9738 | 236 (59.0%) | 157 (39.2%) | 7 (1.8%) |
+
+### Batch 4 — hr/it/sr paralelno, opseg 5401–5800 (22. jul, veče)
+
+**Tabela 1**
+
+| Jezik | Start (CEST) | Kraj (CEST) | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| hr | 20:26 | 23:20 | 2:54:19 | 2.29 |
+| it | 20:26 | 23:15 | 2:49:26 | 2.36 |
+| sr | 20:26 | 23:22 | 2:56:06 | 2.27 |
+| **ZBIR (3 jez.)** | | | | **6.92** |
+
+**Tabela 2**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| hr | 0.9641 | 0.9499 | 0.9736 | 204 (51.0%) | 182 (45.5%) | 14 (3.5%) |
+| it | 0.9661 | 0.9488 | 0.9777 | 185 (46.2%) | 190 (47.5%) | 25 (6.2%) |
+| sr | 0.9625 | 0.9479 | 0.9723 | 220 (55.0%) | 171 (42.8%) | 9 (2.2%) |
+
+### Batch 5 — sva 4 jezika paralelno, opseg 5801–6200 (23. jul, popodne)
+
+**Tabela 1**
+
+| Jezik | Start (CEST) | Kraj (CEST) | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| de | 14:22 | 19:19 | 4:57:20 | 1.35 |
+| hr | 14:22 | 19:14 | 4:52:33 | 1.37 |
+| it | 14:22 | 19:15 | 4:53:34 | 1.36 |
+| sr | 14:22 | 19:18 | 4:56:27 | 1.35 |
+| **ZBIR (4 jez.)** | | | | **5.43** |
+
+**Tabela 2**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M | sudija_real |
+|---|---|---|---|---|---|---|---|
+| de | 0.9625 | 0.9443 | 0.9746 | 223 (55.8%) | 163 (40.8%) | 14 (3.5%) | 167m24s |
+| hr | 0.9656 | 0.9474 | 0.9778 | 239 (59.8%) | 145 (36.2%) | 16 (4.0%) | 151m29s |
+| it | 0.9619 | 0.9457 | 0.9728 | 217 (54.2%) | 161 (40.2%) | 22 (5.5%) | 157m51s |
+| sr | 0.9622 | 0.9449 | 0.9738 | 254 (63.5%) | 142 (35.5%) | 4 (1.0%) | 132m39s |
+
+### Batch 6 — sva 4 jezika paralelno, opseg 6201–6600 (23. jul, rano veče)
+
+**Tabela 1**
+
+| Jezik | Start (CEST) | Kraj (CEST) | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| de | 19:23 | 21:26 | 2:03:19 | 3.24 |
+| hr | 19:23 | 21:34 | 2:11:11 | 3.05 |
+| it | 19:23 | 21:31 | 2:08:57 | 3.10 |
+| sr | 19:23 | 21:39 | 2:16:51 | 2.92 |
+| **ZBIR (4 jez.)** | | | | **12.31** |
+
+**Tabela 2**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M | sudija_real |
+|---|---|---|---|---|---|---|---|
+| de | 0.9635 | 0.9413 | 0.9783 | 210 (52.5%) | 169 (42.2%) | 21 (5.2%) | 27m31s |
+| hr | 0.9635 | 0.9427 | 0.9775 | 225 (56.2%) | 162 (40.5%) | 13 (3.2%) | 29m54s |
+| it | 0.9659 | 0.9450 | 0.9799 | 199 (49.8%) | 181 (45.2%) | 20 (5.0%) | 29m14s |
+| sr | 0.9603 | 0.9407 | 0.9759 | 239 (59.8%) | 152 (38.0%) | 9 (2.2%) | 29m46s |
+
+### Zapažanja — poređenje sa starim podacima i DAN/VEČE obrazac
+
+**Najčistije poređenje u ovom runu — Batch 5 vs Batch 6:** identičan setup (ista 4 jezika, isti dan 23. jul, ista veličina opsega 400 rečenica po jeziku, isti redoslijed 4-paralelno), jedina razlika je vrijeme starta (14:22 CEST vs 19:23 CEST, ~5h razmaka). Zbir rečenica/min skače sa **5.43 → 12.31 (2.27× brže uveče)**, uz identičan kvalitet (avg_final 0.9605 vs 0.9633, razlika unutar šuma).
+
+**Naspram istorijskih referentnih brojki:**
+- Stari solo-sekvencijalni baseline (s117, jedan tok kroz 4 jezika redom): 0.64–1.33 rec/min.
+- Stari "4 paralelne grupe" agregat (s119/s132, svaka grupa = 4 jezika sekvencijalno unutar sebe): ~3.47–3.77 rec/min, izmjereni faktor ubrzanja ~2.47× naspram solo.
+- Ovaj run, PO-JEZIKU paralelizam (4 nezavisna toka umjesto 4 grupe): Batch 1 (jutro) zbir 6.72, Batch 5 (popodne, sljedeći dan) zbir 5.43 — oba u DAN periodu, oba u istom rasponu kao ili nešto iznad starog "4 paralelne grupe" agregata. Batch 6 (veče) zbir **12.31** — znatno iznad bilo čega ranije izmjerenog, čak i uz raniju pretpostavku o "nema hard ograničenja Pro tier-a".
+
+**Uzrok — razlaganje po komponenti (de, Batch 5 vs Batch 6, identičan opseg 400 rečenica):**
+- Sudija (gemma4:31b, isključivo Ollama Cloud): 167m24s → 27m31s — **6.1× brže uveče**
+- Prevodi (glm-5.2 + mistral-large-3, Ollama Cloud): 129m44s → 95m37s — 1.36× brže uveče
+- NLLB (jedini korak koji radi lokalno, ne na Ollama Cloud): 17m43s → 12m59s — **1.36× brže uveče, identičan faktor kao cloud prevodi**
+
+Podudarnost NLLB-a (lokalno) i prevoda (cloud) na istom ~1.36× faktoru sugeriše zajednički uzrok koji pogađa i lokalno računanje i mrežni saobraćaj podjednako (moguće: opterećenje dijeljenog VPS-a). Sudija ima DODATNI, mnogo veći faktor (6.1×) specifičan samo za taj jedan Ollama Cloud model/poziv — vjerovatno opterećenje na Ollama-inoj strani, nezavisno od Flaviove infrastrukture. Ranija subjektivna napomena u README-u (degradacija 16-18h CEST) NIJE potvrđena ovim podacima — naprotiv, period 19-22h CEST je ovdje dosljedno najbrži period u cijelom setu.
+
+**Kvalitet ostaje stabilan kroz sve batch-eve** (avg_final 0.9603–0.9681) — potvrđuje već uspostavljen nalaz da brzina varira sa opterećenjem, kvalitet ne.
+
+### Dodatak — provjera lokalnih resursa VPS-a (s151, sysstat/sar)
+
+Oracle Cloud VPS (Frankfurt, aarch64, 4 vCPU) ima instaliran `sysstat` sa istorijskim podacima za 16-24. jul (`/var/log/sysstat/sa*`). Provjera %steal (CPU vrijeme oduzeto od strane hipervizora za druge tenante na istom fizičkom hostu) za 22-23. jul: **prosjek 0.03-0.04%, maksimum 0.32%** — zanemarljivo kroz cijeli period, uključujući i najsporije i najbrže batch-eve. **Isključuje "buku komšija" (multi-tenant kontencija) kao uzrok DAN/VEČE razlike izmjerene gore.**
+
+Lokalni %user CPU pravi oštre skokove (do ~98%) koji se poklapaju sa START-om batch-eva, ali ne traju kroz njihovo cijelo trajanje — mašina večinu vremena čeka na Ollama Cloud mrežne pozive, ne računa lokalno. Vjerovatan izvor skokova: NLLB (lokalna inferenca) + e5-large embedding, jedini CPU-vezani koraci pipeline-a; sa 4 paralelna jezika na samo 4 vCPU jezgra postoji stvarna samo-kontencija (procesi se međusobno takmiče za jezgra), sekundaran faktor naspram dominantnog Ollama Cloud opterećenja identifikovanog gore.
+
+Backup prozor (01:10-01:30 CEST) potvrđen identično oba dana u sar podacima, van svih analiziranih batch-eva — nema preklapanja s ovom analizom.

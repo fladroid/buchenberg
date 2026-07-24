@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 23. jul 2026. (sesija 149)  
+**Poslednje ažuriranje:** 24. jul 2026. (sesija 151)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -430,7 +430,29 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 > **s107 snapshot (2. jul 2026):** ~1,116M prevoda · ~216k pobjednika · ~234k faznih pobjednika (živo iz baze — procesi prevođenja trče). Fokus: **view sloj** — `v_prevodi_full` kao *majka svih analitičkih viewova* (svi kandidati + sve vrijednosti + kanonski `finalni_score`; izostavljen jedino `prevod_vektor`). Izvedeni: `v_corpus` (domen, 38.333 — namjerno iz baznih tabela jer 46,6% rečenica još nema nijedan prevod), `v_pobjednici_full` (apsolutni), `v_pobjednici_faza_full` (fazni + `takmicenje_faza_*`; invarijanta `takmicenje_faza_id = faza_id` prekršena 0×). Konvencija: sufiks `_full`, prefiks izvora u kolonama; stari viewovi netaknuti. Svi budući brojači izvode se iz majke. Web nedirnut → BB_VERSION s102.
 >
 >
-> **s149 snapshot (23. jul 2026):** ANALITIČKA/DIZAJNERSKA sesija — nula
+> **s151 snapshot (24. jul 2026):** ANALITIČKA sesija — nula pipeline poziva
+> (korpus nepromijenjen sesijskim djelovanjem, 50.624/1.696.725/317.368 na
+> početku). Otvaranje otkrilo memorijski zaostatak (6 sesija, s143->stvarno
+> s150) preko git log-a — Flavio ukazao da `conversation_search` (aktiviran
+> za ovaj projekat) treba koristiti PRIJE pitanja čovjeka, ne poslije;
+> uspješno pronašao s150. Rasprava o korijenu ponavljanih grešaka: Flavio
+> odbio predlog za novi checklist korak ("suvišno") — popravka je
+> bihevioralna (slijediti postojeći signal do kraja), ne strukturna.
+> **RUNOVI.md** dobio analizu 24 nova loga (k20 Dracula, de/hr/it/sr, opseg
+> 4801-6600, PO-JEZIKU paralelizam, različito od s119/s120 grupa-eksperimenata):
+> Batch 5 vs 6 (isti dan, isti setup, 5h razmaka starta) pokazao 2.27x bržu
+> veče-brzinu (zbir 5.43->12.31 rec/min), kvalitet identičan. Razlaganje:
+> sudija (Ollama Cloud) 6.1x varijacije, prevodi 1.36x, NLLB (lokalno) 1.36x
+> — isti faktor kao cloud. `sysstat`/`sar` provjera VPS-a (Frankfurt, Oracle
+> Cloud, Flaviovo pitanje o dijeljenim resursima): %steal zanemarljiv
+> (0.03-0.04%) — ISKLJUČUJE multi-tenant kontenciju; lokalni CPU skokovi
+> poklapaju se sa START-om batch-eva ali ne traju kroz njihovo trajanje
+> (samo-kontencija 4 jezika/4 jezgra, sekundaran faktor). Stara README §15
+> pretpostavka (degradacija 16-18h) NIJE potvrđena — obrnuto, 19-22h CEST
+> najbrži period. Detalji: `docs/RUNOVI.md` (2 nova bloka), `session_151.md`.
+> Flavio najavio novi set logova za sljedeću sesiju.
+>
+> > **s149 snapshot (23. jul 2026):** ANALITIČKA/DIZAJNERSKA sesija — nula
 > pipeline poziva, jedan probni fajl kreiran necommitovan
 > (`src/predlog_root_DRAFT.py`). Korpus na početku 50.624/1.680.725/314.168
 > (živ, Flaviovi pozadinski runovi). **Potvrđeno:** `bb_web_export.py`/
@@ -1347,7 +1369,9 @@ Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. 
 
 Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno zapisati): performanse prema Ollama Cloud primjetno degradiraju otprilike između 16 i 18h CET/CEST (Vienna) vremena. Vjerovatno objašnjenje: Ollama ima servere u US i EU, a Flaviova infrastruktura i radni ritam su evropski — očekivano je da se poklapa sa regionalnim peak opterećenjem. Ovo nije laboratorijsko okruženje s garantovanim resursima; varijacija u rečenica/min (vidi `docs/RUNOVI.md`) je normalna, ne signal greške.
 
+**Ažurirano s151 (24. jul 2026):** formalna analiza (24 loga, k20 Dracula, `docs/RUNOVI.md`) NIJE potvrdila degradaciju 16-18h CEST — naprotiv, period ~19-22h CEST bio je dosljedno najbrži u analiziranom setu (do 2.27× brže od popodnevnih batch-eva, isti dan, isti setup). `sar`/`sysstat` provjera VPS-a (Frankfurt, Oracle Cloud) pokazala zanemarljiv %steal (0.03-0.04%) — isključuje kontenciju sa drugim tenantima. Vjerovatan dominantan faktor: opterećenje na Ollama Cloud strani (sudija gemma4:31b pokazao 6.1× varijaciju). Stara pretpostavka ostaje iznad kao istorijski kontekst.
+
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 23. jul 2026. (sesija 149)*
+*Flavio & Claude · Buchenberg · V3 · 24. jul 2026. (sesija 151)*
