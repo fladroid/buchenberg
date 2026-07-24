@@ -194,6 +194,46 @@ if parts is None:
 
 ---
 
+## 4b. NER / DocRE — imenovani entiteti i relacije
+
+Paralelni analitički sloj uz pipeline prevoda — NE utiče na prevod ili izbor pobjednika, služi za istraživanje strukture teksta (likovi, mjesta, odnosi).
+
+> ⚠️ Ne miješati s "NER-kao-kontekst-za-prevod" (pokušaj da NER poboljša kvalitet prevoda, s135-138) — ta nit je ZATVORENA negativnim nalazom (s138) i potpuno je odvojena od ovog analitičkog sloja.
+
+### Tri sloja (svaki gradi na prethodnom)
+
+| Sloj | Skripta | Motor | Šta radi |
+|------|---------|-------|----------|
+| Classic | `bb_09_ner.py` | spaCy | NER ekstrakcija (osoba/mjesto/org) + co-occurrence veze unutar rečenice |
+| LLM | `bb_10_ner_llm.py` | glm-5.2 | Type reconciliation — rješava spaCy nekonzistentnosti (isto ime, različit tip), grounding u dokaznim rečenicama |
+| DocRE | `bb_10c_docre.py` | glm-5.2 | Usmjerene relacije (izvor→cilj) van granica rečenice; PERSON-PERSON parovi; Massey/Bamman taksonomija (29 fine kategorija → 3 coarse: social/familial/professional) + afinitet (positive/negative/neutral) |
+
+### Orkestracija
+
+`run_ner.sh --knjiga N|all [--force]` — pokreće `bb_09→bb_10→bb_10c`. `--force` je svojstvo PROLAZA ne faze — prosljeđuje se svim trima skriptama podjednako.
+
+### Ključne tabele
+
+- `bb_ner_veze` — co-occurrence, materijalizovan (simetrična, `entitet1<entitet2`, `tezina`=broj zajedničkih rečenica)
+- `bb_ner_relacije` — DocRE usmjerene relacije (`izvor_id→cilj_id`, opis, dokaz, fine/coarse/afinitet/audit_kosinus)
+- `bb_ner_massey` — Massey/Bamman lookup (29 fine kategorija: friend/enemy/parent/servant/lovers…)
+
+FK politika: veze/relacije padaju kroz `CASCADE` kad entitet nestane — zavisnost enkoduje shema, ne skripta.
+
+### Pokrivenost (s147)
+
+Classic+LLM: svih 9 originalnih knjiga. DocRE: 5/12 (Hound, Alice, J&H, Flatland, Hound Copy) — namjerno ograničeno na knjige <2000 rečenica (s133); veće knjige idu sekvencijalno kad ima resursa, Flavio pokreće samostalno.
+
+### Kriterij zatvaranja linije (s133)
+
+Prihvatanje je TEHNIČKO — izvršava se / upisuje potpun sloj / izvoziv u web. Kvalitet same klasifikacije je NALAZ, ne kriterij (npr. Flatland ima samo 1 fine kategoriju od 101 relacije — nalaz o žanru: nema likova u karakternom smislu, ne kvar mehanizma).
+
+### Web prikaz
+
+`nlp.html` ("Named Entities & Relations") — tri ravnopravna pogleda: Classic | With LLM | DocRE, usmjeren graf (D3 force), klik→opis+dokaz.
+
+---
+
 ## 5. Baza podataka — bb shema
 
 ### Tabele
