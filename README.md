@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 24. jul 2026. (sesija 152)  
+**Poslednje ažuriranje:** 25. jul 2026. (sesija 153)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -450,6 +450,22 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s153 snapshot (25. jul 2026):** ANALITIČKA sesija — analiza 16 novih log
+> fajlova (k20 Dracula, opseg 6601–8200, de/hr/it/sr), nula pipeline poziva u
+> sesiji (korpus 50.624/1.728.725/323.768, rastao Flaviovim pozadinskim
+> runovima prije sesije). **Glavni nalaz:** obrazac izvršavanja promijenjen
+> usred niza — prva serija (6601–7000) paralelna (agregat 11.85 rec/min, u
+> skladu s ranijim rasponom), preostale tri serije (7001–8200) strogo
+> sekvencijalne (jezici se izvršavaju jedan za drugim bez pauze) — cijena
+> ~2.8–3.1× sporiji agregatni napredak korpusa naspram paralelnog režima za
+> isti obim. Flavio potvrdio: namjerna promjena. Sudija bez jasnog dan/noć
+> obrasca u ovom uzorku (18–32 min raspon, slabiji efekat nego 6.1× iz
+> prethodnog runa). Kvalitet stabilan (avg_final 0.9593–0.9684) kroz oba
+> režima. Dracula core-4 napredovao 6600→8200 (od 9.073 ukupno). Rezultat
+> upisan u `docs/RUNOVI.md` (novi run-blok, 4 serije). BB_VERSION ostaje
+> s152 (web nedirnut). Sesija zatvorena SAMOSTALNO od Claudea (Flavio
+> unaprijed autorizovao, odsutan od PC-a). Detalji: `docs/sessions/session_153.md`.
 
 > **s152 snapshot (24. jul 2026):** Prva "generalni predlog" sesija — izvršenje
 > svih 5 nalaza iz `docs/PREGLED-teksta-s150.md`. Korpus 50.624/1.704.725/318.968
@@ -1428,4 +1444,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 24. jul 2026. (sesija 151)*
+*Flavio & Claude · Buchenberg · V3 · 25. jul 2026. (sesija 153)*

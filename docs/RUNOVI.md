@@ -567,3 +567,99 @@ Oracle Cloud VPS (Frankfurt, aarch64, 4 vCPU) ima instaliran `sysstat` sa istori
 Lokalni %user CPU pravi oštre skokove (do ~98%) koji se poklapaju sa START-om batch-eva, ali ne traju kroz njihovo cijelo trajanje — mašina večinu vremena čeka na Ollama Cloud mrežne pozive, ne računa lokalno. Vjerovatan izvor skokova: NLLB (lokalna inferenca) + e5-large embedding, jedini CPU-vezani koraci pipeline-a; sa 4 paralelna jezika na samo 4 vCPU jezgra postoji stvarna samo-kontencija (procesi se međusobno takmiče za jezgra), sekundaran faktor naspram dominantnog Ollama Cloud opterećenja identifikovanog gore.
 
 Backup prozor (01:10-01:30 CEST) potvrđen identično oba dana u sar podacima, van svih analiziranih batch-eva — nema preklapanja s ovom analizom.
+
+## Run: 24–25. jul 2026 — Knjiga 20 (Dracula), jezici de/hr/it/sr, opseg 6601–8200, faza 1 (baza) — mješoviti režim (paralelno → sekvencijalno)
+
+*Direktan nastavak prethodnog PO-JEZIKU runa (koji je stao na 6600). Prva serija (6601–7000) nastavlja isti paralelni obrazac kao Batch 1–6 (sva 4 jezika startuju istovremeno). Od druge serije naviše (7001–7400, 7401–7800, 7801–8200) obrazac izvršavanja se mijenja: jezici se izvršavaju STROGO SEKVENCIJALNO — svaki naredni jezik starta tačno u trenutku kad prethodni završi, bez pauze, kroz sve tri preostale serije. Promjena režima nije bila najavljena — otkrivena analizom start/kraj vremena u logovima. Flavio potvrdio: namjerna promjena. Sva vremena CEST (Vienna, jul) = UTC+2.*
+
+### Serija 1 — sva 4 jezika paralelno, opseg 6601–7000
+
+**Tabela 1 — Identifikacija & vrijeme**
+
+| Jezik | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| de | 04:46 | 06:53 | 2:06:58 | 3.15 |
+| hr | 04:46 | 07:06 | 2:20:11 | 2.85 |
+| it | 04:46 | 07:00 | 2:14:23 | 2.98 |
+| sr | 04:46 | 07:06 | 2:19:31 | 2.87 |
+| **ZBIR** | | | | **11.85** |
+
+**Tabela 2 — Kvalitet & pobjede**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M |
+|---|---|---|---|---|---|---|
+| de | 0.9603 | 0.9452 | 0.9705 | 195 (48.8%) | 180 (45.0%) | 25 (6.3%) |
+| hr | 0.9634 | 0.9486 | 0.9733 | 233 (58.3%) | 158 (39.5%) | 9 (2.3%) |
+| it | 0.9660 | 0.9473 | 0.9786 | 221 (55.3%) | 164 (41.0%) | 15 (3.8%) |
+| sr | 0.9593 | 0.9468 | 0.9677 | 242 (60.5%) | 148 (37.0%) | 10 (2.5%) |
+
+### Serija 2 — sekvencijalno (de→hr→it→sr), opseg 7001–7400
+
+**Tabela 1**
+
+| Jezik | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| de | 09:54 | 11:32 | 1:37:31 | 4.10 |
+| hr | 11:32 | 13:28 | 1:56:36 | 3.43 |
+| it | 13:28 | 15:05 | 1:36:20 | 4.15 |
+| sr | 15:05 | 16:58 | 1:52:55 | 3.54 |
+| **AGREGAT (sekvencijalno, 1600 rec / 423.4 min)** | | | | **3.78** |
+
+**Tabela 2**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M | sudija_real |
+|---|---|---|---|---|---|---|---|
+| de | 0.9649 | 0.9467 | 0.9771 | 208 (52.0%) | 175 (43.8%) | 17 (4.3%) | 26m55s |
+| hr | 0.9649 | 0.9503 | 0.9747 | 244 (61.0%) | 147 (36.8%) | 9 (2.3%) | 28m20s |
+| it | 0.9661 | 0.9485 | 0.9779 | 195 (48.8%) | 184 (46.0%) | 21 (5.3%) | 23m57s |
+| sr | 0.9647 | 0.9486 | 0.9756 | 243 (60.8%) | 153 (38.3%) | 4 (1.0%) | 31m57s |
+
+### Serija 3 — sekvencijalno (de→hr→it→sr), opseg 7401–7800
+
+**Tabela 1**
+
+| Jezik | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| de | 16:59 | 18:35 | 1:35:54 | 4.17 |
+| hr | 18:35 | 20:08 | 1:33:34 | 4.28 |
+| it | 20:08 | 21:46 | 1:37:37 | 4.10 |
+| sr | 21:46 | 23:11 | 1:24:45 | 4.72 |
+| **AGREGAT (sekvencijalno, 1600 rec / 371.8 min)** | | | | **4.30** |
+
+**Tabela 2**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M | sudija_real |
+|---|---|---|---|---|---|---|---|
+| de | 0.9599 | 0.9476 | 0.9705 | 206 (51.5%) | 173 (43.3%) | 21 (5.3%) | 24m25s |
+| hr | 0.9684 | 0.9513 | 0.9799 | 221 (55.3%) | 169 (42.3%) | 10 (2.5%) | 29m19s |
+| it | 0.9636 | 0.9502 | 0.9751 | 197 (49.3%) | 184 (46.0%) | 19 (4.8%) | 29m52s |
+| sr | 0.9665 | 0.9499 | 0.9777 | 227 (56.8%) | 162 (40.5%) | 11 (2.8%) | 22m13s |
+
+### Serija 4 — sekvencijalno (de→hr→it→sr), opseg 7801–8200
+
+**Tabela 1**
+
+| Jezik | Start | Kraj | Trajanje | Rečenica/min |
+|---|---|---|---|---|
+| de | 23:11 | 00:31(+1d) | 1:20:04 | 5.00 |
+| hr | 00:31(+1d) | 02:08(+1d) | 1:37:37 | 4.10 |
+| it | 02:08(+1d) | 03:52(+1d) | 1:43:21 | 3.87 |
+| sr | 03:52(+1d) | 05:36(+1d) | 1:44:23 | 3.83 |
+| **AGREGAT (sekvencijalno, 1600 rec / 385.4 min)** | | | | **4.15** |
+
+**Tabela 2**
+
+| Jezik | Final | Komp | Sudija | glm-5.2 | mistral-large-3 | nllb-600M | sudija_real |
+|---|---|---|---|---|---|---|---|
+| de | 0.9645 | 0.9483 | 0.9753 | 212 (53.0%) | 171 (42.8%) | 17 (4.3%) | 18m54s |
+| hr | 0.9667 | 0.9511 | 0.9771 | 204 (51.0%) | 180 (45.0%) | 16 (4.0%) | 26m17s |
+| it | 0.9665 | 0.9508 | 0.9795 | 204 (51.0%) | 181 (45.3%) | 15 (3.8%) | 22m33s |
+| sr | 0.9607 | 0.9480 | 0.9741 | 244 (61.0%) | 144 (36.0%) | 12 (3.0%) | 20m41s |
+
+### Zapažanja — promjena režima i njena cijena
+
+- **Prelazak paralelno→sekvencijalno usred niza, potvrđeno namjeran (Flavio).** Serija 1 (6601–7000) je paralelna kao i prethodnih 6 serija u ovom runu — agregat 11.85 rec/min, u skladu s ranije izmjerenim rasponom (5.43–12.31). Od Serije 2 naviše, izvršavanje je sekvencijalni lanac bez ijedne sekunde pauze između jezika.
+- **Cijena u wall-clock vremenu:** za isti obim (1600 rečenica = 4×400), sekvencijalni režim troši ~3.78–4.30 rec/min agregatno naspram ~11.85 paralelno — **faktor ~2.8–3.1× sporije** da se korpus pomjeri za isti broj rečenica. Pojedinačna brzina po jeziku dok radi solo (3.43–5.00 rec/min) je i dalje solidna — često brža nego isti jezik pod paralelnim opterećenjem — ali pošto samo jedan jezik radi u datom trenutku, ukupan napredak je sporiji.
+- **Sudija (gemma4:31b) — nema jasnog dan/noć obrasca u ovom uzorku.** Trajanje po seriji (400 rečenica) kreće se 18–32 min bez monotonog trenda po dobu dana: najbrži je de@23:11 CEST (veče, 18m54s), ali najsporiji je sr@15:05 CEST (popodne, 31m57s), dok neki noćni termini (hr@00:31, it@02:08) nisu naročito brzi (26m17s, 22m33s). Znatno slabiji efekat nego 6.1× faktor izmjeren u prethodnom runu (Batch 5 vs 6) — taj faktor je vjerovatno bio specifičan za ta dva konkretna termina, ne opšte pravilo.
+- **Kvalitet nepromijenjen kroz oba režima:** avg_final 0.9593–0.9684 kroz sve četiri serije, bez pada ni u paralelnom ni u sekvencijalnom dijelu — potvrđuje već uspostavljen nalaz (brzina varira s režimom/opterećenjem, kvalitet ne).
+- **Napredak korpusa:** Dracula (k20) de/hr/it/sr napredovao sa pozicije 6600 na 8200 (knjiga ima 9.073 rečenice ukupno — još ~873 preostaje za ova četiri jezika).
