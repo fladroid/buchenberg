@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 25. jul 2026. (sesija 153)  
+**Poslednje ažuriranje:** 29. jul 2026. (sesija 154)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -450,6 +450,33 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s154 snapshot (29. jul 2026):** EKSPERIMENTALNA sesija — testirana "gated
+> bazna konkurencija" (varijanta B), pokrenuta Flaviovim opažanjem da glm-5.2
+> (cjenovni nivo 3/4 na Ollama) troši višestruko više resursa nego mistral+nllb
+> zajedno. Retrospektivna analiza (Dracula/Moby Dick, faza 1) pokazala 12,5-22%
+> rečenica bi imalo lošijeg pobjednika bez glm-a u bazi, delta blizu praga šuma
+> (0,003, s146). Otkriven POSTOJEĆI `--prag` gate mehanizam u `bb_03_prevod.py`
+> (ograničen na refine granu) — omogućio test bez ijedne linije koda. Nova
+> faza 9 (glm-only, temp 0,8+0,1, prompt 'refine', prag 0,95). Prvi pokušaj
+> (Hound k1) propao dva puta (NULL finalni_score - zaboravljena sudija; zatim
+> gate se nikad nije otvorio - kontaminacija godinama refine istorije starog
+> zamrznutog para). Ispravka: Hound Copy (k22), virgin opseg 501-700 (n=200
+> rečenica × 4 jezika = 800). **Rezultat:** gate otvoren 225/800 (28,1%),
+> stvarna pobjeda 173/800 (21,6%), prosj. delta pobjede ~0,05 (u skladu sa
+> s146 +0,047). **KLJUČNA POTVRDA:** apsolutni pobjednik (KONCEPT.md argmax
+> preko svih faza) potvrđen 0 neslaganja na 830 provjerenih parova - varijanta
+> B je po dizajnu bezbjedna za kvalitet, neuspjeli glm pokušaji nikad ne
+> dopiru do korpusa. Cijena (Ollama dashboard %) NERIJEŠENO mjerena - identičan
+> skok (+1,2pp) za 30 i za 225 poziva, uzrok nepoznat. Sesija samokritički
+> haotična (SQL greške, isti propust ponovljen dvaput) - Flaviov feedback
+> prihvaćen bez ograde. Flaviov stvarni problem (glm sam ~90% budžeta, treba
+> mu ~150% trenutnih resursa) ostaje NERIJEŠEN - test dokazuje bezbjednost
+> mehanizma, ne rješava razmjeru. Odluka o usvajanju ODLOŽENA (nedostaje:
+> pouzdana mjera uštede, ekstrapolacija na stvarni obim, test na drugom
+> žanru). Korpus 50.624/1.802.993/338.460 (raslo Flaviovim paralelnim radom).
+> BB_VERSION ostaje s153 (web nedirnut). Sesija zatvorena SAMOSTALNO od
+> Claudea (Flavio eksplicitno autorizovao). Detalji: `docs/sessions/session_154.md`.
 
 > **s153 snapshot (25. jul 2026):** ANALITIČKA sesija — analiza 16 novih log
 > fajlova (k20 Dracula, opseg 6601–8200, de/hr/it/sr), nula pipeline poziva u
@@ -1444,4 +1471,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 25. jul 2026. (sesija 153)*
+*Flavio & Claude · Buchenberg · V3 · 29. jul 2026. (sesija 154)*
