@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 31. jul 2026. (sesija 155)  
+**Poslednje ažuriranje:** 31. jul 2026. (sesija 156)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -347,6 +347,8 @@ ORDER BY jezik, pobjede DESC;
 | `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_faza.sh |
 | `bb_faza_info.py` | Faza -> metod (`metod_id\|naziv\|root`) iz `bb_faze` JOIN `bb_metode`; exit 1 ako faza ne postoji (s134) |
 | `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force]`. Metod cita iz baze, modele iz `bb_modeli`. Zamijenio `run_refine.sh` (s134) |
+| `bb_toggle_model.py` | Uključuje/isključuje jedan model (a1) za zadanu fazu preko `bb_faze_a1.aktivan` (s156) — koristi ga `run_root_gated.sh` |
+| `run_root_gated.sh` | **Wrapper za "gated root"** (s156) — jedan poziv: isključi model iz faze 1 → root (suzen bazen) → gated faza (default 10) → model se UVIJEK vraća aktivan (trap na EXIT). `--knjiga --jezici --od --do [--gated-faza N]` |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
@@ -450,6 +452,40 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s156 snapshot (31. jul 2026):** Bug fix iz s155 Dio 4 IZVRŠEN i DVOSTRUKO
+> VERIFIKOVAN. `bb_03_prevod.py` grananje (`elif is_refine:` → `elif is_refine
+> and PROMPT_NAZIV != 'base':`) — jedna linija, `git diff` pregledan,
+> `py_compile` čist. Prije testa, prethodni s155 mislabeled test-podaci (k22
+> 701-740, faza 10) obrisani — nakon komunikacijskog nesporazuma oko obima
+> brisanja (razriješenog eksplicitnim Flaviovim pojašnjenjem: obrisati SVE
+> faze za taj opseg, ne samo fazu 10), taj opseg je sada potpuno prazan kroz
+> sve faze (480 redova obrisano ukupno, root+faza10 zajedno). Test ponovljen
+> na dva svježa opsega: **k22 741-780** (gate 25/160=15,6%, glm pobjeđuje
+> 21/25=84%) i **k22 781-820** (gate 27/160=16,9%, glm pobjeđuje 25/27=92,6%)
+> — oba u skladu sa istorijskim rasponom (s145/s146/s154: 79-93% win-rate kad
+> gate otvori). `prompt: base` potvrđen u oba loga — seed NIJE poslan modelu,
+> bug stvarno ispravljen. **Nova infrastruktura:** `src/bb_toggle_model.py`
+> (DB toggle helper) + `run_root_gated.sh` (wrapper, jedan poziv radi cijeli
+> lanac: isključi model → root → gated faza → model se UVIJEK vraća aktivan
+> preko `trap` na EXIT, i u slučaju greške) — drugi test (781-820) pokrenuo
+> je Flavio SAM, jednim pozivom, potvrđujući da wrapper radi bez asistencije.
+> Prvi tool-poziv za root fazu (741-780) je timeout-ovao na klijentskoj
+> strani (proces nastavio raditi na serveru bez `nohup`, praćen `ps aux`
+> provjerama do kraja) — ubuduće svaki dugi poziv ide sa
+> `PYTHONUNBUFFERED=1 nohup time ... > logs/*.log 2>&1 &`, potvrđeno u
+> drugom testu bez problema. **Dva nova KAKO dokumenta**
+> (`docs/KAKO-BrisanjePrevoda.md`, `docs/KAKO-NovaFaza.md`) — na Flaviov
+> eksplicitan zahtjev, napisani na kraju sesije sa svježim, konkretnim
+> koracima iz ove sesije. Ollama Cloud "Weekly usage" screenshot (93,3%
+> potrošeno): glm segment trake vizuelno najveći uprkos najmanje zahtjeva
+> (4.780 naspram gemma 24.360, mistral 5.568) — vizuelna potvrda s155 nalaza
+> o cijeni-po-pozivu, ne broju poziva. Odluka o usvajanju gated-root pristupa
+> u produkciju ostaje za ponedjeljak (sedmični Ollama reset ~02:00, svjež
+> pogled). Korpus 50.624/1.871.857/352.380. BB_VERSION ostaje nepromijenjen
+> (web nedirnut ove sesije). Sesija zatvorena SAMOSTALNO od Claudea (Flavio
+> eksplicitno autorizovao, odsutan od PC-a). Detalji:
+> `docs/sessions/session_156.md`.
 
 > **s155 snapshot (31. jul 2026):** Dva dijela. **(1) Analiza Ollama Cloud
 > troškova** — Flavio dostavio čist podatak: k12 (Moby Dick) de/hr/it/sr,
@@ -1293,7 +1329,7 @@ Tekst NIJE u HTML hardkodu — hardkod je samo **no-JS fallback**. Izvor istine 
 
 ```bash
 # 0. Project knowledge / docs reference (prije README; s121 dodatak)
-cat docs/KONCEPT.md docs/ANALIZA.md docs/KAKO-JeziciUI.md docs/KAKO-KeyConcepts.md docs/STRANICE.md
+cat docs/KONCEPT.md docs/ANALIZA.md docs/KAKO-JeziciUI.md docs/KAKO-KeyConcepts.md docs/KAKO-BrisanjePrevoda.md docs/KAKO-NovaFaza.md docs/STRANICE.md
 ls docs/ | grep -i "^WEB-FAZA"   # provjeriti ima li novijeg nacrta (npr. WEB-FAZA3.md)
 
 # 1. README
@@ -1342,7 +1378,7 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Gated root (s155, EKSPERIMENTALNO — bug otvoren, neispravljen)
+### Gated root (s155 dizajn, s156 BUG ISPRAVLJEN I DVOSTRUKO VERIFIKOVAN)
 Cilj: sužen root (mistral+nllb, glm isključen) -> sudija -> pobjednik -> gate
 (prag 0,95, postojeći mehanizam) -> nova self-refine faza 10 (glm, BASE
 prompt, bez pivota) -> sudija -> pobjednik (argmax preko cijelog bazena).
@@ -1350,22 +1386,31 @@ Motiv: Ollama Cloud glm-5.2 nesrazmjerno troši sedmični budžet (vidi s155
 snapshot, §9) — cilj je ograničiti glm na uslovni drugi korak umjesto stalnog
 baznog konkurenta.
 
-**Mehanika testirana i RADI** (k22, 701-740, de/hr/it/sr — vidi
-`docs/sessions/session_155.md`): toggle `bb_faze_a1` za fazu 1, `run_faza.sh`
-nepromijenjen, faza 10 registrovana (a1=glm, a2=oba temp, a3=BASE prompt id=1),
-gate ispravno filtrirao 25,0% (poklapa se sa s146/s154).
+**s155 bug (grananje `elif is_refine:` zavisilo SAMO od broja faze, ne od
+prompta — glm dobijao seed uprkos BASE promptu) ISPRAVLJEN u s156:**
+`elif is_refine and PROMPT_NAZIV != 'base':`. Verifikovano DVA PUTA na
+svježim opsezima (k22 741-780 i 781-820, de/hr/it/sr) — `prompt: base`
+potvrđen u logu, glm pobjeđuje 84% i 92,6% kad gate otvori (u skladu sa
+s145/s146/s154 istorijskim rasponom 79-93%), gate stopa 15,6%/16,9%
+(niže od s146/s154 28-29%, normalna varijacija na uzorku od 40 rečenica).
 
-**ALI: BUG NEISPRAVLJEN** — `bb_03_prevod.py` grananje (`elif is_refine:`,
-zavisi SAMO od `args.faza >= 2`) ignoriše koji je prompt zakačen; funkcija
-`prevedi_refine_batch()` hardkoduje seed/referencu u poruku modelu nezavisno
-od prompt template-a. Rezultat: glm je i pored BASE prompta dobio
-mistralov/nllb-ov prevod kao referencu — NIJE nezavisan prevod originala kako
-je bilo namijenjeno. Predložena ispravka (grananje i na `PROMPT_NAZIV`) čeka
-Flaviov OK. 40 postojećih test-prevoda pod fazom 10 su mislabeled (obrisati
-ili zadržati kao trag bug-a — otvoreno). `run_root_gated.sh` wrapper
-(automatizacija toggle+run+toggle+run za Flavija, jedan poziv) dogovoren
-konceptualno, NIJE napravljen. Pravo testiranje na većem obimu tek od
-ponedjeljka (sedmični Ollama reset).
+**Nova infrastruktura (s156):** `src/bb_toggle_model.py` (helper, uključuje/
+isključuje model za fazu preko `bb_faze_a1.aktivan`) + `run_root_gated.sh`
+(wrapper, jedan poziv radi cijeli lanac: toggle off → root → gated faza →
+model se UVIJEK vraća aktivan preko `trap` na EXIT, i u slučaju greške).
+Dva nova KAKO dokumenta: `docs/KAKO-BrisanjePrevoda.md` (FK-svjestan
+redoslijed brisanja prevoda), `docs/KAKO-NovaFaza.md` (prošireno §7,
+uključujući gated-fazu obrazac i s156 bug/fix).
+
+Ollama Cloud "Weekly usage" screenshot (s156, Flavio): glm segment trake
+potrošnje vizuelno najveći uprkos NAJMANJE zahtjeva (4.780 naspram gemma
+24.360, mistral 5.568) — vizuelna potvrda cijene-po-pozivu nalaza iz s155.
+
+Otvoreno za ponedjeljak (sedmični Ollama reset ~02:00): odluka o usvajanju u
+produkciju, pravo testiranje na većem obimu, provjera da li k22 501-700
+(faza 9, s154) treba isti tretman kao 701-740 (koje je s156 potpuno
+obrisala i ponovo čisto testirala), formalna dopuna KONCEPT.md ako se
+usvoji. Detalji: `docs/sessions/session_156.md`.
 
 ### Zamjena modela — IZVRŠENO (s114): mistral-large-3:675b + glm-5.2 u produkciji
 **Refaktor + zamjena izvršeni i testirani kroz cijeli lanac (session_114.md). Korak 4 (web) ZAVRŠEN s120 (Faza 1 priprema s115-118, Faza 2 implementacija s120, svih 9 stranica) — vidi §9 s120 snapshot.** Istorijat odluke ispod.
@@ -1535,4 +1580,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 31. jul 2026. (sesija 155)*
+*Flavio & Claude · Buchenberg · V3 · 31. jul 2026. (sesija 156)*

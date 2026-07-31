@@ -455,7 +455,7 @@ def main():
                     nllb_tgt = NLLB_LANG_MAP[kod]
                     prevodi = nllb_batch(tekstovi, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
                     backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
-                elif is_refine:
+                elif is_refine and PROMPT_NAZIV != 'base':
                     parovi = [(t, seed_map[rid][0]) for rid, poz, t in chunk]
                     prevodi = prevedi_refine_batch(parovi, jezik_naziv, ollama_naziv, temp, TPL_PREVOD_BATCH)
                     if prevodi is None:
