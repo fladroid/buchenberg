@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 31. jul 2026. (sesija 156)  
+**Poslednje ažuriranje:** 1. avgust 2026. (sesija 157)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -452,6 +452,28 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s157 snapshot (1. avgust 2026):** KONCEPTUALNA sesija — nula pipeline/kod/baza
+> izmjena. Dvije nove ideje za dalje sužavanje glm troška dokumentovane ali
+> NEIMPLEMENTIRANE (vidi §14): (1) podjela gated glm faze po temperaturi
+> (0.1 prvo, 0.8 samo za ostatak); (2) radikalnija varijanta koja gatuje i
+> mistral@0.8. **Glavni nalaz sesije — KRITIČAN, BLOKIRA odluku o usvajanju
+> gated-root u produkciju:** `run_root_gated.sh` (s156) mehanizam (toggle
+> `bb_faze_a1.aktivan` za fazu 1) je race-condition-ovan pod paralelnim radom
+> po jeziku — Flaviov standardni obrazac. Globalno stanje na jednom DB redu,
+> toggle-ovano unutar svakog automatizovanog poziva (`trap` na EXIT), nije
+> izolovano po procesu/jeziku — paralelni pozivi tiho pokvare jedan drugom
+> root konfiguraciju bez ijedne greške. Root uzrok: privremeno sužavanje ROOT
+> faze krši ROOT invarijantu (s112: stabilan identitet faze u svakom
+> trenutku) — refine faze nikad nisu imale ovaj problem jer se njihova
+> konfiguracija upisuje JEDNOM (INSERT), nikad ne prepisuje usred izvršavanja.
+> **Dogovoreno rješenje (prio 1 za s158):** promjena root konfiguracije
+> postaje ručan, protokolom-vođen čin (prikaži→OK→izvrši), potpuno odvojen
+> od automatizovanih skripti — deklariši svijet jednom, radi paralelno
+> koliko hoćeš dok važi, vrati ručno na kraju. `run_root_gated.sh` u
+> sadašnjem auto-toggle obliku se povlači iz upotrebe za paralelan rad dok
+> se ne preradi. Korpus nepromijenjen (50.624/1.873.377/352.816). BB_VERSION
+> nepromijenjen (web nedirnut). Detalji: `docs/sessions/session_157.md`.
 
 > **s156 snapshot (31. jul 2026):** Bug fix iz s155 Dio 4 IZVRŠEN i DVOSTRUKO
 > VERIFIKOVAN. `bb_03_prevod.py` grananje (`elif is_refine:` → `elif is_refine
@@ -1378,13 +1400,22 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Gated root (s155 dizajn, s156 BUG ISPRAVLJEN I DVOSTRUKO VERIFIKOVAN)
+### Gated root (s155 dizajn, s156 BUG ISPRAVLJEN, s157 BLOKIRANO — race condition)
 Cilj: sužen root (mistral+nllb, glm isključen) -> sudija -> pobjednik -> gate
 (prag 0,95, postojeći mehanizam) -> nova self-refine faza 10 (glm, BASE
 prompt, bez pivota) -> sudija -> pobjednik (argmax preko cijelog bazena).
 Motiv: Ollama Cloud glm-5.2 nesrazmjerno troši sedmični budžet (vidi s155
 snapshot, §9) — cilj je ograničiti glm na uslovni drugi korak umjesto stalnog
 baznog konkurenta.
+
+> ⚠️ **s157 BLOKIRA usvajanje:** `run_root_gated.sh` toggle-uje globalno
+> stanje (`bb_faze_a1.aktivan` za fazu 1) unutar svakog poziva — nije
+> izolovano po jeziku/procesu. Paralelni pozivi (Flaviov standardni obrazac)
+> tiho pokvare jedan drugom root konfiguraciju bez greške. Rješenje
+> dogovoreno (s157): toggle postaje ručan protokolom-vođen čin, potpuno
+> odvojen od skripti — deklariši svijet jednom (prikaži→OK→izvrši), radi
+> paralelno koliko hoćeš dok važi, vrati ručno na kraju. NEIMPLEMENTIRANO —
+> prio 1 za s158. Vidi `docs/sessions/session_157.md`.
 
 **s155 bug (grananje `elif is_refine:` zavisilo SAMO od broja faze, ne od
 prompta — glm dobijao seed uprkos BASE promptu) ISPRAVLJEN u s156:**
@@ -1580,4 +1611,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 31. jul 2026. (sesija 156)*
+*Flavio & Claude · Buchenberg · V3 · 1. avgust 2026. (sesija 157)*
