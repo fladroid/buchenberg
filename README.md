@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 29. jul 2026. (sesija 154)  
+**Poslednje ažuriranje:** 31. jul 2026. (sesija 155)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -450,6 +450,45 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s155 snapshot (31. jul 2026):** Dva dijela. **(1) Analiza Ollama Cloud
+> troškova** — Flavio dostavio čist podatak: k12 (Moby Dick) de/hr/it/sr,
+> 3600 rečenica × 4 jezika, sedmična potrošnja 32,5%→92,9% (delta 60,4%).
+> Istraženo (web search): Ollama Cloud naplaćuje po GPU-VREMENU, ne po
+> tokenu/klasi; glm-5.2 i mistral-large-3:675b skoro identični po aktivnim
+> parametrima (~40B oba, MoE) pa arhitektura ne objašnjava razliku; Ollamin
+> vlastiti library page etiketira glm-5.2:cloud "High Usage" naspram
+> mistral/gemma4 "Medium Usage"; DOKUMENTOVAN bag na Ollaminom backendu
+> specifično za glm-5.2:cloud (GitHub #16779, #17091 — 10-75s naspram <2s za
+> uporediv model) poklapa se sa projektovim vlastitim s132/s137 nalazima
+> (glm 2,6-3,4× sporiji od mistrala). Flaviova odluka: ograničiti glm na
+> gated drugi korak — ne optimizovati nepredvidljivu tuđu cijenu, minimizovati
+> izloženost njoj. **(2) "Gated root" dizajn + implementacija — MEHANIČKI
+> USPJEŠNA, KONCEPTUALNO NEISPRAVNA (bug otvoren, neispravljen).** Cilj:
+> sužen root (mistral+nllb, bez glm-a) → sudija → pobjednik → gate (prag 0,95,
+> postojeći mehanizam, automatski za fazu≥2) → nova self-refine faza (10,
+> "root-gated-glm-base") sa glm + BASE promptom (bez pivota/reference — za
+> razliku od faze 9 koja koristi refine prompt SA referencom). Test na k22
+> (Hound Copy) 701-740, de/hr/it/sr: korak 1-3 (2-way root, 17m32s) i korak
+> 5-7 (gated glm, 5m08s) oba prošla BEZ grešaka; gate ispravno filtrirao
+> 40/160 (25,0%), poklapa se sa s146/s154 stopama. `run_faza.sh` ne podržava
+> `--prag` (nije potrebno — `bb_03_prevod.py` default 0,95 automatski važi za
+> fazu≥2). **BUG (Flaviov ulov, iz pažljivog čitanja loga):** uprkos `base`
+> promptu, glm JE dobio seed/referencu u stvarnom pozivu modelu — grananje u
+> `bb_03_prevod.py` (`elif is_refine:`, `is_refine = args.faza >= 2`) zavisi
+> SAMO od broja faze, ne od zakačenog prompta; `prevedi_refine_batch()`
+> hardkoduje "Reference {lang}: {seed}" u tekst poruke NEZAVISNO od prompt
+> template-a iz baze. Claude je ranije pogrešno tvrdio da pivot zavisi
+> isključivo od `{seed}` placeholdera u promptu — provjereno samo protiv
+> single-mode fallback funkcije, ne protiv batch-mode funkcije koja se
+> stvarno izvršila. Predložena ispravka (grananje i na `PROMPT_NAZIV`) NIJE
+> primijenjena — Flavio zatvorio sesiju prije toga. 40 test-prevoda pod fazom
+> 10 ostaju u bazi ali su MISLABELED (baza kaže base prompt, stvarni sadržaj
+> poruke bio je refine-sa-referencom) — sudbina (obrisati/zadržati) otvorena
+> pitanja za sljedeću sesiju. Korpus 50.624/1.871.353/352.220 (raslo Flaviovim
+> k12 radom van fokusa sesije). BB_VERSION ostaje s154 (web nedirnut). Kod
+> NIJE mijenjan. Sesija zatvorena SAMOSTALNO od Claudea (Flavio eksplicitno
+> autorizovao, odsutan od PC-a). Detalji: `docs/sessions/session_155.md`.
 
 > **s154 snapshot (29. jul 2026):** EKSPERIMENTALNA sesija — testirana "gated
 > bazna konkurencija" (varijanta B), pokrenuta Flaviovim opažanjem da glm-5.2
@@ -1303,6 +1342,31 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Gated root (s155, EKSPERIMENTALNO — bug otvoren, neispravljen)
+Cilj: sužen root (mistral+nllb, glm isključen) -> sudija -> pobjednik -> gate
+(prag 0,95, postojeći mehanizam) -> nova self-refine faza 10 (glm, BASE
+prompt, bez pivota) -> sudija -> pobjednik (argmax preko cijelog bazena).
+Motiv: Ollama Cloud glm-5.2 nesrazmjerno troši sedmični budžet (vidi s155
+snapshot, §9) — cilj je ograničiti glm na uslovni drugi korak umjesto stalnog
+baznog konkurenta.
+
+**Mehanika testirana i RADI** (k22, 701-740, de/hr/it/sr — vidi
+`docs/sessions/session_155.md`): toggle `bb_faze_a1` za fazu 1, `run_faza.sh`
+nepromijenjen, faza 10 registrovana (a1=glm, a2=oba temp, a3=BASE prompt id=1),
+gate ispravno filtrirao 25,0% (poklapa se sa s146/s154).
+
+**ALI: BUG NEISPRAVLJEN** — `bb_03_prevod.py` grananje (`elif is_refine:`,
+zavisi SAMO od `args.faza >= 2`) ignoriše koji je prompt zakačen; funkcija
+`prevedi_refine_batch()` hardkoduje seed/referencu u poruku modelu nezavisno
+od prompt template-a. Rezultat: glm je i pored BASE prompta dobio
+mistralov/nllb-ov prevod kao referencu — NIJE nezavisan prevod originala kako
+je bilo namijenjeno. Predložena ispravka (grananje i na `PROMPT_NAZIV`) čeka
+Flaviov OK. 40 postojećih test-prevoda pod fazom 10 su mislabeled (obrisati
+ili zadržati kao trag bug-a — otvoreno). `run_root_gated.sh` wrapper
+(automatizacija toggle+run+toggle+run za Flavija, jedan poziv) dogovoren
+konceptualno, NIJE napravljen. Pravo testiranje na većem obimu tek od
+ponedjeljka (sedmični Ollama reset).
+
 ### Zamjena modela — IZVRŠENO (s114): mistral-large-3:675b + glm-5.2 u produkciji
 **Refaktor + zamjena izvršeni i testirani kroz cijeli lanac (session_114.md). Korak 4 (web) ZAVRŠEN s120 (Faza 1 priprema s115-118, Faza 2 implementacija s120, svih 9 stranica) — vidi §9 s120 snapshot.** Istorijat odluke ispod.
 **Drugi retirement talas (5. jul, kompletna Ollama lista) povukao i gemma3:27b i ministral-3:8b — prva s112 odluka nevažeća.** Novi par kroz sandbox sondu (6 kandidata, 2 kruga): **mistral-large-3:675b + glm-5.2** (oba ne-misleća/gase thinking, temp-živa, 10–13 tok, različite familije). Rezerve: deepseek-v4-flash (temp-mrtav), kimi-k2.6. Zamjena i refaktor idu zajedno ("jedan dah"), prije 15. jula — po principima iz `docs/KONCEPT.md` i mapi iz `docs/sessions/session_112.md` (koraci: backup → shema → skripte → test → web; puna lista povučenih + sonda u dodacima s112). Istorijat starog testa ispod.
@@ -1471,4 +1535,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 29. jul 2026. (sesija 154)*
+*Flavio & Claude · Buchenberg · V3 · 31. jul 2026. (sesija 155)*
