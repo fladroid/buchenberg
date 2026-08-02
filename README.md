@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 1. avgust 2026. (sesija 157)  
+**Poslednje ažuriranje:** 2. avgust 2026. (sesija 158)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -452,6 +452,39 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s158 snapshot (2. avgust 2026):** Prio 1 iz s157 (race condition u
+> `run_root_gated.sh`) RIJEŠEN — ali kroz dvije iteracije dizajna. Prvi
+> pokušaj (ručni relativni toggle preko `bb_toggle_model.py --aktivan
+> true/false` prije/poslije rada) mehanički je radio (testirano na k22
+> 930-939) ali je Flavio ispravio pristup: "svijet" mora biti POTPUNA,
+> eksplicitna deklaracija cijelog stanja (svi modeli a1 + sve temperature a2
+> za fazu), ne relativni toggle jedne stvari — jer relativni toggle ne
+> generalizuje na buduće svjetove (npr. mistral isključen, ili neka
+> temperatura isključena). **Finalno rješenje:** novi generički alat
+> `src/bb_deklarisi_svet.py` (`--faza --modeli --temperature`, postavlja
+> aktivan=true SAMO za navedeno, aktivan=false za SVE ostalo u katalogu) +
+> dvije neutralno imenovane, nezavisne skripte `bb_svet_1.sh` (puna 3-way
+> root: mistral+nllb+glm) / `bb_svet_2.sh` (sužen root za gated obrazac,
+> bez glm) — svaka potpuna izjava namjere, ne referencira drugu. Novi svijet
+> ubuduće = nova tanka skripta, nula izmjena logike. `run_root_gated.sh`
+> prerađen (auto-toggle uklonjen, sad samo pokreće root+gated fazu).
+> **Test niz** (k22 Hound Copy core-4, budžet <1%): 930-939 (prvi pokušaj,
+> ručni toggle), 940-949 (svijet 2 — Claudeov propust: pozvan samo root
+> korak direktno preko `run_faza.sh`, gated faza 10 zaboravljena; Flavio
+> primijetio bez detalja, Claude pronašao propust, ispravljeno pozivom
+> punog `run_root_gated.sh` lanca), 950-959 (svijet 1, standardni tok, 5
+> kandidata po rečenici uklj. glm u rootu). Oba svijeta funkcionalno
+> potvrđena end-to-end. Usput: `balsam` MCP konektor prekid/oporavak
+> (OAuth greška, riješeno Flaviovim restartom balsam servera, ne
+> disconnect/reconnect); tri teoretska pitanja o pragu/kombinacijama/
+> minimumu kandidata odgovorena; otkriven legacy red `claude-sonnet-4-6` u
+> `bb_modeli` katalogu (istorijski, ~s-nešto rana sesija, testiranje
+> raznih modela — nepovezano s ovom sesijom, pominjanje u README ostaje
+> otvoreno). Korpus 50.624/1.873.845/352.936 (+468/+120 kroz test niz).
+> BB_VERSION ostaje s157 (web nedirnut). Sesija zatvorena SAMOSTALNO od
+> Claudea (Flavio eksplicitno autorizovao, "izuzetno bez moje kontrole i
+> odobrenja"). Detalji: `docs/sessions/session_158.md`.
 
 > **s157 snapshot (1. avgust 2026):** KONCEPTUALNA sesija — nula pipeline/kod/baza
 > izmjena. Dvije nove ideje za dalje sužavanje glm troška dokumentovane ali
@@ -1400,7 +1433,7 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Gated root (s155 dizajn, s156 BUG ISPRAVLJEN, s157 BLOKIRANO — race condition)
+### Gated root (s155 dizajn, s156 bug ispravljen, s157 otkriven race condition, s158 riješeno — ručni protokol)
 Cilj: sužen root (mistral+nllb, glm isključen) -> sudija -> pobjednik -> gate
 (prag 0,95, postojeći mehanizam) -> nova self-refine faza 10 (glm, BASE
 prompt, bez pivota) -> sudija -> pobjednik (argmax preko cijelog bazena).
@@ -1408,14 +1441,14 @@ Motiv: Ollama Cloud glm-5.2 nesrazmjerno troši sedmični budžet (vidi s155
 snapshot, §9) — cilj je ograničiti glm na uslovni drugi korak umjesto stalnog
 baznog konkurenta.
 
-> ⚠️ **s157 BLOKIRA usvajanje:** `run_root_gated.sh` toggle-uje globalno
-> stanje (`bb_faze_a1.aktivan` za fazu 1) unutar svakog poziva — nije
-> izolovano po jeziku/procesu. Paralelni pozivi (Flaviov standardni obrazac)
-> tiho pokvare jedan drugom root konfiguraciju bez greške. Rješenje
-> dogovoreno (s157): toggle postaje ručan protokolom-vođen čin, potpuno
-> odvojen od skripti — deklariši svijet jednom (prikaži→OK→izvrši), radi
-> paralelno koliko hoćeš dok važi, vrati ručno na kraju. NEIMPLEMENTIRANO —
-> prio 1 za s158. Vidi `docs/sessions/session_157.md`.
+> ✅ **s158 RIJEŠENO:** `run_root_gated.sh` više NE toggle-uje `bb_faze_a1`
+> automatski — Korak 1 (toggle off) i `trap`-cleanup (toggle on) uklonjeni iz
+> skripte. Umjesto toga: ulazak/rad/izlazak je ručan, protokolom-vođen čin
+> (prikaži→OK→izvrši), potpuno odvojen od skripte — vidi
+> `docs/KAKO-NovaFaza.md` §"Protokol za gated root". Skripta se sad smije
+> pozivati paralelno po jeziku dok je svijet ručno postavljen. Vidi
+> `docs/sessions/session_157.md` (nalaz) i `docs/sessions/session_158.md`
+> (rješenje).
 
 **s155 bug (grananje `elif is_refine:` zavisilo SAMO od broja faze, ne od
 prompta — glm dobijao seed uprkos BASE promptu) ISPRAVLJEN u s156:**
@@ -1425,13 +1458,16 @@ potvrđen u logu, glm pobjeđuje 84% i 92,6% kad gate otvori (u skladu sa
 s145/s146/s154 istorijskim rasponom 79-93%), gate stopa 15,6%/16,9%
 (niže od s146/s154 28-29%, normalna varijacija na uzorku od 40 rečenica).
 
-**Nova infrastruktura (s156):** `src/bb_toggle_model.py` (helper, uključuje/
-isključuje model za fazu preko `bb_faze_a1.aktivan`) + `run_root_gated.sh`
-(wrapper, jedan poziv radi cijeli lanac: toggle off → root → gated faza →
-model se UVIJEK vraća aktivan preko `trap` na EXIT, i u slučaju greške).
-Dva nova KAKO dokumenta: `docs/KAKO-BrisanjePrevoda.md` (FK-svjestan
-redoslijed brisanja prevoda), `docs/KAKO-NovaFaza.md` (prošireno §7,
-uključujući gated-fazu obrazac i s156 bug/fix).
+**Infrastruktura (s156, prerađena s158):** `src/bb_deklarisi_svet.py` (novo
+s158 — deklariše CIJELO stanje a1/a2 za fazu, ne relativni toggle) +
+imenovane skripte `bb_svet_1.sh` (puna 3-way root) / `bb_svet_2.sh` (sužen
+root bez glm), svaka potpuna izjava namjere, nezavisna od prethodnog stanja
++ `run_root_gated.sh` (s158: pokreće SAMO root+gated fazu, pretpostavlja da
+je svijet već aktiviran — auto-toggle uklonjen). `src/bb_toggle_model.py`
+(s156) ostaje kao ad-hoc alat za pojedinačni model, van standardnog toka.
+Dva KAKO dokumenta: `docs/KAKO-BrisanjePrevoda.md` (FK-svjestan redoslijed
+brisanja prevoda), `docs/KAKO-NovaFaza.md` (prošireno §7, uključujući
+gated-fazu obrazac, s156 bug/fix, i s158 deklarisani svjetovi).
 
 Ollama Cloud "Weekly usage" screenshot (s156, Flavio): glm segment trake
 potrošnje vizuelno najveći uprkos NAJMANJE zahtjeva (4.780 naspram gemma
@@ -1611,4 +1647,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 1. avgust 2026. (sesija 157)*
+*Flavio & Claude · Buchenberg · V3 · 2. avgust 2026. (sesija 158)*

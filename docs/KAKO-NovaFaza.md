@@ -1,6 +1,6 @@
 # KAKO se dodaje nova faza
 
-Referentni dokument (kao `KAKO-JeziciUI.md`, `KAKO-KeyConcepts.md`) — pročitati PRIJE improvizacije. Proširuje README §7 detaljima iz s142-s156, uključujući "gated" obrazac i poznati bug (ispravljen s156).
+Referentni dokument (kao `KAKO-JeziciUI.md`, `KAKO-KeyConcepts.md`) — pročitati PRIJE improvizacije. Proširuje README §7 detaljima iz s142-s158, uključujući "gated" obrazac, poznati bug (ispravljen s156) i deklarisani svjetovi za paralelan rad (s158, zamjenjuje auto-toggle i relativni toggle).
 
 ---
 
@@ -79,19 +79,75 @@ Očekivano: `prompt: base` za svaki model u toj fazi.
 
 ---
 
-## Wrapper za "gated root" obrazac — `run_root_gated.sh`
+## Protokol za "gated root" — deklarisani svjetovi (s158)
 
-Za tačno ovaj scenario (suzi root, pusti ga, vrati root, pusti gated fazu) postoji gotov skript — nema potrebe za ručnim SQL toggle-om niti za tri odvojena poziva:
+Prije s158, `run_root_gated.sh` je automatski toggle-ovao glm za fazu 1 unutar
+svakog poziva (`trap` na EXIT) — globalna DB promjena bez izolacije po
+procesu/jeziku, pa su paralelni pozivi (Flaviov standardni obrazac) tiho
+kvarili jedan drugom root konfiguraciju (otkriveno s157, race condition).
+
+Prvi pokušaj rješenja (relativni toggle jednog modela, `bb_toggle_model.py`,
+pozvan ručno prije/poslije rada) je TAKOĐE pogrešan pristup — oslanja se na
+pretpostavku da je SVE OSTALO (ostali modeli, temperature) već u ispravnom
+stanju od ranije. Ne garantuje potpuno, samostalno stanje.
+
+**Pravo rješenje (s158): svaki "svijet" je POTPUNA, eksplicitna deklaracija
+cijelog stanja — svih modela (a1) i svih temperatura (a2) za tu fazu — ne
+relativni toggle jedne stvari.** Svaki poziv postavlja aktivan=true SAMO za
+navedeno, aktivan=false za SVE ostalo u katalogu, bez obzira šta je bilo
+prije. Nema pretpostavki o prethodnom stanju.
+
+### Mehanizam — `bb_deklarisi_svet.py`
+
+Generički alat, prima eksplicitnu listu modela i temperatura koji treba da
+budu aktivni za zadanu fazu; sve ostalo u katalogu (`bb_faze_a1`/`bb_faze_a2`)
+se gasi:
+
+```bash
+venv/bin/python src/bb_deklarisi_svet.py --faza 1 \
+    --modeli "mistral-large-3:675b,nllb-600M,glm-5.2" \
+    --temperature "0.8,0.1,0.0"
+```
+
+Ispisuje kompletno rezultujuće stanje (svaki model/temperatura, aktivan ili
+ugašen) — direktna verifikacija bez posebnog upita.
+
+### Imenovani svjetovi — tanke skripte, svaka potpuna sama za sebe
+
+- **`bb_svet_1.sh`** — puna 3-way root faza: mistral + nllb + glm, temp 0.8/0.1/0.0.
+- **`bb_svet_2.sh`** — sužen root za gated obrazac: mistral + nllb (BEZ glm), temp 0.8/0.1/0.0.
+
+Svaka skripta je nezavisna, potpuna izjava namjere — ne zna niti mari za druge
+svjetove, ne referencira ih, ne "vraća" prethodno stanje. Aktiviraš svijet
+koji ti treba, sa parametrima koji su ti potrebni, i siguran si da imaš SVE
+što ti treba i ništa što bi smetalo:
+
+```bash
+bash bb_svet_1.sh   # standardni svijet
+bash bb_svet_2.sh   # svijet za gated-root obrazac
+```
+
+Novi svijet ubuduće (npr. mistral isključen, ili neka temperatura isključena)
+= nova tanka skripta s drugačijom eksplicitnom listom u pozivu
+`bb_deklarisi_svet.py` — nula izmjena logike.
+
+### Rad unutar svijeta
+
+Dok neki svijet važi, `run_root_gated.sh` (ili `run_faza.sh` direktno) se
+smije pozivati paralelno, po jeziku, koliko god puta treba — svi čitaju isto,
+stabilno stanje. Skripta sama NE dira `bb_faze_a1`/`bb_faze_a2` — samo čita
+trenutno stanje i pokreće fazu(e).
 
 ```bash
 cd /home/balsam/buchenberg && PYTHONUNBUFFERED=1 nohup time bash ./run_root_gated.sh \
-  --knjiga <ID> --jezici "de hr it sr" --od <OD> --do <DO> \
-  > logs/root_gated_k<ID>_<OD>_<DO>.log 2>&1 &
+  --knjiga <ID> --jezici "de" --od <OD> --do <DO> \
+  > logs/root_gated_k<ID>_de_<OD>_<DO>.log 2>&1 &
+# ponovi za hr, it, sr... — paralelno, bez straha od sudara
 ```
 
-Radi sve automatski: isključi glm iz faze 1 → root (faza 1, suzen bazen) → gated faza (default `--gated-faza 10`, može se promijeniti) → **glm se UVIJEK vraća na `aktivan=true` za fazu 1 na kraju** (preko `trap` na EXIT, radi i ako nešto usput padne). Pretpostavka: gated faza (10 ili druga) je VEĆ registrovana u bazi (bb_faze + a1/a2/a3) — skript je ne kreira, samo pokreće.
-
-Za ručni toggle jednog modela (van wrappera, npr. za debug): `venv/bin/python src/bb_toggle_model.py --faza <N> --model <naziv> --aktivan true|false`.
+Kad je sav rad u datom svijetu gotov, aktiviraj sljedeći svijet koji ti treba
+— eksplicitno, provjeri (`ps aux`/logovi) da ništa trenutno ne trči nad
+starim svijetom prije nego promijeniš stanje.
 
 ---
 
@@ -108,3 +164,8 @@ Za ručni toggle jednog modela (van wrappera, npr. za debug): `venv/bin/python s
 3. Provjeri da ciljni opseg pozicija stvarno ima ono što očekuješ (prazan ili popunjen) — vidi `KAKO-BrisanjePrevoda.md` odjeljak "Prije brisanja — provjeri obim" za isti obrazac provjere (radi identično i za provjeru prije dodavanja).
 4. Za gated fazu bez seeda — provjeri da je `bb_faze_a3` vezan za `base` prompt, ne `refine`.
 5. Uvijek `PYTHONUNBUFFERED=1 nohup time ... > logs/*.log 2>&1 &` za bilo koji poziv koji traje više od par sekundi — tool koji šalje komandu na server može timeout-ovati prije nego proces završi; bez `nohup` postoji rizik da se proces prekine zajedno s konekcijom (nepotvrđeno u ovom projektu da li bi se prekinuo, ali `nohup` je siguran podrazumijevani izbor i standard već svuda u projektu).
+6. Za gated-root PARALELAN rad — aktiviraj odgovarajući svijet (`bash
+   bb_svet_1.sh` ili `bb_svet_2.sh`, vidi sekciju "Protokol za gated root"
+   iznad) PRIJE poziva. `run_root_gated.sh` sam više NE dira
+   `bb_faze_a1`/`bb_faze_a2` — ako svijet nije eksplicitno deklarisan prije
+   poziva, skripta radi nad KAKVIM GOD je trenutno stanje u bazi, tiho.
