@@ -453,6 +453,38 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 
 ## 9. Stanje prevoda
 
+> **s159 snapshot (3. avgust 2026):** Batch fix + otkriven timeout trade-off.
+> `bb_03_prevod.py` popravljen: batch=20 za gated-base refine (bez seeda,
+> faza 10), batch=5 ostaje za pravi refine (sa seedom) — ranije je gated-base
+> pogrešno dobijao batch=5 jer je logika gledala samo `is_refine`, ne i
+> `PROMPT_NAZIV`. Log naslov sad prati stvarno stanje ("sa seedom"/"bez
+> seeda"). Mikro test k22 1000-1009 čist, commit `f68d367`. **Ideja 1 iz
+> s157 (podjela glm gated faze po temperaturi) razrađena**: retrospektivna
+> analiza na postojećim faza=10 podacima (float-precision bug usput
+> otkriven i ispravljen, `ROUND(model_temperatura::numeric,1)`) pokazala da
+> **0.1 rješava isto ili više nego 0.8 u sva četiri core jezika** s
+> glm-5.2 — stari README §3 pattern (drugi modeli) se ne prenosi direktno.
+> Preporučen redoslijed **0.1 prvo, pa 0.8** (obrnuto od Flaviovog prvog
+> prijedloga), ~10% procijenjena dodatna ušteda — NEIMPLEMENTIRANO, čeka
+> kraj tekućeg k12 prevoda. **Kritičan operativni nalaz**: batch=20 izaziva
+> rastući broj Ollama Cloud read-timeout-a (120s) kasnije u dugim (6+h)
+> neprekidnim sesijama (0-4 timeout/0 neuspjeha rano → 12-17 timeout/1-2
+> trajna neuspjeha kasno, isti run, k12 opseg 9001-9800) — pobjednik i
+> dalje pokriva sve rečenice (root fallback), samo nekoliko desetina
+> "teških" rečenica ostane bez glm pokušaja. Flavio odlučio: stepenasti
+> retry (30/60/120s umjesto fiksnog 30/30/30s) i vjerovatno povratak na
+> max 400 rečenica/sesiju — NEIMPLEMENTIRANO. Usput: potvrđen
+> `docs/KAKO-NovaFaza.md` kao ažuran i dovoljan za planirani "treći
+> svijet"; preuzet i analiziran Gutenberg katalog
+> (`data/external/pg_catalog.csv`, 79.071 stvarnih zapisa pravim CSV
+> parsingom, 120 jezika, svih 9 izvora potvrđeno, nije u gitu); provjerena
+> NLLB-200 podrška za grčki/albanski/mađarski/turski/esperanto (svi
+> podržani) i latinski (nije podržan, ni starogrčki nema poseban kod).
+> Korpus 50.624/1.905.033/360.832 (rastao kroz sesiju, Flaviov k12 rad
+> paralelno). BB_VERSION ostaje s157 (web nedirnut). Sesija zatvorena
+> SAMOSTALNO od Claudea (Flavio eksplicitno autorizovao). Detalji:
+> `docs/sessions/session_159.md`.
+
 > **s158 snapshot (2. avgust 2026):** Prio 1 iz s157 (race condition u
 > `run_root_gated.sh`) RIJEŠEN — ali kroz dvije iteracije dizajna. Prvi
 > pokušaj (ručni relativni toggle preko `bb_toggle_model.py --aktivan
