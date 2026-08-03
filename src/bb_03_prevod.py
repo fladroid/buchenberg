@@ -436,15 +436,17 @@ def main():
             print(f"  Preostalo: {len(todo)} rečenica")
 
             seed_map = {}
+            uses_seed = is_refine and PROMPT_NAZIV != 'base'
             if is_refine:
                 seed_map = get_seed_map(cur, kod, [rid for rid, _, _ in todo])
                 pre_seed = len(todo)
                 todo = [x for x in todo if x[0] in seed_map]
                 pre_prag = len(todo)
                 todo = [x for x in todo if seed_map[x[0]][1] < args.prag]
-                print(f"  Refine: {pre_seed} sa seedom -> {pre_prag}; ispod praga {args.prag}: {len(todo)} (preskoceno {pre_prag - len(todo)})")
+                seed_oznaka = "sa seedom" if uses_seed else "bez seeda"
+                print(f"  Refine: {pre_seed} {seed_oznaka} -> {pre_prag}; ispod praga {args.prag}: {len(todo)} (preskoceno {pre_prag - len(todo)})")
 
-            step = NLLB_CT2_BATCH if (is_nllb and NLLB_ENGINE == "ct2") else (REFINE_BATCH_SIZE if is_refine else BATCH_SIZE)
+            step = NLLB_CT2_BATCH if (is_nllb and NLLB_ENGINE == "ct2") else (REFINE_BATCH_SIZE if uses_seed else BATCH_SIZE)
             for i in range(0, len(todo), step):
                 chunk = todo[i:i + step]
                 tekstovi = [t for _, _, t in chunk]
