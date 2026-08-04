@@ -157,6 +157,53 @@ starim svijetom prije nego promijeniš stanje.
 
 ---
 
+## Oporavak nakon pada usred prevođenja (s160)
+
+`bb_03_prevod.py` nema top-level try/except u `main()`. Ako i batch-poziv I
+single-fallback za istu rečenicu potroše sva 3 pokušaja (vidi
+`ollama_chat(max_retries=3)`), izuzetak probije neuhvaćen i **cijeli proces
+umre odmah** — sve što nije `commit`-ovano PRIJE te tačke je izgubljeno
+(uključujući djelimično prevedene, ali nezapisane rečenice u istom chunk-u), i
+svaki sljedeći batch/jezik u tom istom pozivu se **nikad ne ni pokuša**.
+
+Bash wrapperi (`run_faza.sh`, `run_root_gated.sh`) imaju `set -e`, ali svaki
+poziv ide kroz `| tee -a "$LOG"` bez `set -o pipefail` — exit kod cijevi je
+exit kod `tee`-a (skoro uvijek 0), NE pythona. Zato lanac **tiho nastavlja**
+na Sudiju i Pobjednika i pored pada (poznata, NEPOPRAVLJENA rupa — vidi
+"Otvoreno" ispod).
+
+**Oporavak — nema posebne logike, postojeći mehanizam je dovoljan:**
+`already_done()` + prag (za faze≥2) već ispravno određuju šta nedostaje.
+Prosto pozovi ISTU komandu (`run_faza.sh` ili `run_root_gated.sh`) sa ISTIM
+`--knjiga/--jezici/--od/--do/--faza` kao original — ne treba znati gdje je
+tačno puklo. Dodaj `--uradi-ako-nema` (s160) kao eksplicitnu oznaku namjere u
+logu ("REZIM: --uradi-ako-nema..." se ispiše na početku svakog poziva) —
+**flag ne mijenja nikakvu logiku**, čisto dokumentaciono, da se u logu vidi da
+je ovo namjeran nastavak a ne svjež posao.
+
+⚠️ **Poznato ograničenje (ne bug — dizajn faze):** za faze≥2, prag se
+PONOVO računa pri svakom pozivu preko TRENUTNOG pobjednika. Ako je Sudija
+(automatski, zbog tiho-nastavlja rupe gore) između pada i oporavka već
+proglasio pobjednika preko DRUGOG modela/temperature sa `finalni_score≥0.95`,
+ta rečenica ispada iz `todo` na oporavku — namjerno, ne greška. Primjer (s160,
+k12 de, glm@0.1 nakon pada glm@0.1 usred `run_root_gated.sh`): 7 rečenica je
+ostalo bez glm@0.1 pokušaja jer je glm@**0.8** sam već prešao prag prije nego
+je oporavak pokrenut.
+
+⚠️ **Ograničenje za fazu 1 (root) specifično:** Sudija filtrira `AND
+m.aktivan` bezuslovno (čak i sa `--force`). Ako je svijet promijenjen između
+pada i oporavka, prevodi modela koji više nije aktivan **nikad neće biti
+ocijenjeni** dok se model ponovo ne aktivira. Nema istorije "koji je svijet
+bio aktivan kad" — `bb_faze_a1.aktivan` je obično polje, nema timestamp ni
+audit tabelu. Provjeri prije oporavka fazu 1: da li je isti svijet i dalje
+aktivan.
+
+**Otvoreno (nepopravljeno, s160):** `set -o pipefail` (ili provjera
+`${PIPESTATUS[0]}`) u `run_faza.sh`/`run_root_gated.sh`, da pad Pythona
+stvarno zaustavi lanac umjesto tihog nastavka na Sudiju/Pobjednika.
+
+---
+
 ## Prije pokretanja bilo koje nove faze — checklist
 
 1. Provjeri da faza postoji: `venv/bin/python src/bb_faza_info.py --faza <N>` (exit 1 ako ne postoji).

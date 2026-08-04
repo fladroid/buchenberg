@@ -1465,7 +1465,7 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
-### Gated root (s155 dizajn, s156 bug ispravljen, s157 otkriven race condition, s158 riješeno — ručni protokol)
+### Gated root (s155 dizajn, s156 bug ispravljen, s157 otkriven race condition, s158 riješeno — deklarisani svjetovi, s159 batch/timeout nalaz, s160 oporavak nakon pada)
 Cilj: sužen root (mistral+nllb, glm isključen) -> sudija -> pobjednik -> gate
 (prag 0,95, postojeći mehanizam) -> nova self-refine faza 10 (glm, BASE
 prompt, bez pivota) -> sudija -> pobjednik (argmax preko cijelog bazena).
@@ -1481,6 +1481,30 @@ baznog konkurenta.
 > pozivati paralelno po jeziku dok je svijet ručno postavljen. Vidi
 > `docs/sessions/session_157.md` (nalaz) i `docs/sessions/session_158.md`
 > (rješenje).
+
+> ✅ **s160 — oporavak nakon pada usred prevođenja, dokumentovan i testiran:**
+> `bb_03_prevod.py` nema top-level try/except; ako i batch I single-fallback
+> potroše sva 3 pokušaja, proces umire neuhvaćen (traceback), gubeći sve
+> nezapisano u tom chunk-u I sve naredne batch-eve/jezike u istom pozivu.
+> Bash wrapperi (`set -e` bez `set -o pipefail`, cijev na `tee`) zato **tiho
+> nastavljaju** na Sudiju/Pobjednika — POZNATA, NEPOPRAVLJENA rupa.
+> **Oporavak ne treba novu logiku** — `already_done()`+prag (faze≥2) već
+> ispravno određuju šta nedostaje; prosto ponovi ISTU komandu. Novi flag
+> `--uradi-ako-nema` (bool, čisto label u logu, ne mijenja logiku) dodat u
+> `bb_03_prevod.py`/`run_faza.sh`/`run_root_gated.sh` da označi namjeran
+> nastavak. Testirano na stvarnom k12 (Moby Dick) incidentu (3.avg, de
+> glm@0.1 pukao usred `run_root_gated.sh` na batch 18/19) — rerun 4.avg
+> dovršio sve stvarno nedostajuće (21 nova de rečenica), a 7 de rečenica je
+> ISPRAVNO ostalo bez glm@0.1 jer je glm@0.8 sam već prešao prag 0,95 prije
+> oporavka (dinamičko prera-čunavanje praga — namjerno ponašanje, ne bug,
+> vidi `docs/KAKO-NovaFaza.md` §"Oporavak nakon pada"). hr/it/sr nisu trebali
+> oporavak (glm@0.1 već potpun od 3.avg uveče). ⚠️ Otvoreno: session_159.md
+> je za isti raspon (9001-9800) prijavio 2 potpuna neuspjeha za IT — stvarni
+> log (`gated_k12_it_9001_9800.log`) ne pokazuje nijedan Traceback i završava
+> čisto istog dana bez ijednog reda dodanog 4.avg. Neusklađeno, nije dalje
+> istraženo — mogući uzrok: log je prepisan (`>`, ne `>>`) naknadnim ručnim
+> rerunom prije kraja s159, ili je s159-ov nalaz bio netačan. Detalji:
+> `docs/sessions/session_160.md`.
 
 **s155 bug (grananje `elif is_refine:` zavisilo SAMO od broja faze, ne od
 prompta — glm dobijao seed uprkos BASE promptu) ISPRAVLJEN u s156:**
@@ -1679,4 +1703,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 2. avgust 2026. (sesija 158)*
+*Flavio & Claude · Buchenberg · V3 · 4. avgust 2026. (sesija 160)*
