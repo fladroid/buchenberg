@@ -8,7 +8,7 @@
 # --force je svojstvo PROLAZA (kao u run_ner.sh) -> prosljeđuje se sudiji (ponovno ocjenjivanje).
 # Primjer: bash run_faza.sh --faza 2 --knjiga 22 --jezici "de hr" --od 1 --do 20
 set -e
-FAZA=""; KNJIGA=""; JEZICI=""; OD=""; DO=""; FORCE=""; RUNDA="1"
+FAZA=""; KNJIGA=""; JEZICI=""; OD=""; DO=""; FORCE=""; RUNDA="1"; URADI_AKO_NEMA=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --faza)   FAZA="$2"; shift 2 ;;
@@ -18,6 +18,7 @@ while [[ $# -gt 0 ]]; do
         --do)     DO="$2"; shift 2 ;;
         --force)  FORCE="--force"; shift ;;
         --runda)  RUNDA="$2"; shift 2 ;;
+        --uradi-ako-nema) URADI_AKO_NEMA="--uradi-ako-nema"; shift ;;
         *) echo "Nepoznat argument: $1"; exit 1 ;;
     esac
 done
@@ -49,7 +50,7 @@ while IFS='|' read -r MODEL TEMP; do
     time venv/bin/python src/bb_03_prevod.py \
         --knjiga "$KNJIGA" --od "$OD" --do "$DO" \
         --model "$MODEL" --temp "$TEMP" --faza "$FAZA" --runda "$RUNDA" \
-        --embedder "$EMBEDDER" \
+        --embedder "$EMBEDDER" $URADI_AKO_NEMA \
         --jezici $JEZICI 2>&1 | tee -a "$LOG"
 done <<< "$MODELI"
 

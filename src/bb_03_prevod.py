@@ -352,6 +352,8 @@ def main():
                         help="Prag finalni_score seeda ispod kojeg se refine pokusava (samo faza 2+)")
     parser.add_argument("--runda", type=int, default=1,
                         help="Runda ponavljanja iste konfiguracije (faza/model/temp/prompt) - default 1")
+    parser.add_argument("--uradi-ako-nema", action="store_true", default=False,
+                        help="Label u logu: namjeran nastavak/dovrsavanje raspona (already_done()+prag logika se ne mijenja)")
     args = parser.parse_args()
 
     is_nllb = (args.model == "nllb-600M")
@@ -391,6 +393,8 @@ def main():
 
     recenice = get_recenice(cur, args.knjiga, args.od, args.do)
     print(f"Rečenica za obradu: {len(recenice)} (pozicije {args.od}–{args.do})")
+    if args.uradi_ako_nema:
+        print("REZIM: --uradi-ako-nema (namjeran nastavak/dovrsavanje raspona; logika already_done()+prag nepromijenjena)")
 
     for temp in args.temp:
         cur.execute("""

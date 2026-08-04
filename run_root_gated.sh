@@ -16,7 +16,7 @@
 #   bash run_root_gated.sh --knjiga 22 --jezici "de hr it sr" --od 741 --do 780
 
 set -e
-KNJIGA=""; JEZICI=""; OD=""; DO=""; GATED_FAZA="10"
+KNJIGA=""; JEZICI=""; OD=""; DO=""; GATED_FAZA="10"; URADI_AKO_NEMA=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --knjiga)     KNJIGA="$2"; shift 2 ;;
@@ -24,6 +24,7 @@ while [[ $# -gt 0 ]]; do
         --od)         OD="$2"; shift 2 ;;
         --do)         DO="$2"; shift 2 ;;
         --gated-faza) GATED_FAZA="$2"; shift 2 ;;
+        --uradi-ako-nema) URADI_AKO_NEMA="--uradi-ako-nema"; shift ;;
         *) echo "Nepoznat argument: $1"; exit 1 ;;
     esac
 done
@@ -45,11 +46,11 @@ echo "======================================" | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
 echo ">>> Korak 1: root faza (bazen po vec postavljenom stanju bb_faze_a1)" | tee -a "$LOG"
-bash ./run_faza.sh --faza 1 --knjiga "$KNJIGA" --jezici "$JEZICI" --od "$OD" --do "$DO" 2>&1 | tee -a "$LOG"
+bash ./run_faza.sh --faza 1 --knjiga "$KNJIGA" --jezici "$JEZICI" --od "$OD" --do "$DO" $URADI_AKO_NEMA 2>&1 | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
 echo ">>> Korak 2: gated faza $GATED_FAZA (prag 0.95 default)" | tee -a "$LOG"
-bash ./run_faza.sh --faza "$GATED_FAZA" --knjiga "$KNJIGA" --jezici "$JEZICI" --od "$OD" --do "$DO" 2>&1 | tee -a "$LOG"
+bash ./run_faza.sh --faza "$GATED_FAZA" --knjiga "$KNJIGA" --jezici "$JEZICI" --od "$OD" --do "$DO" $URADI_AKO_NEMA 2>&1 | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
 echo "======================================" | tee -a "$LOG"
