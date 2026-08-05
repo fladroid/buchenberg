@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 5. avgust 2026. (sesija 162)  
+**Poslednje ažuriranje:** 5. avgust 2026. (sesija 163)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -351,6 +351,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_deklarisi_svet.py` | **Deklaracija "svijeta"** (s158) — postavlja CIJELO stanje a1/a2 za fazu: `aktivan=true` samo za navedeno u `--modeli`/`--temperature`, `false` za sve ostalo u katalogu. Potpuna izjava namjere, nezavisna od prethodnog stanja (NE relativni toggle). `--faza --modeli --temperature` |
 | `bb_svet_1.sh` / `bb_svet_2.sh` | Imenovani svjetovi (s158), tanki omotači nad `bb_deklarisi_svet.py`: **1** = puna 3-way root (mistral+nllb+glm), **2** = sužen root za gated obrazac (bez glm). Svaka nezavisna, ne referencira drugu; novi svijet = nova tanka skripta, nula izmjena logike |
 | `run_root_gated.sh` | **Wrapper za "gated root"** (s156, prerađen s158) — jedan poziv: root (po VEĆ postavljenom svijetu) → gated faza (default 10). **Auto-toggle uklonjen** — skripta NE dira `bb_faze_a1`, pretpostavlja da je svijet ručno aktiviran; smije se pozivati paralelno po jeziku. `--knjiga --jezici --od --do [--gated-faza N] [--uradi-ako-nema]` |
+| `run_kaskada.sh` | **Fleksibilna kaskada bez svijeta** (s163) — root direktnim pozivom (bilo koji `--model`) → sudija → pobjednik → 4 nezavisne gated faze (11-14: mistral/glm × 0.1/0.8, prompt `base`, prag<0.95, svaka svoj sudija+pobjednik). Ne dira `bb_faze_a1`/dijeljeno stanje — svaka faza je odvojen red. `--knjiga --jezici --od --do` |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
@@ -454,6 +455,33 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s163 snapshot (5. avgust 2026):** Implementacija zaključaka s162 truth
+> table — fleksibilan mehanizam za ručnu kaskadu prevoda bez "svijeta".
+> Sesija počela s procesnim trenjem (Claude odgovarao iz sjećanja umjesto iz
+> koda, dao kontradiktorne odgovore o "svijetu" nakon što je Flavio već
+> zaključio da svjetovi nisu potrebni) — ispravljeno kroz direktnu provjeru
+> koda prije svakog "da/ne" odgovora. **Nalaz:** direktan poziv
+> `bb_03_prevod.py --model X --temp Y --faza Z` (bez `run_faza.sh`
+> orkestracije svih aktivnih modela) uopšte ne čita dijeljenu "svijet" listu
+> — "svijet" je potreban SAMO kad root treba birati između više modela od
+> kojih se ne zna unaprijed koji su aktivni; kad je svaki korak tačno jedan
+> model, izbor je već napravljen u komandi. **Registrovano 16 novih faza**
+> (`metod_id=2`, self-refine): 11-14 bez seeda (`base` prompt, mistral/glm ×
+> 0.1/0.8), 15-26 sa seedom (3 prompta refine/refine-lenient/refine-strict ×
+> mistral/glm × 0.1/0.8) — svaka svoj nezavisan red u `bb_faze`+a1/a2/a3,
+> uključiva/isključiva/ponovljiva u bilo kom redoslijedu, bez sprege. Test
+> kraj-do-kraja (k22/hr, 900-919): faza 11 (bez seeda) gate ispravno filtrirao
+> 2/20 ispod praga (s913, s918), oba poboljšana nakon mistral@0.1; faza 15
+> (sa seedom) potvrdila samo-sužavajući lijevak — s913 više NIJE ispod praga
+> (već popravljen fazom 11), ispravno preskočen, samo s918 dodatno poboljšan.
+> Obje grane koda (`uses_seed=True/False`) potvrđene na stvarnim podacima.
+> Bug iz s162 (gated-bez-seeda tiho preskače rečenice bez pobjednika)
+> namjerno NEISPRAVLJEN — Flaviova eksplicitna odluka, ne blokira testirani
+> tok jer root uvijek prethodi. Novi `run_kaskada.sh` (root nllb → 4 gated
+> faze bez seeda, 11-14) na zahtjev; "sa seedom" grupa (15-26) nema wrapper.
+> Korpus 50.624/1.938.093/369.832 (+3 prevoda od testa). BB_VERSION
+> nepromijenjen (web nedirnut). Detalji: `docs/sessions/session_163.md`.
 
 > **s162 snapshot (5. avgust 2026):** KONCEPTUALNA sesija — misaoni eksperiment
 > (Flavio eksplicitno: "nema veze sa stvarnošću"), nula izmjena koda/baze/weba.
@@ -1800,4 +1828,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 5. avgust 2026. (sesija 162)*
+*Flavio & Claude · Buchenberg · V3 · 5. avgust 2026. (sesija 163)*
