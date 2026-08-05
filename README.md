@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 5. avgust 2026. (sesija 161)  
+**Poslednje ažuriranje:** 5. avgust 2026. (sesija 162)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -454,6 +454,36 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s162 snapshot (5. avgust 2026):** KONCEPTUALNA sesija — misaoni eksperiment
+> (Flavio eksplicitno: "nema veze sa stvarnošću"), nula izmjena koda/baze/weba.
+> Metoda: istinitosna tabela (Q1=postoji li pobjednik, Q2=koristi li se seed,
+> Q3=da li je prag aktivan) primijenjena da se razdvoji logička nužnost od
+> operativne preference u pipeline dizajnu. **NALAZ 1:** jedina STVARNA
+> zavisnost je Q1=F ⇒ Q2/Q3 irelevantni — "root faza" nije poseban dizajn nego
+> samo ime dato tom redu tabele; minimum modela (§2 KONCEPT.md), partial-unique
+> na metod_id=1, i "svjetovi" (s156-158) su operativne preference koje su
+> greškom upisane istim jezikom kao logička nužnost. **NALAZ 2 — bug otkriven
+> tabelom, neispravljen:** gated-bez-seeda faze (npr. faza 10) tiho preskaču
+> rečenice bez ijednog prevoda jer kod veže "mora postojati pobjednik" na
+> `is_refine` (faza≥2) umjesto na Q2 (koristi li se seed) posebno. **NALAZ 3:**
+> produkcioni "svijet 2" (mistral+nllb, standard od s159) VEĆ krši §2 minimum
+> ("najmanje 2 LLM u baznoj fazi") — samo 1 LLM + 1 MT — tiho, neprimijećeno do
+> ove sesije; DB šema (`bb_faze_a1`) nema CHECK koji bi to spriječio, kršenje
+> je čisto dokumentarno. Usput razjašnjeno: `already_done()` je skopiran na
+> TAČNU konfiguraciju (knjiga+jezik+faza+model+temp+prompt+embedder+runda), ne
+> "ikad prevedeno bilo čim"; `--prag` je CLI-only na `bb_03_prevod.py` (default
+> 0.95), `run_faza.sh` ga NE prosljeđuje (uvijek 0.95 kroz standardne
+> orkestratore), `--runda` JESTE proslijeđen. Seed i prag potvrđeni kao dvije
+> nezavisne ose (2×2), ne vezane. Redni broj pokušaja predložen kao izvediv iz
+> `created_at` (ne nova kolona), razdvojen po širini (bez seeda) vs dubini (sa
+> seedom) lanca. Prag-istorija po pozivu RAZMOTRENA i ODBAČENA (Flaviova
+> odluka — globalni prag 0.95 dovoljan kompromis). Ranije u sesiji: memorija
+> (zapis #30) ispravljena — stajala na s143 za Dio A/B narativ, dopunjena
+> s144-s161 razvojem (Dio B napušten s144, gated faze u produkciji od s159).
+> Baza/kod/web nedirnuti. Otvoreno: da li "faza" opstaje kao pojam (poziv-kao-
+> jedinica vs faza-kao-recept); KONCEPT.md §2 revizija nije odlučena. Detalji:
+> `docs/sessions/session_162.md`.
 
 > **s161 snapshot (5. avgust 2026):** README audit + k12 analiza + razjašnjenje
 > MCP tool-limita. **(1)** Cijeli README pročitan (dva `sed` poziva — `cat` prvi
@@ -1512,6 +1542,21 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Konceptualna revizija: da li su root faza/self-refine/svjetovi nužni? (s162, OTVORENO)
+Misaoni eksperiment (nula izmjena) istinitosnom tabelom (Q1=postoji pobjednik/
+Q2=seed/Q3=prag) pokazao da je jedina STVARNA zavisnost u sistemu "seed treba
+da postoji bar jedan raniji prevod" — sve ostalo (root kao imenovana kategorija
+sa minimumom ≥2 LLM, partial-unique na bazu, svjetovi kao mehanizam za promjenu
+sastava root-a) je operativna preferenca upisana istim jezikom kao logička
+nužnost u `docs/KONCEPT.md` §2. Usput otkriveno: produkcioni "svijet 2"
+(mistral+nllb, standard od s159) VEĆ krši §2 minimum (samo 1 LLM), neprimijećeno
+do sad; DB šema to ne sprečava (nema CHECK). Takođe otkriven konkretan bug
+(neispravljen): gated-bez-seeda faze (npr. faza 10) tiho preskaču rečenice bez
+ijednog prevoda jer kod ne razdvaja "treba li pobjednik" (zavisi od Q2=seed) od
+"da li je faza≥2" (trenutna implementacija). NIJE ODLUČENO da li i kako
+mijenjati koncept/šemu — Flavio eksplicitno zatražio da se ostane na misaonom
+nivou ove sesije. Detalji: `docs/sessions/session_162.md`.
+
 ### Gated root (s155 dizajn, s156 bug ispravljen, s157 otkriven race condition, s158 riješeno — deklarisani svjetovi, s159 batch/timeout nalaz, s160 oporavak nakon pada)
 Cilj: sužen root (mistral+nllb, glm isključen) -> sudija -> pobjednik -> gate
 (prag 0,95, postojeći mehanizam) -> nova self-refine faza 10 (glm, BASE
@@ -1755,4 +1800,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 5. avgust 2026. (sesija 161)*
+*Flavio & Claude · Buchenberg · V3 · 5. avgust 2026. (sesija 162)*
