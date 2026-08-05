@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 2. avgust 2026. (sesija 158)  
+**Poslednje ažuriranje:** 5. avgust 2026. (sesija 161)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -93,7 +93,7 @@ The project is built in ongoing collaboration with **[Claude](https://claude.ai)
 | `nllb-600M` | Lokalno (CPU) | 0.0 | 1 | Deterministički; dobar za kratke rečenice |
 | `gemma4:31b` | Ollama Cloud | 0.0 | — | Samo sudija — ne prevodi |
 
-**Aktivni modeli žive u bazi** (`bb_modeli.aktivan`, s114) — orchestratori ih čitaju kroz `src/bb_aktivni_modeli.py --faza N`. Stari par `gemma3:12b`/`ministral-3:14b` (Ollama retire 15. jul 2026) zamrznut kao istorijska referenca: `aktivan=false`, svi prevodi netaknuti.
+**Aktivni izbor po fazi živi u bazi** — od s142 NE u `bb_modeli` nego u tri veze `bb_faze_a1` (model) / `bb_faze_a2` (temperatura) / `bb_faze_a3` (prompt); `bb_modeli.aktivan` je samo katalog-nivo zastavica. Orkestratori čitaju kroz `src/bb_aktivni_modeli.py --faza N`. Kolone "Temperatura" i "Faza" u tabeli iznad su ILUSTRACIJA tekuće upotrebe, ne shema — model i temperatura su nezavisne ose (vidi §5, §7). Stari par `gemma3:12b`/`ministral-3:14b` (Ollama retire 15. jul 2026) zamrznut kao istorijska referenca: `aktivan=false`, svi prevodi netaknuti.
 
 **Zamjena IZVRŠENA (s114):** novi par registrovan (id 18–23) i testiran kroz cijeli lanac (Hound Copy hr 1–10). Sudija gemma4:31b i NLLB nepogođeni. Istorijat izbora: s109–s112.
 
@@ -339,16 +339,18 @@ ORDER BY jezik, pobjede DESC;
 |---------|------|
 | `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
 | `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy); lista knjiga je hardcodovana u `KNJIGE` |
-| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114) |
+| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena |
 | `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114) |
 | `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_faza.sh |
 | `bb_faza_info.py` | Faza -> metod (`metod_id\|naziv\|root`) iz `bb_faze` JOIN `bb_metode`; exit 1 ako faza ne postoji (s134) |
-| `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force]`. Metod cita iz baze, modele iz `bb_modeli`. Zamijenio `run_refine.sh` (s134) |
-| `bb_toggle_model.py` | Uključuje/isključuje jedan model (a1) za zadanu fazu preko `bb_faze_a1.aktivan` (s156) — koristi ga `run_root_gated.sh` |
-| `run_root_gated.sh` | **Wrapper za "gated root"** (s156) — jedan poziv: isključi model iz faze 1 → root (suzen bazen) → gated faza (default 10) → model se UVIJEK vraća aktivan (trap na EXIT). `--knjiga --jezici --od --do [--gated-faza N]` |
+| `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force] [--runda N] [--uradi-ako-nema]`. Metod cita iz baze, a1/a2/a3 izbor iz `bb_faze_a*`. Zamijenio `run_refine.sh` (s134) |
+| `bb_toggle_model.py` | Uključuje/isključuje JEDAN model (a1) za zadanu fazu preko `bb_faze_a1.aktivan` (s156). **Ad-hoc/debug alat, VAN standardnog toka** (s158) — standardni put je `bb_deklarisi_svet.py` |
+| `bb_deklarisi_svet.py` | **Deklaracija "svijeta"** (s158) — postavlja CIJELO stanje a1/a2 za fazu: `aktivan=true` samo za navedeno u `--modeli`/`--temperature`, `false` za sve ostalo u katalogu. Potpuna izjava namjere, nezavisna od prethodnog stanja (NE relativni toggle). `--faza --modeli --temperature` |
+| `bb_svet_1.sh` / `bb_svet_2.sh` | Imenovani svjetovi (s158), tanki omotači nad `bb_deklarisi_svet.py`: **1** = puna 3-way root (mistral+nllb+glm), **2** = sužen root za gated obrazac (bez glm). Svaka nezavisna, ne referencira drugu; novi svijet = nova tanka skripta, nula izmjena logike |
+| `run_root_gated.sh` | **Wrapper za "gated root"** (s156, prerađen s158) — jedan poziv: root (po VEĆ postavljenom svijetu) → gated faza (default 10). **Auto-toggle uklonjen** — skripta NE dira `bb_faze_a1`, pretpostavlja da je svijet ručno aktiviran; smije se pozivati paralelno po jeziku. `--knjiga --jezici --od --do [--gated-faza N] [--uradi-ako-nema]` |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
@@ -452,6 +454,30 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s160 snapshot (4. avgust 2026):** Istraga pada usred prevođenja k12
+> (Moby Dick, de glm-5.2@0.1, gated faza 10, noć 3/4.avg). Mehanizam pada
+> razjašnjen: batch poziv hvata izuzetak i pada na single, ali **single
+> fallback nema try/except** — kad i tu propadnu sva 3 pokušaja, proces umire
+> neuhvaćen i gubi cijeli chunk plus sve naredne batch-eve u tom pozivu.
+> Identifikovane dvije strukturne rupe, obje eksplicitno ostavljene
+> NEPOPRAVLJENE (Flaviova odluka o obimu): **Rupa A** — `set -e` bez
+> `set -o pipefail` uz cijev na `tee` znači da exit kod pythona nestaje, pa
+> lanac tiho nastavlja na Sudiju/Pobjednika i nakon pada; **Rupa B** —
+> dinamičko preračunavanje praga na oporavku, potvrđeno kao NAMJERNO ISPRAVNO
+> ponašanje faze, ne bug. Implementiran `--uradi-ako-nema` (`bb_03_prevod.py`
+> + `run_faza.sh` + `run_root_gated.sh`) — čist label u logu za namjeran
+> nastavak, logika `already_done()`+prag nedirnuta; tri Flaviove korekcije
+> tokom dizajna (ne zaobilaziti prag, ne provjeravati neodgovorivo pitanje
+> "u kom svijetu je puklo", ne graditi nezatraženu sigurnosnu ogradu).
+> Testirano na stvarnom incidentu: de dobio 21 novi prevod, a 7 rečenica
+> ISPRAVNO ostalo bez glm@0.1 jer je glm@0.8 već prešao prag 0,95 —
+> računica 340+21+7=368 zatvorena; hr/it/sr nisu ni trebali oporavak.
+> Usput razjašnjena kolona `runda` (iskorištena samo jednom, s147
+> permutacijski eksperiment). ⚠️ Otvoreno: nesklad sa `session_159.md` koja
+> za isti raspon prijavljuje 2 potpuna IT neuspjeha kojih nema u logu.
+> Korpus 50.624/1.905.054/360.832. BB_VERSION nepromijenjen (web nedirnut).
+> Detalji: `docs/sessions/session_160.md`.
 
 > **s159 snapshot (3. avgust 2026):** Batch fix + otkriven timeout trade-off.
 > `bb_03_prevod.py` popravljen: batch=20 za gated-base refine (bez seeda,
@@ -1419,8 +1445,9 @@ Tekst NIJE u HTML hardkodu — hardkod je samo **no-JS fallback**. Izvor istine 
 cat docs/KONCEPT.md docs/ANALIZA.md docs/KAKO-JeziciUI.md docs/KAKO-KeyConcepts.md docs/KAKO-BrisanjePrevoda.md docs/KAKO-NovaFaza.md docs/STRANICE.md
 ls docs/ | grep -i "^WEB-FAZA"   # provjeriti ima li novijeg nacrta (npr. WEB-FAZA3.md)
 
-# 1. README
-cat /home/balsam/buchenberg/README.md
+# 1. README — CIJELI, u dva poziva (jedan `cat` premašuje limit tool izlaza, s161)
+sed -n '1,900p'   /home/balsam/buchenberg/README.md
+sed -n '901,$p'   /home/balsam/buchenberg/README.md
 
 # 2. Posljednja 3 session dokumenta
 ls docs/sessions/  # naći posljednja 3
@@ -1457,7 +1484,6 @@ Svaka sesija završava:
 | `bb_04_pobjednik.py` DELETE bez range filtera brisao sve pobjednike za jezik | 38 | DELETE sada filtrira po opsegu |
 | Ollama Cloud retry nedostajao | 38 | 3 pokušaja, 30s čekanje |
 | `bb_knjige.gutenberg_id` bez UNIQUE constrainta — dupli insert prolazio tiho | 41 | `ALTER TABLE bb_knjige ADD CONSTRAINT bb_knjige_gutenberg_id_unique UNIQUE (gutenberg_id)` |
-
 | Orphan pobjednici u `bb_prev_recenica` — FK bez CASCADE — 11 redova pokazivalo na nepostojeće `bb_prevodi_recenica` | 54 | `DELETE FROM bb_prev_recenica WHERE prevodi_recenica_id NOT IN (SELECT id FROM bb_prevodi_recenica)` — obrisano 11 orphana; `ON DELETE CASCADE` odgođeno |
 | Base64 za prenos tekstualnog sadržaja na foxuno — nepouzdan za duže stringove | 119 | Uvijek heredoc `cat > file << 'EOF' ... EOF`, nikad base64 za tekstualni sadržaj |
 
@@ -1473,14 +1499,19 @@ Motiv: Ollama Cloud glm-5.2 nesrazmjerno troši sedmični budžet (vidi s155
 snapshot, §9) — cilj je ograničiti glm na uslovni drugi korak umjesto stalnog
 baznog konkurenta.
 
-> ✅ **s158 RIJEŠENO:** `run_root_gated.sh` više NE toggle-uje `bb_faze_a1`
-> automatski — Korak 1 (toggle off) i `trap`-cleanup (toggle on) uklonjeni iz
-> skripte. Umjesto toga: ulazak/rad/izlazak je ručan, protokolom-vođen čin
-> (prikaži→OK→izvrši), potpuno odvojen od skripte — vidi
-> `docs/KAKO-NovaFaza.md` §"Protokol za gated root". Skripta se sad smije
-> pozivati paralelno po jeziku dok je svijet ručno postavljen. Vidi
-> `docs/sessions/session_157.md` (nalaz) i `docs/sessions/session_158.md`
-> (rješenje).
+> ✅ **s158 RIJEŠENO — DEKLARISANI SVJETOVI:** `run_root_gated.sh` više NE
+> toggle-uje `bb_faze_a1` automatski (Korak 1 + `trap`-cleanup uklonjeni).
+> Rješenje NIJE ručni relativni toggle — to je bio prvi pokušaj i Flavio ga je
+> odbacio jer ne generalizuje (pisan za viđeni slučaj glm on/off, pada čim
+> zatreba svijet gdje je isključen mistral ili neka temperatura). **Svaki
+> svijet je POTPUNA, eksplicitna deklaracija cijelog a1/a2 stanja za fazu**,
+> nezavisna od prethodnog: `src/bb_deklarisi_svet.py` + imenovane skripte
+> `bb_svet_1.sh` (puna 3-way root) / `bb_svet_2.sh` (sužen root, bez glm).
+> Ulazak u svijet je ručan, protokolom-vođen čin (prikaži→OK→izvrši), odvojen
+> od skripte; dok svijet važi, `run_root_gated.sh` se smije pozivati paralelno
+> po jeziku. Novi svijet ubuduće = nova tanka skripta, nula izmjena logike.
+> Vidi `docs/KAKO-NovaFaza.md` §"Protokol za gated root — deklarisani svjetovi",
+> `docs/sessions/session_157.md` (nalaz) i `session_158.md` (rješenje).
 
 > ✅ **s160 — oporavak nakon pada usred prevođenja, dokumentovan i testiran:**
 > `bb_03_prevod.py` nema top-level try/except; ako i batch I single-fallback
@@ -1529,11 +1560,11 @@ Ollama Cloud "Weekly usage" screenshot (s156, Flavio): glm segment trake
 potrošnje vizuelno najveći uprkos NAJMANJE zahtjeva (4.780 naspram gemma
 24.360, mistral 5.568) — vizuelna potvrda cijene-po-pozivu nalaza iz s155.
 
-Otvoreno za ponedjeljak (sedmični Ollama reset ~02:00): odluka o usvajanju u
-produkciju, pravo testiranje na većem obimu, provjera da li k22 501-700
-(faza 9, s154) treba isti tretman kao 701-740 (koje je s156 potpuno
-obrisala i ponovo čisto testirala), formalna dopuna KONCEPT.md ako se
-usvoji. Detalji: `docs/sessions/session_156.md`.
+**Status (s161): USVOJEN I U PRODUKCIJI.** Gated obrazac (svijet 2 + faza 10)
+je od s159 standardni tok za Flaviove runove — cijeli k12 (Moby Dick) prevodi
+se tako, na 10 jezika u parovima. Preostalo otvoreno iz s156: provjera da li
+k22 501-700 (faza 9, s154) treba isti tretman kao 701-740, i formalna dopuna
+`docs/KONCEPT.md`. Detalji: `docs/sessions/session_156.md`.
 
 ### Zamjena modela — IZVRŠENO (s114): mistral-large-3:675b + glm-5.2 u produkciji
 **Refaktor + zamjena izvršeni i testirani kroz cijeli lanac (session_114.md). Korak 4 (web) ZAVRŠEN s120 (Faza 1 priprema s115-118, Faza 2 implementacija s120, svih 9 stranica) — vidi §9 s120 snapshot.** Istorijat odluke ispod.
@@ -1641,7 +1672,7 @@ NLLB radi kroz **CTranslate2 int8** (CPU), default. ~6–7× brže od FP32 na Ne
 4. ✅ **X-Ray Key Concepts kartice** (s96, dodano) → **OBRISANE s120** (Flaviova odluka): 🩻 X-ray style art + 🎸 Rock Art and the X-Ray Style uklonjene sa index/about/stats (`data/concepts.json`). "Key Concepts" naslov se i dalje ne prevodi.
 5. **`bb_web_export.py`** — refaktorisati da koristi `v_pobjednici_full`/`v_pobjednici_faza_full` view (POKUŠANO s148, VRAĆENO — cross-view JOIN dva `_full` view-a tjera pun sequential scan; sljedeći pokušaj treba materijalizovan view ili indeks, ne direktan LEFT JOIN. Vidi §9 s148 snapshot)
 6. ✅ **Stats dvije tabele + fazni pobjednik** — KOMPLETNO (s123, vidi §9 s123 snapshot)
-3. **Cache-Control za JS/CSS**
+7. **Cache-Control za JS/CSS**
 
 ### Odloženo / u razmatranju
 - **NLP — Relation Extraction** (s90 koncept, "leži"): tretirati kao summarization-klasu problema, ne co-occurrence. Grounding-by-evidence kao princip; provjera kroz embedding kosinus (ne LLM tumačenje). Ideja: **rasplet detektivskog romana kao ulaz** — autorov vlastiti opis relacija na kraju knjige kao upit + semantička pretraga unazad za potkrepu; daje i zlatni standard za evaluaciju. Žanrovski uslovljeno (Hound, Big Four imaju rasplet). Detalji: `docs/sessions/session_90.md`.
@@ -1703,4 +1734,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 4. avgust 2026. (sesija 160)*
+*Flavio & Claude · Buchenberg · V3 · 5. avgust 2026. (sesija 161)*
