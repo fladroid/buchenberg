@@ -455,6 +455,27 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 
 ## 9. Stanje prevoda
 
+> **s161 snapshot (5. avgust 2026):** README audit + k12 analiza + razjašnjenje
+> MCP tool-limita. **(1)** Cijeli README pročitan (dva `sed` poziva — `cat` prvi
+> put puknuo na limitu tool izlaza), otkrivene tri klase nesklada nakupljene kroz
+> s142-s160: netačno (§7 `run_root_gated.sh`/`bb_toggle_model.py` opisi zaostali
+> iza s158, nedostajale tri nove skripte `bb_deklarisi_svet.py`/`bb_svet_1.sh`/
+> `bb_svet_2.sh`, §14 s158 blok opisivao odbačen prvi pokušaj, §3 zaostao iza
+> s142), zaostalo (header/footer nesklad, §9 bez s160, §14 "otvoreno za
+> ponedjeljak" zastarjelo — gated pristup je standardni tok od s159), kozmetika
+> (prelomljena tabela §13, numeracija §14). Sve popravljeno, commit `16a9c6b`.
+> **(2)** Analiza Flaviovog paralelnog k12 prevoda (10 jezika, 5 parova
+> af-nl/bg-bs/es-fr/mk-sl/pt-ro): gate-postotak raste s pozicijom u knjizi
+> (12-23%→30-54%, potvrđuje s159 core-4 nalaz); root-faza usporila do ~3× tokom
+> dugog neprekidnog dana — ista latencijska pojava kao s159/s160 timeout
+> eskalacija, ovdje kao trajanje ne neuspjeh; mk/sl potvrđen najsporiji u 3/4
+> provjerene grupe. Nula pada u 27 pregledanih logova. **(3)** Razjašnjeno:
+> "Tool result too large" NIJE limit konteksta (do 1M tokena) nego zaseban,
+> manji prag na JEDAN tool poziv (~100-153KB empirijski) — potvrđeno pretragom
+> (isti mehanizam dokumentovan u Claude Code). README §12 checklist ispravljen
+> na dva `sed` poziva umjesto `cat`. Baza/kod/web nedirnuti. Detalji:
+> `docs/sessions/session_161.md`.
+
 > **s160 snapshot (4. avgust 2026):** Istraga pada usred prevođenja k12
 > (Moby Dick, de glm-5.2@0.1, gated faza 10, noć 3/4.avg). Mehanizam pada
 > razjašnjen: batch poziv hvata izuzetak i pada na single, ali **single
