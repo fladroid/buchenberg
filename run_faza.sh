@@ -8,6 +8,7 @@
 # --force je svojstvo PROLAZA (kao u run_ner.sh) -> prosljeđuje se sudiji (ponovno ocjenjivanje).
 # Primjer: bash run_faza.sh --faza 2 --knjiga 22 --jezici "de hr" --od 1 --do 20
 set -e
+set -o pipefail   # bez ovoga | tee guta izlazni kod Pythona i set -e ne vidi pad
 FAZA=""; KNJIGA=""; JEZICI=""; OD=""; DO=""; FORCE=""; RUNDA="1"; URADI_AKO_NEMA=""
 while [[ $# -gt 0 ]]; do
     case $1 in

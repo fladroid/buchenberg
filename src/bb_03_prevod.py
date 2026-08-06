@@ -446,6 +446,18 @@ def main():
                 pre_seed = len(todo)
                 todo = [x for x in todo if x[0] in seed_map]
                 pre_prag = len(todo)
+                bez_ocjene = [x for x in todo if seed_map[x[0]][1] is None]
+                if bez_ocjene:
+                    poz = ", ".join(str(p) for _, p, _ in bez_ocjene[:20])
+                    if len(bez_ocjene) > 20:
+                        poz += f" ... (+{len(bez_ocjene) - 20})"
+                    print(f"  PREKID: {len(bez_ocjene)} pobjednika bez sudijine ocjene (jezik {kod})")
+                    print(f"    Pozicije: {poz}")
+                    print(f"    Stanje: nijedan prevod nije napravljen, baza netaknuta.")
+                    print(f"    Rjesenje: pokreni sudiju za ovaj opseg, pa ponovi ovaj isti poziv:")
+                    print(f"      venv/bin/python src/bb_08_sudija.py --knjiga {args.knjiga} "
+                          f"--od {args.od} --do {args.do} --jezici {kod}")
+                    sys.exit(3)
                 todo = [x for x in todo if seed_map[x[0]][1] < args.prag]
                 seed_oznaka = "sa seedom" if uses_seed else "bez seeda"
                 print(f"  Refine: {pre_seed} {seed_oznaka} -> {pre_prag}; ispod praga {args.prag}: {len(todo)} (preskoceno {pre_prag - len(todo)})")

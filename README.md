@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 5. avgust 2026. (sesija 163)  
+**Poslednje ažuriranje:** 6. avgust 2026. (sesija 164)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -455,6 +455,41 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s164 snapshot (6. avgust 2026):** EKONOMIJA KASKADE — najznačajniji
+> praktičan nalaz dosad. **Kaskada2 (mistral-only, dvije runde po fazi, bez
+> glm) daje praktično identičan kvalitet uz 3× manju potrošnju Ollama
+> resursa** (0.7% naspram 2.17% sedmičnog budžeta na 100 rečenica).
+> Izmjereno na k12: nova 1401-1500 prosjek 0.9447, stara 1101-1200 (mistral+glm)
+> 0.9449 — razlika 0.0002, 15× ispod praga šuma sudije; i to uz TEŽI tekst
+> (root/nllb baseline 0.6733 naspram 0.7102). Nova skripta `run_kaskada2.sh`
+> (nllb root → 11r1 → 12r1 → 11r2 → 12r2). **Put do nalaza:** (a) hendikep
+> prag (prag kao kvantil po jeziku umjesto apsolutne vrijednosti) razmotren i
+> ODBAČEN — ne štedi ništa, samo preraspoređuje pozive, i to suprotno headroom
+> gradijentu (s134); (b) sonda `src/sandbox_temp_probe.py` (NOVA) izmjerila da
+> je razlika između temperatura MANJA od varijacije unutar iste temperature
+> (0.8 vs 1.0 = 0.9909, unutar 0.8 = 0.9888) — nova temperatura nije novi
+> kandidat, ali PONOVNI POZIV jeste; (c) runda potvrđena kao gated (gate
+> zavisi samo od faza≥2, nezavisno od runde) i time upotrebljiva kao jeftina
+> zamjena za glm fazu. **Paralelnost izmjerena (2→10 procesa):** optimum ~8
+> (6.49 jezika/h), na 10 propusnost PADA (4.92) — i granica je **lokalni RAM,
+> ne Ollama** (svaki proces ≈3.2GB: e5-large + NLLB; nl 1601-1700 ubio OOM
+> Killer, exit 137). Ollama potrošnja beznačajna na svim nivoima (max 0.5%).
+> **Dva bug-a dijagnostikovana i popravljena:** (1) `bb_03_prevod.py:449`
+> pucao `TypeError: NoneType < float` — pravi uzrok je nesklad `v_prevodi_full`
+> (`0.4*komp+0.6*sudija`, bez CASE → NULL) naspram `bb_04_pobjednik.py`
+> (`CASE ... ELSE komp` → bira pobjednika i bez sudije); Flaviova odluka:
+> nesklad OSTAJE, ali gate sada staje s jasnom porukom i `sys.exit(3)` prije
+> ijednog Ollama poziva; (2) `run_faza.sh` imao `set -e` ali ga je `| tee`
+> gutao (izlazni kod pipeline-a = kod `tee`) → kaskada tiho preskakala pale
+> faze i ispisivala ZAVRŠENO (fr 1601-1700: `ZAVR=5`, ali faza 11 runda 2
+> nikad izvršena). Dodan `set -o pipefail`, testiran izolovano. Razjašnjeno:
+> `--uradi-ako-nema` je čisto label u logu, bez funkcije. Temperatura
+> potvrđena kao parametar SAMPLERA a ne atribut modela (T=1.0 = nedirnuta
+> distribucija; mistral nema `thinking` capability, gemma4 i glm imaju).
+> Korpus 50.624/1.959.796/376.532. BB_VERSION nepromijenjen (web nedirnut).
+> Otvorene rupe za Flavia: nl 1601-1700 (prazno), fr 1601-1700 (f11 r2).
+> Detalji: `docs/sessions/session_164.md`.
 
 > **s163 snapshot (5. avgust 2026):** Implementacija zaključaka s162 truth
 > table — fleksibilan mehanizam za ručnu kaskadu prevoda bez "svijeta".
@@ -1828,4 +1863,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 5. avgust 2026. (sesija 163)*
+*Flavio & Claude · Buchenberg · V3 · 6. avgust 2026. (sesija 164)*
