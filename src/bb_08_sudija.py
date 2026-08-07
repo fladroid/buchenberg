@@ -176,6 +176,22 @@ def main():
                 translations=translations_str
             )
 
+            # Rečenica bez ijednog alfanumerickog znaka (npr. "*", "* *") nije tekst.
+            # Sudija je ne moze ocijeniti — vraca prazan niz ili objasnjenje umjesto
+            # ocjene, sto zaustavlja gate u bb_03_prevod.py pri svakoj novoj rundi.
+            # Upisujemo kompozitni kao sudija_avg: isti fallback koji
+            # bb_04_pobjednik.py vec primjenjuje na NULL sudiju.
+            if not re.search(r'[^\W_]', data["tekst"] or "", re.UNICODE):
+                cur.execute("""
+                    UPDATE bb_prevodi_recenica
+                    SET sudija_avg = (score + translation_score) / 2
+                    WHERE id = ANY(%s) AND sudija_avg IS NULL
+                """, ([p["prevod_id"] for p in prevodi],))
+                conn.commit()
+                print(f"  s{pozicija}: nije tekst ({data['tekst']!r}) — "
+                      f"upisan kompozitni, sudija preskocen")
+                continue
+
             print(f"  s{pozicija}: pozivam sudiju...")
             raw = call_sudija(prompt)
             ocjene = parse_ocjene(raw)

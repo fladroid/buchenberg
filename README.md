@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 6. avgust 2026. (sesija 164)  
+**Poslednje ažuriranje:** 7. avgust 2026. (sesija 165)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -455,6 +455,65 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s165 snapshot (7. avgust 2026):** ADAPTIVNA KASKADA — parametri kalibrisani
+> iz postojećih podataka, bez ijednog novog prevoda. Ključni mehanički nalaz:
+> **broj obrađenih rečenica u svakoj gated fazi JESTE broj rečenica ispod praga
+> u tom trenutku** — kriva opadanja se čita direktno iz loga (`grep -i
+> preskoceno`). Medijane po koracima (k12 2001-2100, kaskada2): 90 → 45.5 →
+> 37.5 → 33.5; prvi korak nosi devet desetina posla. **Kriterij nije fiksni
+> procenat nego PRAG PRINOSA** (prinos = rečenica prešlo prag / rečenica
+> obrađeno): prva runda 0.26-0.69, sve kasnije ispod 0.15, kod nl četvrta
+> doslovno 0.00. Simulacija pravila "stani ako prinos < 0.10": **-19% poziva
+> uz +3.5 pp rečenica ispod praga**. Dogovoreni parametri: **r=0.10** (glavni
+> mehanizam), **N=4** (osigurač), **X=25%** (cilj, rijetko zaustavlja),
+> **tolerancija=2** uzastopna promašaja s resetom brojača na svaki dobar korak
+> (prinos ne opada monotono — sl pao na 0.07 pa se vratio na 0.16). Redoslijed
+> provjere X → r → N. Ograničenje: prinos se računa iz razlike dva gate broja
+> koji nose šum sudije — ispod ~200 rečenica po pozivu mjeri se šum, **400 je
+> minimum, 800 pošteno**. Fiksni procenat odbačen jer varijacija po dijelovima
+> knjige (es: 8.6 → 16.0 → 23.0 → 26.4 kroz prve 4000 rečenica) NADMAŠUJE
+> varijaciju po tretmanu. NOVE skripte: `run_kaskada3.sh` (mistral@0.1 root →
+> 2× mistral@0.8 → 1× glm@0.8) i `run_kaskada4.sh` (mistral@0.1 root → 4 runde
+> mistral@0.8 **bez ranog izlaza**, mjerni run za retroaktivnu simulaciju svih
+> kombinacija parametara). **Kaskada3 izmjerena (k12 2101-2200):** root
+> mistral@0.1 ostavlja 56.5% ispod praga naspram 90% za nllb root, ali refine
+> zato nema odakle uzeti (pad -7, -5 naspram -44.5, -8, -4). Trošak medijano:
+> kaskada2 = 206 poziva (root besplatan/lokalni), kaskada3 = 250 (svi plaćeni).
+> Prividno pogoršanje razriješeno KONTROLNOM GRUPOM: de/hr/it/sr nisu prošli
+> kaskadu3 a pogoršali se VIŠE (+9.5 naspram +8) — **pogoršanje je od teksta,
+> ne od metode**; kaskada3 je po ishodu izjednačena s kaskadom2. **Fer test
+> skupog modela:** glm samo na ostatku poslije mistralove konvergencije daje
+> prinos medijano 0.135 naspram 0.125/0.10 za mistral runde prije njega —
+> **glm nije kvalitativno drugačiji od još jedne mistral runde**, ne zaslužuje
+> posebno mjesto u mehanizmu. **HARDVER izmjeren prvi put:** foxuno 23 GB RAM,
+> 8 GB swap, **4 jezgra**; `maxresident` 5.1-5.37 GB s NLLB, **2.92 GB bez
+> njega** — NLLB nosi 2.4 GB po procesu i jedini troši lokalni CPU (sve ostalo
+> čeka mrežu). Flaviova stepenasta strategija (najviše 4 istovremeno, čekaj
+> NLLB, pa sljedeća 4) dala **8.1 jezika/h** naspram 6.49 (8 paralelnih, s164)
+> i 4.92 (10 odjednom) — poluga je broj procesa u rootu, ne veličina batcha
+> (`NLLB_CT2_BATCH=200` je chunk, `max_batch_size=14` je tvrdi CT2 limit).
+> **POPRAVLJEN sistemski zastoj sudije:** `*` i `* *` (separatori odjeljaka
+> koje je segmentacija propustila u korpus) sudija ne može ocijeniti — vraća
+> prazan JSON niz (NIJE greška parsiranja) ili objašnjenje riječima. Ručni
+> UPDATE je krpio posljedicu koja se reprodukuje pri SVAKOJ novoj rundi (nl
+> pao na rundi 3, ro i sl na rundi 2). `src/bb_08_sudija.py` sada preskače
+> rečenice bez ijednog alfanumeričkog znaka i upisuje kompozitni kao
+> `sudija_avg` (isti fallback koji `bb_04_pobjednik.py` već ima za NULL).
+> Uslov namjerno strog — `Oh!`, `I.`, `II.` sudija ocjenjuje uredno.
+> **Sudijin režim "sve nule" izmjeren i SVJESNO NEPOPRAVLJEN:** 10.930 nula
+> (0.55%), od toga 7.279 uz kompozitni > 0.90 (0.369%); na nivou pobjednika
+> samo **440 od 384.032 (0.115%)** — argmax apsorbuje kvar redundancijom
+> kandidata. Nula je MJERENJE ("ne valja"), NULL je IZOSTANAK mjerenja; samo
+> se drugo smije prepisati kompozitnim, inače sudija gubi pravo da presudi
+> protiv cosinea. Tvrdi pod (1-2% ispod 0.80) je time potvrđen kao stvarno
+> svojstvo teksta, ne artefakt. Usput: `bb_04_pobjednik.py` ispisuje `N/A` i
+> za nulu (falsy bug u prikazu, ne u podacima). **Odbačeno:** normalizacija
+> nealfabetskih znakova prije embeddinga — razlika između "A B C" i "A, B, C"
+> je informacija, ne šum; za sudiju je gramatika pola interpunkcija.
+> Legitimno samo kao TEST DETEKCIJE, što je upravo popravka iznad.
+> Korpus: **50.624 / 1.977.665 / 384.032**. BB_VERSION nepromijenjen.
+> Detalji: `docs/sessions/session_165.md`.
 
 > **s164 snapshot (6. avgust 2026):** EKONOMIJA KASKADE — najznačajniji
 > praktičan nalaz dosad. **Kaskada2 (mistral-only, dvije runde po fazi, bez
@@ -1605,6 +1664,20 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Adaptivna kaskada — implementacija petlje (s165, OTVORENO)
+Parametri dogovoreni i kalibrisani nad postojećim podacima, **kod nije pisan**.
+Petlja: radi rundu; poslije svake provjeri redom **X** (procenat ispod praga —
+zadovoljan?), **r** (prinos posljednjeg koraka — ima li još šta?), **N**
+(osigurač). Brojač `neuspjeha` broji **uzastopne** promašaje prinosa i resetuje
+se na nulu čim prinos poraste; staje na `neuspjeha == tolerancija`. Vrijednosti:
+X=25%, r=0.10, N=4, tolerancija=2. Skupi model NE dobija posebno mjesto — pada
+pod isto pravilo prinosa kao svaka runda (izmjereno s165: glm na ostatku 0.135
+naspram 0.10-0.125 za mistral rundu). Prije implementacije: `run_kaskada4.sh`
+(pun run bez ranog izlaza, 4 jezika × 800 rečenica) daje krivu nad kojom se sve
+kombinacije parametara simuliraju retroaktivno — **jedan pun run > više
+odsječenih runova**, jer odsječeni ne sadrže jedni druge. Status na kraju s165:
+run nije završen (es trčao, nl/ro/sl treba ponovo pustiti).
+
 ### Konceptualna revizija: da li su root faza/self-refine/svjetovi nužni? (s162, OTVORENO)
 Misaoni eksperiment (nula izmjena) istinitosnom tabelom (Q1=postoji pobjednik/
 Q2=seed/Q3=prag) pokazao da je jedina STVARNA zavisnost u sistemu "seed treba
@@ -1863,4 +1936,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 6. avgust 2026. (sesija 164)*
+*Flavio & Claude · Buchenberg · V3 · 7. avgust 2026. (sesija 165)*
