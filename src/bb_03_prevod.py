@@ -508,7 +508,8 @@ def main():
                     translation_score = cosine(en_vektori[j], prevod_vektori[j])
                     upisi_prevod(cur, prevodi_knjige_id, rid,
                                  prevodi[j], backs[j], score, translation_score)
-                    print(f"    s{poz}: score={score:.4f} ts={translation_score:.4f}")
+                    komp = (score + translation_score) / 2
+                    print(f"    s{poz}: ts={translation_score:.4f} bts={score:.4f} komp={komp:.4f}")
 
                 conn.commit()
 
