@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 7. avgust 2026. (sesija 165)  
+**Poslednje ažuriranje:** 8. avgust 2026. (sesija 166)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -339,7 +339,7 @@ ORDER BY jezik, pobjede DESC;
 |---------|------|
 | `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
 | `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy); lista knjiga je hardcodovana u `KNJIGE` |
-| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena |
+| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena. **Ispis po rečenici (s166): `ts=` translation_score, `bts=` back-translation score, `komp=` kompozitni** — kompozitni se računa samo za ispis (u bazi ga daje `v_prevodi_full`) |
 | `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
@@ -455,6 +455,48 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s166 snapshot (8. avgust 2026):** VIDLJIVOST MJERENJA — instrumentacija
+> umjesto rekonstrukcije. **Forenzika s165 haosa:** ponovljena pokretanja
+> `run_kaskada4.sh` s nepopravljenom greškom NISU ostavila štetu u bazi — nula
+> duplikata, nula praznina, nula neocijenjenih prevoda, samo faze 1 i 12
+> (opseg 2201-4000, 4 jezika). Razlog je arhitektonski: `already_done()`
+> idempotentan po tačnoj konfiguraciji, UNIQUE preko 7 kolona, argmax nezavisan
+> od redoslijeda nastanka, gate staje prije ijednog Ollama poziva. Runde od
+> ~50 s u logu nisu prazan gate nego preskočena već odrađena runda. **Logovi
+> se prepisuju** (`>` a ne `>>`) — istorija pokušaja se iz njih ne može
+> rekonstruisati, baza je izvor istine. **IZMJENE:** (1) `bb_03_prevod.py`
+> ispisuje `ts=` (translation) / `bts=` (back-translation) / `komp=`
+> (kompozitni) umjesto `score=`/`ts=` — kompozitni je ono što ulazi u gate, a
+> ne postoji kao varijabla u `bb_03` (izvodi se u `v_prevodi_full.kompozitni` i
+> inline u `bb_04`); (2) `run_kaskada4.sh` korak 1 dobio `time` na sva tri
+> poziva — `run_faza.sh` ga je VEĆ imao, neinstrumentiran je bio samo direktan
+> poziv u kaskadama; (3) funkcija `okolina` ispisuje broj već aktivnih `bb_03`
+> procesa + load average + slobodan RAM na startu I kraju runa — **zatvara
+> konfaund otvoren od s132** (trajanja nisu bila uporediva jer se nije znalo
+> koliko procesa paralelno trči). `pgrep -fc` uvijek ispiše broj I vrati exit 1
+> → `|| :`, ne `|| echo 0` (dvostruka nula). **Razlaganje koraka 1** (prvi put
+> mjereno): root ~90%, sudija ~9%, pobjednik <1%. **Root usporava 2.9× od 1 do
+> 4 paralelna procesa** (2.7 → 7.9 s/rečenica) — nezavisna potvrda izmjerenih
+> 3.1× iz s165. Load 8.88 na 4 jezgra = 2.2× overcommit; ro/sl "sporiji" samo
+> jer su zadnjih 15 min trčali sami. **KRIVA PRINOSA (es/nl 3001-4000, pun
+> mjerni run):** prvi korak 0.18-0.19 naspram 0.26-0.69 u kalibraciji — **r=0.10
+> je kalibrisan na NLLB krivoj a primjenjuje se na mistral root**. Nemonotonost
+> je PRAVILO ne izuzetak (nl 0.108 → 0.303 → 0.261: dva najbolja koraka dolaze
+> POSLIJE najslabijeg; pravilo preživi za 8 hiljaditinki). **X=25% se ne dostiže
+> nijednom** (es 30.8%, nl 25.8% poslije 4 runde) — kao mjera napretka ne radi
+> ništa. **POREĐENJE ROOT MODELA** (uparen uzorak 201-1100, 900 rečenica, iste
+> rečenice): % ispod praga — es 31.7/34.8/85.6, nl 37.1/37.9/89.7, ro
+> 51.8/48.8/89.2, sl 57.0/61.7/92.7 za mistral@0.8 / mistral@0.1 / nllb.
+> **NLLB kao root bio je pogrešan** (3× više posla refineu — retroaktivna
+> potvrda izbacivanja). **mistral@0.8 je BOLJI root od @0.1 na 3 od 4 jezika**
+> (sl 4.7 pp, es 3.1 pp; jedino ro voli @0.1) — kaskada4 vozi @0.1, dakle
+> lošiju varijantu; isti obrazac kao za refine runde u s165. **Rangiranje
+> jezika stabilno kroz sve rootove** (es < nl < ro < sl) → sl nije žrtva
+> pogrešnog modela nego teži jezik za sve; **"treći svijet" ne bi riješio sl**.
+> Ograda: poredi samo root fazu, ne pun lanac. Korpus: **50.624 / 1.985.746 /
+> 386.032**. BB_VERSION nepromijenjen (web nedirnut).
+> Detalji: `docs/sessions/session_166.md`.
 
 > **s165 snapshot (7. avgust 2026):** ADAPTIVNA KASKADA — parametri kalibrisani
 > iz postojećih podataka, bez ijednog novog prevoda. Ključni mehanički nalaz:
@@ -1936,4 +1978,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 7. avgust 2026. (sesija 165)*
+*Flavio & Claude · Buchenberg · V3 · 8. avgust 2026. (sesija 166)*
