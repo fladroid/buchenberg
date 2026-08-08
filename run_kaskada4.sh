@@ -25,6 +25,16 @@ fi
 
 EMBEDDER="multilingual-e5-large"
 
+# Okolina — neponovljiva poslije, a bez nje trajanja nisu uporediva.
+# pgrep -fc uvijek ispise broj i vrati 1 kad nema pogodaka -> ':' samo cuva set -e.
+okolina() {
+    echo ">>> OKOLINA ($1): $(date)"
+    echo "    bb_03 procesa vec aktivno: $(pgrep -fc bb_03_prevod.py || :)"
+    echo "    load average:$(uptime | sed 's/.*load average://')"
+    echo "    RAM: $(free -m | awk '/^Mem:/{print $7" MB dostupno od "$2" MB"}')"
+}
+okolina start
+
 echo ">>> KORAK 1: root (mistral-large-3:675b @ 0.1)"
 time venv/bin/python src/bb_03_prevod.py \
     --knjiga "$KNJIGA" --od "$OD" --do "$DO" \
@@ -42,4 +52,5 @@ for RUNDA in $(seq 1 $BROJ_RUNDI); do
     bash run_faza.sh --faza "$FAZA_MISTRAL_08" --knjiga "$KNJIGA" --jezici "$JEZICI" --od "$OD" --do "$DO" --runda "$RUNDA"
 done
 
+okolina kraj
 echo ">>> ZAVRSENO: $(date)"
