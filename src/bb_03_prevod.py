@@ -63,39 +63,24 @@ EMBEDDER_PATH_MAP = {
 
 NLLB_MODEL_NAME = "facebook/nllb-200-distilled-600M"
 
-NLLB_LANG_MAP = {
-    "hr": "hrv_Latn",
-    "sr": "srp_Cyrl",
-    "bs": "bos_Latn",
-    "sl": "slv_Latn",
-    "mk": "mkd_Cyrl",
-    "bg": "bul_Cyrl",
-    "de": "deu_Latn",
-    "nl": "nld_Latn",
-    "af": "afr_Latn",
-    "fr": "fra_Latn",
-    "it": "ita_Latn",
-    "es": "spa_Latn",
-    "pt": "por_Latn",
-    "ro": "ron_Latn",
-}
+# Jezicke mape se pune IZ BAZE (bb_jezik.naziv_en / .nllb_kod) na pocetku main().
+# Namjerno NE na nivou modula: "import bb_03_prevod" ne smije traziti konekciju
+# (sandbox sonde ga importuju zbog nllb_batch/cosine).
+# Novi jezik = jedan INSERT u bb_jezik, bez izmjene koda.
+NLLB_LANG_MAP = {}
 
-JEZIK_NAZIVI = {
-    "hr": "Croatian",
-    "sr": "Serbian",
-    "bs": "Bosnian",
-    "sl": "Slovenian",
-    "mk": "Macedonian",
-    "bg": "Bulgarian",
-    "de": "German",
-    "nl": "Dutch",
-    "af": "Afrikaans",
-    "fr": "French",
-    "it": "Italian",
-    "es": "Spanish",
-    "pt": "Portuguese",
-    "ro": "Romanian",
-}
+JEZIK_NAZIVI = {}
+
+
+def ucitaj_jezike(cur):
+    """Puni JEZIK_NAZIVI i NLLB_LANG_MAP iz bb_jezik. Zove se jednom, iz main()."""
+    cur.execute("SELECT btrim(kod), naziv_en, nllb_kod FROM bb_jezik")
+    for kod, naziv_en, nllb_kod in cur.fetchall():
+        if naziv_en:
+            JEZIK_NAZIVI[kod] = naziv_en
+        if nllb_kod:
+            NLLB_LANG_MAP[kod] = nllb_kod
+    print(f"Jezici iz baze: {len(JEZIK_NAZIVI)} s nazivom, {len(NLLB_LANG_MAP)} s NLLB kodom")
 
 
 # ── NLLB ────────────────────────────────────────────────────────────────────
@@ -371,6 +356,8 @@ def main():
     conn = psycopg2.connect(**DB)
     cur  = conn.cursor()
 
+    ucitaj_jezike(cur)
+
     cur.execute("SELECT id FROM bb_embeddings WHERE naziv=%s", (args.embedder,))
     row = cur.fetchone()
     if not row:
@@ -420,7 +407,6 @@ def main():
             if not jezik_naziv:
                 print(f"Nepoznat jezik: {kod}, preskačem.")
                 continue
-
             if is_nllb and kod not in NLLB_LANG_MAP:
                 print(f"NLLB ne podržava jezik: {kod}, preskačem.")
                 continue
