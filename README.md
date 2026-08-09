@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 8. avgust 2026. (sesija 166)  
+**Poslednje ažuriranje:** 9. avgust 2026. (sesija 167)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -240,7 +240,7 @@ Prihvatanje je TEHNIČKO — izvršava se / upisuje potpun sloj / izvoziv u web.
 
 | Tabela | Opis |
 |--------|------|
-| `bb_jezik` | 14 jezika |
+| `bb_jezik` | 14 jezika. **s167: +`naziv_en` varchar(100), +`nllb_kod` varchar(20)** — `bb_03` i `bb_08` ih čitaju iz baze umjesto iz hardkodiranih dictova. `naziv` je na srpskom (za ljude), `naziv_en` engleski (ide u LLM prompt). Obje kolone NULL-abilne; `bb_08` koristi `COALESCE(naziv_en, naziv)`. **Novi jezik za `bb_03`/`bb_08` = jedan INSERT, bez izmjene koda.** |
 | `bb_metode` | **Metod = tip operacije** (s134). `root` boolean: `base` (root, izvršiv tačno jednom) i `self-refine` (ponovljiv M puta). Metod nosi SADRŽAJ (šta se radi, koji seed); faza nosi REDOSLIJED. |
 | `bb_faze` | **Faza = jedno izvršavanje metoda** (s134): redni broj + jedinstveni identifikator. `metod_id` FK → `bb_metode` (**1 metod : M faza**). Partial UNIQUE `WHERE metod_id=1` čuva ROOT-invarijantu u SHEMI. |
 | `bb_modeli` | **s142: ČIST katalog imena** (`id, naziv, aktivan`, UNIQUE(naziv)) — a1 osa. Slijepljivanje s temperaturom/fazom (staro, do s142) UKLONJENO. |
@@ -339,19 +339,22 @@ ORDER BY jezik, pobjede DESC;
 |---------|------|
 | `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
 | `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy); lista knjiga je hardcodovana u `KNJIGE` |
-| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena. **Ispis po rečenici (s166): `ts=` translation_score, `bts=` back-translation score, `komp=` kompozitni** — kompozitni se računa samo za ispis (u bazi ga daje `v_prevodi_full`) |
+| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena. **Ispis po rečenici (s166): `ts=` translation_score, `bts=` back-translation score, `komp=` kompozitni** — kompozitni se računa samo za ispis (u bazi ga daje `v_prevodi_full`). **s167: `JEZIK_NAZIVI`/`NLLB_LANG_MAP` više NISU hardkod** — prazni dictovi koje puni `ucitaj_jezike(cur)` iz `bb_jezik`, pozvana jednom iz `main()`. Namjerno NE na nivou modula: `import bb_03_prevod` ne smije tražiti konekciju (sandbox sonde ga importuju zbog `nllb_batch`/`cosine`) |
 | `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
-| `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114) |
+| `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114). **s167: prompt dobija ENGLESKI naziv jezika** (`COALESCE(naziv_en, naziv)`) — do s167 je slao srpski (`grammatical correctness in holandski`). Izmjereno prije izmjene: mijenja pobjednika u 10–13% rečenica, uz 0% od samog ponavljanja poziva. **Korpus od s167 ima dvije ocjenjivačke ere** (granica je vrijeme, ne kolona) |
 | `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_faza.sh |
 | `bb_faza_info.py` | Faza -> metod (`metod_id\|naziv\|root`) iz `bb_faze` JOIN `bb_metode`; exit 1 ako faza ne postoji (s134) |
-| `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force] [--runda N] [--uradi-ako-nema]`. Metod cita iz baze, a1/a2/a3 izbor iz `bb_faze_a*`. Zamijenio `run_refine.sh` (s134) |
+| `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force] [--runda N] [--uradi-ako-nema] [--prag X]`. **s167: `--prag` se PROSLJEĐUJE `bb_03` (`${PRAG:+--prag $PRAG}`); bez njega ekspanzija je prazna i vrijedi `bb_03` default 0.95 — kaskade 1–4 nepromijenjene.** Prag se ispisuje u zaglavlju loga. Metod cita iz baze, a1/a2/a3 izbor iz `bb_faze_a*`. Zamijenio `run_refine.sh` (s134) |
 | `bb_toggle_model.py` | Uključuje/isključuje JEDAN model (a1) za zadanu fazu preko `bb_faze_a1.aktivan` (s156). **Ad-hoc/debug alat, VAN standardnog toka** (s158) — standardni put je `bb_deklarisi_svet.py` |
 | `bb_deklarisi_svet.py` | **Deklaracija "svijeta"** (s158) — postavlja CIJELO stanje a1/a2 za fazu: `aktivan=true` samo za navedeno u `--modeli`/`--temperature`, `false` za sve ostalo u katalogu. Potpuna izjava namjere, nezavisna od prethodnog stanja (NE relativni toggle). `--faza --modeli --temperature` |
 | `bb_svet_1.sh` / `bb_svet_2.sh` | Imenovani svjetovi (s158), tanki omotači nad `bb_deklarisi_svet.py`: **1** = puna 3-way root (mistral+nllb+glm), **2** = sužen root za gated obrazac (bez glm). Svaka nezavisna, ne referencira drugu; novi svijet = nova tanka skripta, nula izmjena logike |
 | `run_root_gated.sh` | **Wrapper za "gated root"** (s156, prerađen s158) — jedan poziv: root (po VEĆ postavljenom svijetu) → gated faza (default 10). **Auto-toggle uklonjen** — skripta NE dira `bb_faze_a1`, pretpostavlja da je svijet ručno aktiviran; smije se pozivati paralelno po jeziku. `--knjiga --jezici --od --do [--gated-faza N] [--uradi-ako-nema]` |
 | `run_kaskada.sh` | **Fleksibilna kaskada bez svijeta** (s163) — root direktnim pozivom (bilo koji `--model`) → sudija → pobjednik → 4 nezavisne gated faze (11-14: mistral/glm × 0.1/0.8, prompt `base`, prag<0.95, svaka svoj sudija+pobjednik). Ne dira `bb_faze_a1`/dijeljeno stanje — svaka faza je odvojen red. `--knjiga --jezici --od --do` |
+| `run_kaskada5.sh` | **s167 — kaskada4 + parametrizovan prag.** mistral@0.1 root → 4 runde mistral@0.8 (faza 12), bez ranog izlaza. `--knjiga --jezici --od --do [--prag X]` (default 0.95), prosljeđuje prag svim gated rundama. Root fazu NE dira — tamo gate ne postoji. Testirano k22/hr: default gate 6/4/3/3, `--prag 0.85` gate 3/0/0/0 (runde 2–4 bez ijednog reda u bazi) |
+| `sandbox_jezik_probe.py` | **s167, READ-ONLY, NECOMMITOVANO** — mjeri je li prag prenosiv na jezik koji NIJE registrovan. Prevodi opseg NLLB-om ili LLM-om (`--llm`), računa score ISTIM putem kao `bb_03` (funkcije importovane), poredi s postojećim NLLB prevodima istih rečenica iz baze. `--nllb-kod --oznaka --prag --llm --temp --jezik-naziv` |
+| `sandbox_sudija_naziv_probe.py` | **s167, READ-ONLY** — mjeri utiče li naziv jezika u promptu na sudijinu ocjenu. Tri prolaza (A1/B/A2) nad istim kandidatima; treći daje šum tog seta. Mjeri MAE, bias i **promjenu argmaxa**. `PROMPT_TEMPLATE`/`call_sudija`/`parse_ocjene` importovani iz `bb_08` |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
@@ -374,9 +377,21 @@ ORDER BY jezik, pobjede DESC;
 
 ### Kako dodati novi jezik
 
+**Od s167 — za `bb_03` i `bb_08` dovoljan je JEDAN INSERT** (mape se citaju iz baze):
+
 ```sql
-INSERT INTO bb_jezik (kod, naziv) VALUES ('xx', 'naziv') ON CONFLICT DO NOTHING;
+INSERT INTO bb_jezik (kod, naziv, naziv_en, nllb_kod)
+VALUES ('ja', 'japanski', 'Japanese', 'jpn_Jpan') ON CONFLICT DO NOTHING;
 ```
+
+- `naziv` — za ljude (srpski), NE ide u nijedan prompt
+- `naziv_en` — ide u sudijin prompt; ako je NULL, `bb_08` pada na `naziv` (`COALESCE`)
+- `nllb_kod` — samo ako NLLB ulazi u lanac; ako je NULL, `bb_03` glasno preskace NLLB za taj jezik (kaskada4/5 voze mistral root pa im ne treba)
+
+> ⚠️ **Ovo NIJE dovoljno za cijeli lanac.** Ostaje: (a) **vrijednost praga za taj
+> jezik** — parametar postoji od s167, broj ne; prag 0.95 nije prenosiv na drugo
+> pismo (s167 japanski nalaz); (b) **web sloj** — `geometry.html`, `learn.html`,
+> `nav.js` imaju vlastite liste jezika.
 
 ### Kako dodati novi model i temperaturu (s142: tri nezavisne ose)
 
@@ -455,6 +470,53 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s167 snapshot (9. avgust 2026):** PRVI SISTEMATSKI NAPAD NA HARDKOD.
+> Krenulo od usputnog pitanja o japanskom, zavrsilo s tri izmjene.
+> **(1) PRAG JE PARAMETAR:** nova `run_kaskada5.sh` (kaskada4 + `--prag`,
+> default 0.95) + `run_faza.sh` ga sad PROSLJEDUJE (`${PRAG:+--prag $PRAG}`)
+> — do s167 ga je gutao (nalaz s162), pa je svaka gated runda tiho isla na 0.95
+> **bez traga o tome u logu**. Sad se ispisuje u zaglavlju svake faze. Bez
+> `--prag` ekspanzija je prazna → kaskade 1–4 nepromijenjene (provjereno
+> izolovano). Testirano k22/hr: 1070-1089 default (gate 6/4/3/3, 3:04),
+> 1090-1109 `--prag 0.85` (gate 3/0/0/0, 2:13) — **runde 2–4 drugog testa nemaju
+> NIJEDAN red u bazi**, prag stvarno propagiran. Nizi prag nije "blazi kriterij"
+> nego MANJI OBIM POSLA (test 2 brzi, ali zavrsio sa 7 ispod 0.95 naspram 3).
+> **(2) JEZICKE MAPE IZ BAZE:** `bb_jezik` +`naziv_en`+`nllb_kod` (backup
+> `/tmp/bb_backup_pre_jezik_20260809.dump`, 24 TABLE DATA); `JEZIK_NAZIVI` i
+> `NLLB_LANG_MAP` u `bb_03` vise nisu literali nego se pune iz baze u `main()`
+> (namjerno NE na nivou modula — sonde importuju `bb_03`). **Novi jezik za
+> `bb_03`/`bb_08` = jedan INSERT.** Ostatak lanca provjeren grepom: `bb_04`,
+> `bb_08`, `bb_web_export`, `bb_xray_export`, `health_check` CISTI; literali
+> samo u legacy skriptama (mrtve od s111), sondama, i webu
+> (`geometry.html`, `learn.html`, `nav.js` — NEDIRNUTO).
+> **(3) SUDIJA DOBIJA ENGLESKI NAZIV JEZIKA:** otkriveno da `bb_08` salje
+> **srpski** naziv u engleski prompt (`grammatical correctness in holandski`) —
+> tako je ocijenjen CIJELI dosadasnji korpus. Izmjereno prije izmjene (nova
+> sonda `sandbox_sudija_naziv_probe.py`, tri prolaza A1/B/A2 gdje treci daje sum,
+> k22 4-33, 2 nezavisna runa): MAE po nazivu 0.0113–0.0189 naspram suma
+> 0.0018–0.0060; **bias NEGATIVAN u sva 4 mjerenja** (engleski naziv sudi
+> stroze → korpus je ocjenjivan blaze); **argmax se mijenja 10.0% (nl) i 13.3%
+> (de) po nazivu, a 0.0% od ponavljanja poziva.** Izmjena je jedna linija
+> (`COALESCE(naziv_en, naziv)`). **CIJENA: korpus od s167 ima dvije ocjenjivacke
+> ere**, granica je vrijeme a ne kolona (s165 §6.4).
+> **JAPANSKI — nalaz o mjernom aparatu, ne o jeziku:** `translation_score` NE
+> razlikuje dobar japanski od loseg. NLLB smece (`hearth-rug`→besmislica) i
+> mistral vrhunski prevod (`暖炉の敷物` tacno) dijeli **1 postotni poen**
+> (93.5% vs 92.5% ispod praga), dok ih na evropskim jezicima dijeli **trideset**
+> (s166 §9). Uzrok izolovan i kvantifikovan NAD POSTOJECIM KORPUSOM: sr
+> (cirilica) vs hr/bs (latinica), k12 1-2600, isti model — `bts` razlika 0.0007
+> (sum), `ts` razlika **0.0068** (deset puta veca). **Kazna za pismo je stvarna;
+> srpski je sve vrijeme nosio mali sistematski hendikep.** ⚠️ Razlika prema
+> hendikep pragu odbacenom u s164: tamo preraspodjela unutar ISTE skale, ovdje
+> korekcija instrumenta koji mjeri DRUGOM skalom. **Prag 0.95 nije prenosiv
+> cross-script.** Usput izmjerena **memorizacija u back-translationu**: doslovno
+> identican back na recenicama >120 znakova — glm 3.24%, mistral 0.51%, gemma3
+> 0.12%, ministral 0.06%, **nllb 0.00%** (4 od 101.218); gradijent prati velicinu
+> modela. **Ne utice na pobjednike** (glm 3.24% kandidata vs 3.19% pobjednika) —
+> sudija apsorbuje, potvrda s146. Korpus: **50.624 / 1.999.546 / 390.532**.
+> BB_VERSION nepromijenjen (web nedirnut, s152 — 15 sesija iza).
+> Detalji: `docs/sessions/session_167.md`.
 
 > **s166 snapshot (8. avgust 2026):** VIDLJIVOST MJERENJA — instrumentacija
 > umjesto rekonstrukcije. **Forenzika s165 haosa:** ponovljena pokretanja
@@ -1706,6 +1768,64 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Parametri kao konfiguracija, ne kao hardkod (s167, OTVORENO — okvir za dalje)
+Flaviov kriterij, zapisan da se ne izgubi: pitanje nije **da li je neki broj
+tacan**, nego **da li je potreban, da li je fiksan za sve, i kako se do njega
+dolazi.** Test scenarij: instanca na tudjem serveru, s knjigama i jezicima koje
+nismo vidjeli, **bez diranja source-a**. Danas to jos nije moguce.
+
+**Tri vrste brojeva danas zive u istom sloju** i zato svaka nova ideja trazi
+izmjenu izvora:
+- **identitetski** — `0.4/0.6`, argmax, jedan sudija, jedan embedder. Mijenjas ih
+  i to vise nije Buchenberg. Pripadaju u `KONCEPT.md` i smiju biti u kodu.
+- **kalibracijski** — prag, `r`, `N`, `X`, ventil 0.85. Zavise od korpusa, jezika
+  i modela; moraju biti postavljivi bez otvaranja `.py`.
+- **operativni** — batch 20, paralelizam, timeout, `intra_threads`. Zavise od
+  zeljeza.
+
+**s167 je uradio PRVI kalibracijski parametar (prag) do kraja, kao obrazac koji
+ostali poslije samo slijede.** Jedan uradjen do kraja vrijedi vise od pet
+zapocetih.
+
+**Sljedeci korak (skica dogovorena, NIJE radjena): tabela parametara.** Kljuc =
+trojka (knjiga, jezik, model) koju sema vec nosi; prazan `knjiga`/`model` znaci
+"vazi za jezik", sve prazno "vazi svuda" — danasnjih 0.95 postaje JEDAN RED, ne
+poseban slucaj. Uz nju **sonda koja PREDLAZE** vrijednost (covjek upisuje):
+uzorak 100–200 recenica, po pravilu ~5%, s **pocetka, sredine i kraja** knjige —
+jer je s165 izmjerio da varijacija po dijelu knjige nadmasuje varijaciju po
+tretmanu (es: 8.6 → 26.4 kroz 4000 recenica).
+
+> ⚠️ **Kriticno pravilo:** parametar se mora racunati **iz root faze**. Ako se
+> izvede iz distribucije pobjednika, mjerimo vlastiti otisak — povratna sprega
+> (s139), ista zamka na koju smo naisli u s164 kod hendikep tabele.
+
+> ⚠️ **Ne mijesati s hendikep pragom odbacenim u s164.** Tamo: prag kao kvantil
+> po jeziku, unutar ISTE skale — samo preraspodjeljuje pozive, i to suprotno
+> headroom gradijentu; odbacen s pravom. Ovdje: skale su STVARNO razlicite jer
+> embedder drugacije mjeri pismo (s167, izmjereno). Prvo je olaksica za tezak
+> jezik, drugo je korekcija instrumenta. **Bez ovog razlikovanja izgledace kao da
+> smo se predomislili.**
+
+### Japanski / ne-latinicna pisma (s167, OTVORENO)
+Mehanizam postoji, vrijednost praga ne. `translation_score` mjeri udaljenost
+pisma u embedding prostoru, ne vjernost prevoda — mistralov vrhunski japanski
+daje 92.5% ispod praga 0.95. Kaskada bi na tom pragu bila prazan hod: skoro svaka
+recenica ulazi u sve runde, a runda ne moze podici `ts` jer kazna ne dolazi od
+kvaliteta. Prije produkcije treba prag na njegovoj skali. **Romanizacija nije
+rjesenje** — kanji→romaji trazi citanje, romaji→kanji je nepovratno; to bi bila
+nova crna kutija, ne mehanicka zamjena znakova kao `bb_sr_cirilica.py`.
+
+### Sitno, otvoreno iz s167
+- **`created_at` kao granica dviju ocjenjivackih era** — NIJE provjereno postoji
+  li kolona na `bb_prevodi_recenica`. Dok se ne pusti novi sudijin prolaz, ere se
+  ne mijesaju; poslije toga granica je samo vrijeme.
+- `src/sandbox_jezik_probe.py` — commitovati ili ne (odgodjeno)
+- glm japanski run pokrenut, nije zavrsen (`logs/probe_ja_glm_k22_1_200.log`)
+- obrisati `/tmp/bb_backup_pre_jezik_20260809.dump` kad prodje period sigurnosti
+- **`limits.html` ima dvije nove stavke kad se web bude dirao:** memorizacija u
+  back-translationu (glm 3.24% naspram nllb 0.00%) i kazna za pismo (~0.007 za
+  cirilicu, cross-script red velicine vise)
+
 ### Adaptivna kaskada — implementacija petlje (s165, OTVORENO)
 Parametri dogovoreni i kalibrisani nad postojećim podacima, **kod nije pisan**.
 Petlja: radi rundu; poslije svake provjeri redom **X** (procenat ispod praga —
@@ -1978,4 +2098,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 8. avgust 2026. (sesija 166)*
+*Flavio & Claude · Buchenberg · V3 · 9. avgust 2026. (sesija 167)*
