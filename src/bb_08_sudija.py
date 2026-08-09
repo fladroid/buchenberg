@@ -109,7 +109,7 @@ def main():
     cur  = conn.cursor()
 
     for kod in args.jezici:
-        cur.execute("SELECT id, naziv FROM bb_jezik WHERE kod = %s", (kod,))
+        cur.execute("SELECT id, COALESCE(naziv_en, naziv) FROM bb_jezik WHERE kod = %s", (kod,))
         row = cur.fetchone()
         if not row:
             print(f"Nepoznat jezik: {kod}, preskačem.")
