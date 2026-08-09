@@ -6,6 +6,7 @@ Output:
     /var/www/buchenberg/data/books.json         — katalog knjiga i jezika
     /var/www/buchenberg/data/orig_<id>.json     — sve originalne rečenice knjige
     /var/www/buchenberg/data/tr_<id>_<lang>.json — prevod po jeziku (svi pobjednici)
+    /var/www/buchenberg/data/langs.js           — rjecnik imena jezika (native + en) iz bb_jezik
 
 Primjer:
     venv/bin/python src/bb_web_export.py
@@ -52,7 +53,8 @@ def get_languages_for_book(cur, knjiga_id):
     cur.execute("""
         SELECT
             j.kod,
-            j.naziv,
+            j.naziv_native,
+            j.naziv_en,
             COUNT(DISTINCT r.pozicija) AS prevedenih_recenica
         FROM bb_prev_knjige pk
         JOIN bb_jezik j ON j.id = pk.jezik_id
@@ -60,9 +62,19 @@ def get_languages_for_book(cur, knjiga_id):
         JOIN bb_prevodi_recenica pr ON pr.id = pvr.prevodi_recenica_id
         JOIN bb_recenice r ON r.id = pr.recenica_id
         WHERE pk.knjiga_id = %s
-        GROUP BY j.kod, j.naziv
+        GROUP BY j.kod, j.naziv_native, j.naziv_en
         ORDER BY j.kod
     """, (knjiga_id,))
+    return cur.fetchall()
+
+
+def get_all_languages(cur):
+    """Svi jezici iz bb_jezik — izvor za generisani rjecnik imena na webu."""
+    cur.execute("""
+        SELECT btrim(kod), naziv_native, naziv_en
+        FROM bb_jezik
+        ORDER BY kod
+    """)
     return cur.fetchall()
 
 
@@ -414,8 +426,8 @@ def main():
     for book_id, naziv, autor, gutenberg_id, ukupno in books:
         langs = get_languages_for_book(cur, book_id)
         lang_list = [
-            {"code": kod, "name": naziv_j, "sentences": prevedenih}
-            for kod, naziv_j, prevedenih in langs
+            {"code": kod, "name": naziv_nat, "name_en": naziv_en, "sentences": prevedenih}
+            for kod, naziv_nat, naziv_en, prevedenih in langs
         ]
         books_data.append({
             "id":               book_id,
@@ -455,7 +467,7 @@ def main():
         # dict originala za merge
         all_sents = {pos: tekst for pos, tekst in get_all_sentences(cur, book_id)}
 
-        for lang_kod, lang_naziv, prevedenih in langs:
+        for lang_kod, lang_naziv, lang_naziv_en, prevedenih in langs:
             rows = get_translations(cur, book_id, lang_kod)
             if not rows:
                 continue
@@ -554,6 +566,19 @@ def main():
           f"{len(stats_data['winners_by_config'])} konfiguracija, "
           f"{len(stats_data['coverage'])} knjiga×jezik, "
           f"{len(stats_data['scores'])} jezika)")
+
+    # --- langs.js — generisani rjecnik imena jezika (IZ BAZE, ne hardkod na webu) ---
+    langs = get_all_languages(cur)
+    lang_map = {kod: {"native": nat, "en": en} for kod, nat, en in langs}
+    # 'en' je IZVORNI jezik korpusa (invarijanta projekta), ne ciljni — nema ga u bb_jezik
+    lang_map["en"] = {"native": "English", "en": "English"}
+    langs_path = os.path.join(args.output, "langs.js")
+    with open(langs_path, "w", encoding="utf-8") as f:
+        f.write("// Generisano od bb_web_export.py iz bb_jezik — NE mijenjati rucno.\n")
+        f.write("window.BB_LANGS = ")
+        json.dump(lang_map, f, ensure_ascii=False, indent=2)
+        f.write(";\n")
+    print(f"  langs.js — {len(lang_map)} jezika (rjecnik imena iz baze)")
 
     cur.close()
     conn.close()

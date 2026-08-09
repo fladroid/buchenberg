@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 9. avgust 2026. (sesija 167)  
+**Poslednje ažuriranje:** 9. avgust 2026. (sesija 168)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -240,7 +240,7 @@ Prihvatanje je TEHNIČKO — izvršava se / upisuje potpun sloj / izvoziv u web.
 
 | Tabela | Opis |
 |--------|------|
-| `bb_jezik` | 14 jezika. **s167: +`naziv_en` varchar(100), +`nllb_kod` varchar(20)** — `bb_03` i `bb_08` ih čitaju iz baze umjesto iz hardkodiranih dictova. `naziv` je na srpskom (za ljude), `naziv_en` engleski (ide u LLM prompt). Obje kolone NULL-abilne; `bb_08` koristi `COALESCE(naziv_en, naziv)`. **Novi jezik za `bb_03`/`bb_08` = jedan INSERT, bez izmjene koda.** |
+| `bb_jezik` | 14 jezika. **s167: +`naziv_en` varchar(100), +`nllb_kod` varchar(20)** — `bb_03` i `bb_08` ih čitaju iz baze umjesto iz hardkodiranih dictova. `naziv` je na srpskom (za ljude), `naziv_en` engleski (ide u LLM prompt). **s168: +`naziv_native` varchar(100) NOT NULL** (ime jezika u vlastitom pismu — `Hrvatski`, `日本語`; ide na web). `naziv_en` je takodje **NOT NULL** (s168); `nllb_kod` ostaje NULL-abilan (jezik bez NLLB podrske je legitiman). **Tri imena, tri svrhe:** `naziv` = srpski, za ljude; `naziv_en` = LLM prompt + tekst u recenici na webu; `naziv_native` = samostalan prikaz na webu. **Novi jezik za `bb_03`/`bb_08` = jedan INSERT, bez izmjene koda.** |
 | `bb_metode` | **Metod = tip operacije** (s134). `root` boolean: `base` (root, izvršiv tačno jednom) i `self-refine` (ponovljiv M puta). Metod nosi SADRŽAJ (šta se radi, koji seed); faza nosi REDOSLIJED. |
 | `bb_faze` | **Faza = jedno izvršavanje metoda** (s134): redni broj + jedinstveni identifikator. `metod_id` FK → `bb_metode` (**1 metod : M faza**). Partial UNIQUE `WHERE metod_id=1` čuva ROOT-invarijantu u SHEMI. |
 | `bb_modeli` | **s142: ČIST katalog imena** (`id, naziv, aktivan`, UNIQUE(naziv)) — a1 osa. Slijepljivanje s temperaturom/fazom (staro, do s142) UKLONJENO. |
@@ -343,7 +343,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
-| `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114). **s167: prompt dobija ENGLESKI naziv jezika** (`COALESCE(naziv_en, naziv)`) — do s167 je slao srpski (`grammatical correctness in holandski`). Izmjereno prije izmjene: mijenja pobjednika u 10–13% rečenica, uz 0% od samog ponavljanja poziva. **Korpus od s167 ima dvije ocjenjivačke ere** (granica je vrijeme, ne kolona) |
+| `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114). **s167: prompt dobija ENGLESKI naziv jezika** (`naziv_en`; `COALESCE` uklonjen u s168 kad je kolona postala NOT NULL) — do s167 je slao srpski (`grammatical correctness in holandski`). Izmjereno prije izmjene: mijenja pobjednika u 10–13% rečenica, uz 0% od samog ponavljanja poziva. **Korpus od s167 ima dvije ocjenjivačke ere** (granica je vrijeme, ne kolona) |
 | `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_faza.sh |
 | `bb_faza_info.py` | Faza -> metod (`metod_id\|naziv\|root`) iz `bb_faze` JOIN `bb_metode`; exit 1 ako faza ne postoji (s134) |
 | `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force] [--runda N] [--uradi-ako-nema] [--prag X]`. **s167: `--prag` se PROSLJEĐUJE `bb_03` (`${PRAG:+--prag $PRAG}`); bez njega ekspanzija je prazna i vrijedi `bb_03` default 0.95 — kaskade 1–4 nepromijenjene.** Prag se ispisuje u zaglavlju loga. Metod cita iz baze, a1/a2/a3 izbor iz `bb_faze_a*`. Zamijenio `run_refine.sh` (s134) |
@@ -357,7 +357,7 @@ ORDER BY jezik, pobjede DESC;
 | `sandbox_sudija_naziv_probe.py` | **s167, READ-ONLY** — mjeri utiče li naziv jezika u promptu na sudijinu ocjenu. Tri prolaza (A1/B/A2) nad istim kandidatima; treći daje šum tog seta. Mjeri MAE, bias i **promjenu argmaxa**. `PROMPT_TEMPLATE`/`call_sudija`/`parse_ocjene` importovani iz `bb_08` |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
-| `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
+| `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). **s168: +`data/langs.js`** — `window.BB_LANGS` (native + en ime po jeziku) iz `bb_jezik`; web stranice ga ucitavaju sinhrono (`<script src="data/langs.js">` prije `nav.js`) umjesto vlastitih rjecnika. `books.json` nosi `name` (native) i `name_en`. NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
 | `bb_sr_cirilica.py` | Transliterira srpske prevode latinica → ćirilica (idempotentna) |
 | `bb_10_ner_llm.py` | LLM NER (glm-5.2): type reconciliation konfliktnih entiteta s groundingom dokaznim rečenicama; upis method='llm' paralelno uz classic (s126). Kompletira llm sloj — kopira i nekonfliktne classic entitete kao čiste llm redove (s127). s130: `--knjiga N\|all`, `--force`, održava **vlastite co-occ veze**, preskače knjige bez classic sloja. |
 | `bb_10c_docre.py` | DocRE: par-vođena ekstrakcija usmjerenih relacija (prvi prolaz glm-5.2, nedirano od s129) + **drugi prolaz s131 (Massey)**: glm-5.2 (think:false, temp 0.0) klasifikuje iz zatvorene liste 29 fine kategorija (iz baze) + afinitet; "ostalo"→fine=NULL (živ ventil). Deterministički filter: klasifikacija SAMO za PERSON-PERSON parove. `audit_kosinus` = e5-large audit metrika. `--reklasifikuj` = samo drugi prolaz nad postojećim relacijama (UPDATE). `--knjiga N\|all`, `--force`, `--dry-run`. |
@@ -380,18 +380,24 @@ ORDER BY jezik, pobjede DESC;
 **Od s167 — za `bb_03` i `bb_08` dovoljan je JEDAN INSERT** (mape se citaju iz baze):
 
 ```sql
-INSERT INTO bb_jezik (kod, naziv, naziv_en, nllb_kod)
-VALUES ('ja', 'japanski', 'Japanese', 'jpn_Jpan') ON CONFLICT DO NOTHING;
+INSERT INTO bb_jezik (kod, naziv, naziv_en, naziv_native, nllb_kod)
+VALUES ('ja', 'japanski', 'Japanese', '日本語', 'jpn_Jpan') ON CONFLICT DO NOTHING;
 ```
 
 - `naziv` — za ljude (srpski), NE ide u nijedan prompt
-- `naziv_en` — ide u sudijin prompt; ako je NULL, `bb_08` pada na `naziv` (`COALESCE`)
+- `naziv_en` — ide u sudijin prompt; **NOT NULL od s168**: INSERT bez njega puca, umjesto da tiho posalje srpski naziv u engleski prompt
+- `naziv_native` — ime u vlastitom pismu, ide na web; **NOT NULL od s168**
 - `nllb_kod` — samo ako NLLB ulazi u lanac; ako je NULL, `bb_03` glasno preskace NLLB za taj jezik (kaskada4/5 voze mistral root pa im ne treba)
 
-> ⚠️ **Ovo NIJE dovoljno za cijeli lanac.** Ostaje: (a) **vrijednost praga za taj
-> jezik** — parametar postoji od s167, broj ne; prag 0.95 nije prenosiv na drugo
-> pismo (s167 japanski nalaz); (b) **web sloj** — `geometry.html`, `learn.html`,
-> `nav.js` imaju vlastite liste jezika.
+> ⚠️ **Ostaje jos:** **vrijednost praga za taj jezik** — parametar postoji od s167,
+> broj ne; prag 0.95 nije prenosiv na drugo pismo (s167 japanski nalaz).
+>
+> ✅ **s168: web sloj vise NIJE prepreka.** `bb_web_export.py` generise
+> `data/langs.js` (`window.BB_LANGS`, native + en) iz `bb_jezik`; `books.html`,
+> `art.html`, `learn.html`, `reader.html`, `stats.html` citaju iz njega umjesto iz
+> sest vlastitih hardkodiranih rjecnika. Novi jezik = INSERT + `bb_web_export.py`.
+> Izuzetak: `geometry.html` — njena lista je IZBOR koji jezici ulaze u UMAP
+> projekciju (`bb_geometry_export.py:34`), odluka a ne konfiguracija.
 
 ### Kako dodati novi model i temperaturu (s142: tri nezavisne ose)
 
@@ -470,6 +476,33 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s168 snapshot (9. avgust 2026):** JEZIK KAO PODATAK — zatvoren lanac od baze do weba.
+> **(1) Popravka s167 nasljedja:** `naziv_en` postao **NOT NULL**, a `COALESCE(naziv_en, naziv)`
+> u `bb_08_sudija.py` UKLONJEN. Nalaz: `COALESCE` nije bio mjera opreza nego put ka tihom
+> pogresnom odgovoru — garantovao je samo "nije NULL", ne "jeste engleski"; da je `naziv_en`
+> falio, u engleski prompt bi opet otisao `holandski`. Garancija preseljena iz koda u shemu.
+> **(2) Japanski registrovan** (id 15, `jpn_Jpan`) — prvi jezik dodat otkako su mape u bazi.
+> Verifikovano punim lancem `run_kaskada5.sh` k22/ja 1010-1029: `Japanese` ispisan i kod
+> prevodioca i kod sudije, 20 recenica, 20 pobjednika, 32 prevoda, nula neocijenjenih.
+> ⚠️ **Neslaganje sa s167 koje NIJE istrazeno** (Flaviova odluka: ima vremena): gate je dao
+> 10/8/4/4 ispod praga (50% poslije roota), a s167 sonda je za japanski mjerila 92.5% ispod
+> praga. Kandidati: razlicit opseg (1-200 = metadata/pocetak knjige vs 1010-1029 = cist
+> dijalog; s165 varijacija po dijelu knjige), ili razlika sonda-vs-pipeline. **Refine JESTE
+> podizao `ts`** — suprotno s167 predvidjanju. Kontrolna grupa vec postoji: k22/de 1010-1029
+> isti opseg, gate 4/3/3/2.
+> **(3) Web rjecnici jezika UKINUTI.** Zateceno **sest** hardkodiranih rjecnika u pet fajlova
+> (`art.html` imao dva), i **nesklad medju njima**: `books`/`art`/`reader`/`stats` nativna imena
+> (`Hrvatski`), `learn.html` engleska (`Croatian`) — isti jezik, dva imena, jer je svako imao
+> svoju kopiju. Nesklad je STVARAN dizajn, ne nemar: `learn.html` ime stavlja unutar recenice
+> ("3 books in Croatian"), ostali ga prikazuju samostalno. Zato **dvije kolone, ne jedna**:
+> nova `naziv_native` (NOT NULL, 15 jezika) uz postojecu `naziv_en`. `bb_web_export.py`
+> generise `data/langs.js` (`window.BB_LANGS`, native+en, +`en` kao izvorni jezik korpusa);
+> svih pet stranica ucitava ga sinhrono prije `nav.js` i cita kroz `Proxy` — imena stizu iz
+> baze, fallback `|| code` ostaje. `books.json` nosi `name` (native) + `name_en`.
+> `geometry.html` NEDIRNUT (njena lista je izbor jezika za UMAP, odluka a ne konfiguracija).
+> **BB_VERSION s152 → s168** — prvi put dirnut web od s152 (16 sesija).
+> Korpus: **50.624 / 1.999.606 / 390.572**. Detalji: `docs/sessions/session_168.md`.
 
 > **s167 snapshot (9. avgust 2026):** PRVI SISTEMATSKI NAPAD NA HARDKOD.
 > Krenulo od usputnog pitanja o japanskom, zavrsilo s tri izmjene.
@@ -2098,4 +2131,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 9. avgust 2026. (sesija 167)*
+*Flavio & Claude · Buchenberg · V3 · 9. avgust 2026. (sesija 168)*
