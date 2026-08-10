@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 9. avgust 2026. (sesija 168)  
+**Poslednje ažuriranje:** 10. avgust 2026. (sesija 169)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -353,6 +353,11 @@ ORDER BY jezik, pobjede DESC;
 | `run_root_gated.sh` | **Wrapper za "gated root"** (s156, prerađen s158) — jedan poziv: root (po VEĆ postavljenom svijetu) → gated faza (default 10). **Auto-toggle uklonjen** — skripta NE dira `bb_faze_a1`, pretpostavlja da je svijet ručno aktiviran; smije se pozivati paralelno po jeziku. `--knjiga --jezici --od --do [--gated-faza N] [--uradi-ako-nema]` |
 | `run_kaskada.sh` | **Fleksibilna kaskada bez svijeta** (s163) — root direktnim pozivom (bilo koji `--model`) → sudija → pobjednik → 4 nezavisne gated faze (11-14: mistral/glm × 0.1/0.8, prompt `base`, prag<0.95, svaka svoj sudija+pobjednik). Ne dira `bb_faze_a1`/dijeljeno stanje — svaka faza je odvojen red. `--knjiga --jezici --od --do` |
 | `run_kaskada5.sh` | **s167 — kaskada4 + parametrizovan prag.** mistral@0.1 root → 4 runde mistral@0.8 (faza 12), bez ranog izlaza. `--knjiga --jezici --od --do [--prag X]` (default 0.95), prosljeđuje prag svim gated rundama. Root fazu NE dira — tamo gate ne postoji. Testirano k22/hr: default gate 6/4/3/3, `--prag 0.85` gate 3/0/0/0 (runde 2–4 bez ijednog reda u bazi) |
+| `run_kaskada6.sh` | **s169 — kaskada5 SA SEEDOM.** Identična petici osim gated faze: **16** (prompt `refine`) umjesto 12 (`base`). Posljedica u `bb_03`: `uses_seed=True` → modelu se šalje trenutni apsolutni pobjednik kao referenca, batch pada 20→5. `--knjiga --jezici --od --do [--prag X]` |
+| `run_kaskada7.sh` | **s169 — kaskada BEZ fiksnog broja rundi (Flaviovo pravilo).** Vrti dok prethodna runda prebaci bar jednu rečenicu preko praga; staje na strogoj nuli. Mjera se čita iz gate ispisa (`ispod praga`), zbir preko jezika — zato **jedan jezik po pozivu**, inače lakši jezik vrti prazne runde dok teži napreduje. `--faza 12\|16` (default 12), `--max N` samo kao osigurač (default 20). Ispisuje `>>> BILANS` po rundi |
+| `run_kaskada8.sh` | **s169 — dvoetapna, bez ijednog parametra za pogoditi.** Etapa 1 = faza 12 (base) dok ne dođe nula → **`>>> PRELAZAK`** → etapa 2 = faza 16 (seed) dok ne dođe nova nula. Obrazloženje: nula u etapi 1 ne znači da je rečenica gotova nego da je nezavisno izvlačenje iscrpljeno (klon-stopa base grane 8–22%, seed grane 0–3%). Pri prelasku se `PRETHODNI` resetuje na −1, inače bi prva seed runda odmah bila proglašena neproduktivnom. `--knjiga --jezici --od --do [--prag X] [--max N]` |
+| `sandbox_kaskada_logs.py` | **s169, READ-ONLY** — parser kaskada4/5/6/7/8 logova: okolina (aktivni `bb_03`, load, RAM), parametri, gate po rundi, `real` po bloku (root/prevod/sudija/pobjednik), brojači ZAVRŠENO/Traceback/timeout. Izlaz: `/tmp/kask_files.tsv` + `/tmp/kask_rounds.tsv`. Prima listu putanja logova |
+| `sandbox_kaskada_cijena.py` | **s169, READ-ONLY** — spaja `/tmp/kask_*.tsv` s bazom: minute i pozivi **po osvojenom pobjedniku**, po jeziku i rundi. Opsezi se čitaju iz logova (samo kompletni, `zavr==4`), pa se poklapanje log↔baza ne prepisuje ručno |
 | `sandbox_jezik_probe.py` | **s167, READ-ONLY, NECOMMITOVANO** — mjeri je li prag prenosiv na jezik koji NIJE registrovan. Prevodi opseg NLLB-om ili LLM-om (`--llm`), računa score ISTIM putem kao `bb_03` (funkcije importovane), poredi s postojećim NLLB prevodima istih rečenica iz baze. `--nllb-kod --oznaka --prag --llm --temp --jezik-naziv` |
 | `sandbox_sudija_naziv_probe.py` | **s167, READ-ONLY** — mjeri utiče li naziv jezika u promptu na sudijinu ocjenu. Tri prolaza (A1/B/A2) nad istim kandidatima; treći daje šum tog seta. Mjeri MAE, bias i **promjenu argmaxa**. `PROMPT_TEMPLATE`/`call_sudija`/`parse_ocjene` importovani iz `bb_08` |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
@@ -476,6 +481,54 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s169 snapshot (10. avgust 2026):** SEED SE VRATIO + KASKADA BEZ FIKSNOG BROJA RUNDI.
+> **(1) RIJEŠENO neslaganje s167/s168 oko japanskog.** Uzrok nije bio ni opseg ni
+> sonda-vs-pipeline (oba kandidata iz s168 pogrešna) nego **dvije različite veličine**:
+> gate radi nad `finalni_score`, s167 sonda je računala samo kosinusne komponente.
+> k12 4201–4600, root mistral@0.1: ja `pct_komp` **98.5%** naspram `pct_final` **78.5%**;
+> ostali 76.0–95.8 naspram 43.5–76.3. Potvrda do decimale: gate u logovima za ja dao
+> 73/75/83/83 = prosjek 78.5, identično bazi. Kazna za pismo je stvarna na `ts`
+> (ja 0.8686, najniža od 15) ali je **sudija apsorbuje** (ja `sud` 0.9243, pri vrhu) —
+> na osi koja otvara gate japanski je vrh kontinuuma, 2.2 pp iznad sl, ne zasebna
+> kategorija. **Prag 0.95 je operabilan i za japanski.**
+> **(2) SEED naspram BEZ-SEEDA, prvi put izmjereno.** Seed nikad nije bio odbačen
+> odlukom — ispao je iz upotrebe kao nasljeđe s155 gated-root dizajna (glm je tamo
+> trebao prevoditi original NEZAVISNO, pa je faza 10 namjerno dobila `base`), a
+> kaskade 2–5 su to naslijedile. Uravnotežen test k24: **es base 131 pokušaja → 43
+> preuzimanja; es seed 80 pokušaja → 43 preuzimanja**, rep 25/45 naspram 10/39.
+> sl: stope jednake (39.6 naspram 37.7) ali **skok u r1 dvostruk** (0.0964 naspram
+> 0.0463) — seed **ne pobjeđuje češće nego jače**, zato prebacuje preko praga i prazni
+> lijevak 43% naspram 28%. Na repu k12 (faza 16 poslije 4 base runde) seed uzeo 50.3%
+> naspram 12.5% za petu base rundu, uz **0.16 naspram 1.35 min po pobjedniku**.
+> **(3) KLON-STOPA — novi pokazatelj.** Klon = model vratio doslovno postojeći tekst.
+> Base grana **8–22%**, seed grana **0–3.1%** (obrnuto od očekivanja iz s137). Nije kvar
+> nego mjerenje: signal da se distribucija modela skupila. **Ne prolazi kroz sudiju** —
+> jedini pokazatelj nezavisan od instrumenta. Ograde: nije mjera kvaliteta; zavisi od
+> temperature (na 0.1 bi bio ~100% po konstrukciji).
+> **(4) FIKSNE 4 RUNDE SU BILE PREKRATKE.** `run_kaskada7.sh` (Flaviovo pravilo: vrti
+> dok ima bar jedno prebacivanje) na 11 jezika × 100 rečenica dao: bs 9, sl 8,
+> af/es/ro 7, fr/nl/pt 6, mk 5, bg/ja 4 runde — **medijana 6.5, 8 od 11 preko četiri**.
+> **Prinos vaskrsava** (bs 6·3·**1**·3·2·**4**·2; es 9·1·1·1·**3**; sl 4·**8**·2·3·1·1),
+> pa je stroga nula jedini ispravan okidač — svako "stani kad prinos padne ispod N"
+> odsjeklo bi oporavak. Cijena pravila = tačno jedna runda po jeziku.
+> **(5) Prirodni eksperiment već u bazi:** k12 4201–4600 de/hr/it/sr nemaju nijednu
+> refine fazu (stari svijet 1, 5 kandidata u rootu). Strategija A = 5.00 prevoda/rečenici,
+> 40% glm; strategija B (kaskada5) = 2.34–3.87, **nula glm**. Kontrolni par hr/sr/bs:
+> razlika 0.002–0.004 — **na pragu šuma sudije**. Isti rezultat, bez glm-a.
+> **(6) Ollama: spor je MODEL, ne region.** Iz kaskada7 logova 12:53–16:59 CEST:
+> `mistral-large-3` drži 4–6 s/rečenici bez trenda kroz pet sati, dok `gemma4:31b`
+> ide 0.88 → **14.49** s/rečenici. Skokovi sudije **sinhroni među nezavisnim procesima**
+> → uzrok na Ollama strani. Prvi timeout poslije 63 čista loga (sl kaskada7 r4, read
+> timeout 120s, pokriven retryjem). **U analizi cijene vrijeme sudije držati odvojeno.**
+> **(7) Raspodjela ocjena:** gornje četiri petine korpusa stanu u 0.066 (0.9332–0.9996),
+> prva petina proteže 0.608. Prag 0.95 pada u **grupu 2** za bg/bs/de/es/fr/hr/it/nl/pt/ro/sr
+> (~20–40% ispod) a u **grupu 3** za af/ja/mk/sl (~40–60%) — isti broj, dvostruko različit
+> posao. Savršenih ocjena 4.524 na 397.572 pobjednika, **nijedna 0.0**; raspoređene na
+> samo 1.028 rečenica (4.4 jezika po rečenici) → savršena ocjena je osobina REČENICE.
+> hr 1.40% naspram sr 0.63% = kazna za pismo, faktor 2.2, nezavisna potvrda s167.
+> Korpus: **50.624 / 2.027.541 / 399.172**. Web nedirnut (BB_VERSION ostaje s168).
+> Detalji: `docs/sessions/session_169.md`.
 
 > **s168 snapshot (9. avgust 2026):** JEZIK KAO PODATAK — zatvoren lanac od baze do weba.
 > **(1) Popravka s167 nasljedja:** `naziv_en` postao **NOT NULL**, a `COALESCE(naziv_en, naziv)`
@@ -1853,13 +1906,35 @@ nova crna kutija, ne mehanicka zamjena znakova kao `bb_sr_cirilica.py`.
   li kolona na `bb_prevodi_recenica`. Dok se ne pusti novi sudijin prolaz, ere se
   ne mijesaju; poslije toga granica je samo vrijeme.
 - `src/sandbox_jezik_probe.py` — commitovati ili ne (odgodjeno)
+- **s169 zaprljani podaci:** `logs/kaskada5_k24_sl_701_900.log` (dva paralelna identična
+  procesa — taj opseg u bazi ima dvostruke pokušaje, log neupotrebljiv; čista zamjena je
+  901–1100) i `logs/kaskada5_k12_af_4601_4700.log` (nekompletan, runda 4 nedostaje)
+- **s169 neizmjereno:** `refine-strict` (prompt id 4) nikad korišten u kaskadi — formulisan
+  je tačno za iscrpljenu distribuciju ("ako ne možeš bolje, napravi značajno DRUGAČIJE"),
+  a klonovi su problem base grane koja nema seed pa ne zna šta da izbjegne
+- **s169 neizmjereno:** uticaj dužine/broja tokena engleske rečenice na ocjenu. Za razliku
+  od kazne za pismo (konstanta po jeziku, skraćuje se u argmaxu), dužina varira UNUTAR
+  jezika — pa se duge rečenice mogu gomilati u repu i trošiti sve runde
+- **s169 izmjereno ali NIJE usvojeno:** pragovi po jeziku izvedeni iz produktivnosti
+  (pravilo "zadrži pojas dok preuzima ≥40%"): **0.92** za bg/es/fr/it/ja/nl/pt/sr,
+  **0.89** za af/bs/de/hr/mk/ro/sl. Flaviov stav: prag nije mjera kvaliteta nego regulator
+  potrošnje, a broj rundi je jača poluga
 - glm japanski run pokrenut, nije zavrsen (`logs/probe_ja_glm_k22_1_200.log`)
 - obrisati `/tmp/bb_backup_pre_jezik_20260809.dump` kad prodje period sigurnosti
 - **`limits.html` ima dvije nove stavke kad se web bude dirao:** memorizacija u
   back-translationu (glm 3.24% naspram nllb 0.00%) i kazna za pismo (~0.007 za
   cirilicu, cross-script red velicine vise)
 
-### Adaptivna kaskada — implementacija petlje (s165, OTVORENO)
+### Adaptivna kaskada — implementacija petlje (s165 → ZATVORENO u s169)
+**Riješeno drugačije nego što je s165 planirao.** Umjesto četiri kalibrisana parametra
+(X=25%, r=0.10, N=4, tolerancija=2) usvojeno je Flaviovo pravilo bez ijednog parametra:
+**vrti dok prethodna runda prebaci bar jednu rečenicu preko praga** (`run_kaskada7.sh`).
+Mjerenje na 11 jezika pokazalo je zašto je prag prinosa bio pogrešan pristup: **prinos
+vaskrsava** (runda poslije one koja je dala 1 zna dati 4), pa bi `r=0.10` odsjekao
+oporavak. Stroga nula je jedini okidač koji ne griješi. Usput je pao i pretpostavljeni
+smjer: fiksne 4 runde nisu bile preskupe nego **prekratke za 8 od 11 jezika**.
+Originalni s165 plan ostaje zapisan ispod kao istorijski kontekst.
+
 Parametri dogovoreni i kalibrisani nad postojećim podacima, **kod nije pisan**.
 Petlja: radi rundu; poslije svake provjeri redom **X** (procenat ispod praga —
 zadovoljan?), **r** (prinos posljednjeg koraka — ima li još šta?), **N**
@@ -2131,4 +2206,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 9. avgust 2026. (sesija 168)*
+*Flavio & Claude · Buchenberg · V3 · 10. avgust 2026. (sesija 169)*
