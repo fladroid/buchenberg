@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 11. avgust 2026. (sesija 170)  
+**Poslednje ažuriranje:** 11. avgust 2026. (sesija 171)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -357,6 +357,7 @@ ORDER BY jezik, pobjede DESC;
 | `run_kaskada7.sh` | **s169 — kaskada BEZ fiksnog broja rundi (Flaviovo pravilo).** Vrti dok prethodna runda prebaci bar jednu rečenicu preko praga; staje na strogoj nuli. Mjera se čita iz gate ispisa (`ispod praga`), zbir preko jezika — zato **jedan jezik po pozivu**, inače lakši jezik vrti prazne runde dok teži napreduje. `--faza 12\|16` (default 12), `--max N` samo kao osigurač (default 20). Ispisuje `>>> BILANS` po rundi. **s170: + `>>> ZBIR` red** (prirast zbira ocjena, tri normalizacije) |
 | `run_kaskada8.sh` | **s169 — dvoetapna, bez ijednog parametra za pogoditi.** Etapa 1 = faza 12 (base) dok ne dođe nula → **`>>> PRELAZAK`** → etapa 2 = faza 16 (seed) dok ne dođe nova nula. Obrazloženje: nula u etapi 1 ne znači da je rečenica gotova nego da je nezavisno izvlačenje iscrpljeno (klon-stopa base grane 8–22%, seed grane 0–3%). Pri prelasku se `PRETHODNI` resetuje na −1, inače bi prva seed runda odmah bila proglašena neproduktivnom. `--knjiga --jezici --od --do [--prag X] [--max N]`. **s170: + `>>> ZBIR` red uz postojeci `BILANS`** |
 | `run_kaskada9.sh` | **s170 — troetapna.** kaskada8 + **etapa 3: faza 24 (`refine-strict`, sa seedom)**, koja NE staje po gate-nuli nego kad **prirast zbira ocjena** padne ispod `--prirast` (default 0.10 % od `n`). Motiv: gate je slijep za poboljsanja koja ne prebace prag (s170: 7/11 jezika stalo dok je zbir jos rastao). Faza 24 registrovana jos u s163 -> nula izmjena baze. `--knjiga --jezici --od --do [--prag] [--prirast] [--max]` |
+| `run_kaskada10.sh` | **s171 — JEDNOPETLJANA.** root -> ponavljaj KRUG { faza 12 (base) -> faza 16 (seed) -> faza 24 (strict) }, sve tri faze s **istom vrijednoscu `--runda`** (faza kaze STA, runda KOJI PUT; u bazi ih razlikuje `faza_id`, runda sluzi samo da drugi krug smije ponoviti vec potrosenu fazu). Stajanje: **krug u kojem nijedna faza nije prebacila nijednu preko praga** — najstariji kriterij, zbir i klon-stopa ostaju informacija. Provjera nule ide poslije PRVE faze narednog kruga (gate kasni jednu rundu, pa gate faze 12 izvjestava o cijelom prethodnom krugu) -> potvrda nule kosta jednu fazu, ne tri. `--max 30` broji KRUGOVE. Povod: faze 16/24 rade nad SIDROM, pa nad promijenjenim sidrom nisu isti posao — kaskada 8/9 im daje tacno jedan pokusaj. `--knjiga --jezici --od --do [--prag] [--max]` |
 | `sandbox_batch_ponavljanje.py` | **s170, READ-ONLY** — mjeri daje li ponavljanje iste recenice UNUTAR jednog batcha klonove ili razlicite prevode. Cetiri rukavca (1 poziv prepleteno / 1 poziv blokovi / N poziva batch5 / N poziva batch20). Nalaz: **100% klonova u jednom pozivu**, 60/60 parova |
 | `sandbox_kaskada_logs.py` | **s169, READ-ONLY** — parser kaskada4/5/6/7/8 logova: okolina (aktivni `bb_03`, load, RAM), parametri, gate po rundi, `real` po bloku (root/prevod/sudija/pobjednik), brojači ZAVRŠENO/Traceback/timeout. Izlaz: `/tmp/kask_files.tsv` + `/tmp/kask_rounds.tsv`. Prima listu putanja logova |
 | `sandbox_kaskada_cijena.py` | **s169, READ-ONLY** — spaja `/tmp/kask_*.tsv` s bazom: minute i pozivi **po osvojenom pobjedniku**, po jeziku i rundi. Opsezi se čitaju iz logova (samo kompletni, `zavr==4`), pa se poklapanje log↔baza ne prepisuje ručno |
@@ -483,6 +484,41 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s171 snapshot (11. avgust 2026):** PRVI PUNI KASKADA9 PROLAZI + KASKADA10.
+> **(1) `refine-strict` NIJE novi mehanizam na procesljanom terenu.** Tri puna prolaza
+> (k12 5201-5300, es/ro/nl, nula Tracebackova): etapa 3 stala poslije **jedne** runde u
+> sva tri slucaja, Δ **+0.005 / +0.032 / +0.018 % n**. Izvod iz s170 razdvojio je prvu
+> rundu **novog** mehanizma (0.195-3.238 % n) od zavrsne runde **iscrpljenog**
+> (0.000-0.143 % n) — sva tri padaju duboko u donju klasu, uz umiruce runde etape 2
+> iste sesije (es r11 +0.009, r12 +0.000). **Promjena teksta prompta unutar seed grane
+> ne otvara novu distribuciju.** Ograda iz s170 smoke testa (k22/ja +0.65 % n, tamo je
+> strict bio PRVI mehanizam sa seedom) time POTVRDJENA.
+> **(2) `x = 0.10` NIJE ISKUSAN.** Nijedan prolaz nije dosao do druge strict runde, pa
+> pravilo nikad nije biralo — bilo koje `x` izmedju ~0.04 i 0.19 dalo bi isti ishod.
+> Strukturno: odluka se donosi POSLIJE runde, pa je uz ovaj prompt etapa 3 **po
+> konstrukciji tacno jedna runda**. Izmjeren je domet mehanizma, ne prag. De facto isti
+> rezultat kao kaskada8 uz tacno jednu dodatnu rundu (cijena 1m43 / 2m34 / 3m40).
+> **(3) KASKADA10** (`run_kaskada10.sh`, novo, 132 linije, nula izmjena baze/Pythona):
+> jedna petlja, **krug = tri faze (12/16/24) s istom rundom**, stajanje na krugu bez
+> ijednog prelaska preko praga. Motiv: faze 16/24 rade nad **sidrom**, pa nad
+> promijenjenim sidrom nisu isti posao — kaskada 8/9 svaki mehanizam posjeti tacno
+> jednom i zatvori zauvijek; petlja strictu daje **krivu umjesto tacke**. Gate vodi
+> odluku (najstariji kriterij), zbir je informacija — jer gate-only prolaz dozvoljava da
+> se pravilo "gate ILI prirast zbira" simulira **retroaktivno** iz istih logova, dok
+> obrnuto ne radi.
+> **(4) Klon-stopa nikad nije postojala u kodu** — `grep -i klon` daje jedan pogodak, i
+> to komentar. **Ne ide u log i ne dira se `bb_03`:** gate i zbir su **stanje** (ne
+> rekonstruisu se po krugu, jer `DELETE+INSERT` prepisuje pobjednika), klon je
+> **dogadjaj** (osobina reda u `bb_prevodi_recenica`, koji nikad ne nestaje, sa svojom
+> (faza, runda)). Zato gate/zbir MORAJU u log, klonovi ne moraju.
+> **(5) Usput:** gate i BILANS se u repu razilaze za **tacno 1** bez ijednog ponavljanja
+> (nl r11-r15) — hipoteza: zaokruzivanje na granici (`v_prevodi_full` zaokruzi pa poredi,
+> `bb_04` poredi nezaokruzeno), NEPROVJERENO. Rep ne pada: poslije 14-15 rundi ostaje
+> es 23 / nl 29 / ro 35 ispod praga.
+> Korpus: **50.624 / 2.040.431 / 401.072** (rast iskljucivo od Flaviovih runova — u
+> sesiji nije pokrenut nijedan prevod). Web nedirnut (BB_VERSION ostaje s168).
+> Detalji: `docs/sessions/session_171.md`.
 
 > **s170 snapshot (11. avgust 2026):** KASKADA9 + ZBIR KAO DRUGA MJERA.
 > **(1) `gemma4` oporavak DATIRAN:** iz 11 kaskada8 logova, prelom **17:05–17:14 UTC
@@ -2246,4 +2282,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 11. avgust 2026. (sesija 170)*
+*Flavio & Claude · Buchenberg · V3 · 11. avgust 2026. (sesija 171)*
