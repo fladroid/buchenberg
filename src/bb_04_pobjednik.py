@@ -56,6 +56,8 @@ def main():
     parser.add_argument("--od",     type=int, required=True)
     parser.add_argument("--do",     type=int, required=True)
     parser.add_argument("--jezici", type=str, nargs="+", required=True)
+    parser.add_argument("--prag", type=float, default=0.95,
+                        help="Samo za ISPIS bilansa; ne utice na izbor pobjednika.")
     args = parser.parse_args()
 
     conn = psycopg2.connect(**DB)
@@ -163,6 +165,17 @@ def main():
 
         conn.commit()
         print(f"  Upisano: {upisano}")
+
+        # Bilans jezika (s170): apsolutno stanje poslije izbora pobjednika.
+        # Racuna se iz vec ucitane liste - nula dodatnih upita.
+        # Omotaci (kaskade) iz uzastopnih bilansa izvode PROMJENU.
+        n_pob = len(pobjednici)
+        if n_pob:
+            skorovi = [float(x[7]) for x in pobjednici]
+            zbir = sum(skorovi)
+            ispod = sum(1 for v in skorovi if v < args.prag)
+            print(f"  BILANS jezika: n={n_pob} zbir={zbir:.4f} "
+                  f"prosjek={zbir/n_pob:.4f} ispod {args.prag}: {ispod}")
 
         # ── Fazni pobjednik → bb_prev_recenica_faza ──
         # Isti skup kandidata, ali pobjednik po (rečenica × faza).

@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 10. avgust 2026. (sesija 169)  
+**Poslednje ažuriranje:** 11. avgust 2026. (sesija 170)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -296,7 +296,7 @@ Prihvatanje je TEHNIČKO — izvršava se / upisuje potpun sloj / izvoziv u web.
 | View | Opis |
 |------|------|
 | `v_corpus` | Domen: `bb_knjige` × `bb_recenice`, svaki ID + njegove vrijednosti. Namjerno IZ BAZNIH TABELA, ne iz majke — 46,6% rečenica još nema nijedan prevod, corpus iz majke bio bi krnji i pomičan. |
-| `v_prevodi_full` | **MAJKA**: v_corpus + `bb_prevodi_recenica` + jezik/model/faza (LEFT)/embedder — svi kandidati, sve ocjene, `kompozitni` + `finalni_score` (kanonska formula). Jedini izuzetak od "sve kolone": `prevod_vektor` (1024-dim). |
+| `v_prevodi_full` | **MAJKA**: v_corpus + `bb_prevodi_recenica` + jezik/model/faza (LEFT)/embedder — svi kandidati, sve ocjene, `kompozitni` + `finalni_score` (kanonska formula). **s170: `finalni_score` vise NE propagira NULL** — `CASE WHEN sudija_avg IS NOT NULL THEN 0.4*komp+0.6*sudija ELSE komp END`, isto pravilo koje `bb_04` koristi od pocetka. Nesklad view-naspram-`bb_04` (s164) time ZATVOREN; 8.660 redova / 1.704 pobjednika izaslo iz NULL-a. Nijedan red podataka nije dirnut; `sudija_avg` netaknut (0.0 je ZAUZETA vrijednost — 11.095 stvarnih nula). Jedini izuzetak od "sve kolone": `prevod_vektor` (1024-dim). |
 | `v_pobjednici_full` | Apsolutni pobjednici: `bb_prev_recenica` (pokazivač) → JOIN majka (`pf.*`). |
 | `v_pobjednici_faza_full` | Fazni pobjednici: `bb_prev_recenica_faza` + `takmicenje_faza_*` iz pokazivača → JOIN majka. Invarijanta (provjerena, 0 prekršaja): `takmicenje_faza_id = faza_id`. |
 
@@ -340,7 +340,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
 | `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy); lista knjiga je hardcodovana u `KNJIGE` |
 | `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena. **Ispis po rečenici (s166): `ts=` translation_score, `bts=` back-translation score, `komp=` kompozitni** — kompozitni se računa samo za ispis (u bazi ga daje `v_prevodi_full`). **s167: `JEZIK_NAZIVI`/`NLLB_LANG_MAP` više NISU hardkod** — prazni dictovi koje puni `ucitaj_jezike(cur)` iz `bb_jezik`, pozvana jednom iz `main()`. Namjerno NE na nivou modula: `import bb_03_prevod` ne smije tražiti konekciju (sandbox sonde ga importuju zbog `nllb_batch`/`cosine`) |
-| `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu |
+| `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu. **s170: `--prag X` (default 0.95) — SAMO za ispis, ne dira izbor** + red `BILANS jezika: n= zbir= prosjek= ispod X:` iz vec ucitane liste (nula dodatnih upita). Time obje mjere dobijaju SVE putanje: kaskade, `run_faza.sh`, `run_root_gated.sh`, rucni pozivi |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114). **s167: prompt dobija ENGLESKI naziv jezika** (`naziv_en`; `COALESCE` uklonjen u s168 kad je kolona postala NOT NULL) — do s167 je slao srpski (`grammatical correctness in holandski`). Izmjereno prije izmjene: mijenja pobjednika u 10–13% rečenica, uz 0% od samog ponavljanja poziva. **Korpus od s167 ima dvije ocjenjivačke ere** (granica je vrijeme, ne kolona) |
@@ -354,8 +354,10 @@ ORDER BY jezik, pobjede DESC;
 | `run_kaskada.sh` | **Fleksibilna kaskada bez svijeta** (s163) — root direktnim pozivom (bilo koji `--model`) → sudija → pobjednik → 4 nezavisne gated faze (11-14: mistral/glm × 0.1/0.8, prompt `base`, prag<0.95, svaka svoj sudija+pobjednik). Ne dira `bb_faze_a1`/dijeljeno stanje — svaka faza je odvojen red. `--knjiga --jezici --od --do` |
 | `run_kaskada5.sh` | **s167 — kaskada4 + parametrizovan prag.** mistral@0.1 root → 4 runde mistral@0.8 (faza 12), bez ranog izlaza. `--knjiga --jezici --od --do [--prag X]` (default 0.95), prosljeđuje prag svim gated rundama. Root fazu NE dira — tamo gate ne postoji. Testirano k22/hr: default gate 6/4/3/3, `--prag 0.85` gate 3/0/0/0 (runde 2–4 bez ijednog reda u bazi) |
 | `run_kaskada6.sh` | **s169 — kaskada5 SA SEEDOM.** Identična petici osim gated faze: **16** (prompt `refine`) umjesto 12 (`base`). Posljedica u `bb_03`: `uses_seed=True` → modelu se šalje trenutni apsolutni pobjednik kao referenca, batch pada 20→5. `--knjiga --jezici --od --do [--prag X]` |
-| `run_kaskada7.sh` | **s169 — kaskada BEZ fiksnog broja rundi (Flaviovo pravilo).** Vrti dok prethodna runda prebaci bar jednu rečenicu preko praga; staje na strogoj nuli. Mjera se čita iz gate ispisa (`ispod praga`), zbir preko jezika — zato **jedan jezik po pozivu**, inače lakši jezik vrti prazne runde dok teži napreduje. `--faza 12\|16` (default 12), `--max N` samo kao osigurač (default 20). Ispisuje `>>> BILANS` po rundi |
-| `run_kaskada8.sh` | **s169 — dvoetapna, bez ijednog parametra za pogoditi.** Etapa 1 = faza 12 (base) dok ne dođe nula → **`>>> PRELAZAK`** → etapa 2 = faza 16 (seed) dok ne dođe nova nula. Obrazloženje: nula u etapi 1 ne znači da je rečenica gotova nego da je nezavisno izvlačenje iscrpljeno (klon-stopa base grane 8–22%, seed grane 0–3%). Pri prelasku se `PRETHODNI` resetuje na −1, inače bi prva seed runda odmah bila proglašena neproduktivnom. `--knjiga --jezici --od --do [--prag X] [--max N]` |
+| `run_kaskada7.sh` | **s169 — kaskada BEZ fiksnog broja rundi (Flaviovo pravilo).** Vrti dok prethodna runda prebaci bar jednu rečenicu preko praga; staje na strogoj nuli. Mjera se čita iz gate ispisa (`ispod praga`), zbir preko jezika — zato **jedan jezik po pozivu**, inače lakši jezik vrti prazne runde dok teži napreduje. `--faza 12\|16` (default 12), `--max N` samo kao osigurač (default 20). Ispisuje `>>> BILANS` po rundi. **s170: + `>>> ZBIR` red** (prirast zbira ocjena, tri normalizacije) |
+| `run_kaskada8.sh` | **s169 — dvoetapna, bez ijednog parametra za pogoditi.** Etapa 1 = faza 12 (base) dok ne dođe nula → **`>>> PRELAZAK`** → etapa 2 = faza 16 (seed) dok ne dođe nova nula. Obrazloženje: nula u etapi 1 ne znači da je rečenica gotova nego da je nezavisno izvlačenje iscrpljeno (klon-stopa base grane 8–22%, seed grane 0–3%). Pri prelasku se `PRETHODNI` resetuje na −1, inače bi prva seed runda odmah bila proglašena neproduktivnom. `--knjiga --jezici --od --do [--prag X] [--max N]`. **s170: + `>>> ZBIR` red uz postojeci `BILANS`** |
+| `run_kaskada9.sh` | **s170 — troetapna.** kaskada8 + **etapa 3: faza 24 (`refine-strict`, sa seedom)**, koja NE staje po gate-nuli nego kad **prirast zbira ocjena** padne ispod `--prirast` (default 0.10 % od `n`). Motiv: gate je slijep za poboljsanja koja ne prebace prag (s170: 7/11 jezika stalo dok je zbir jos rastao). Faza 24 registrovana jos u s163 -> nula izmjena baze. `--knjiga --jezici --od --do [--prag] [--prirast] [--max]` |
+| `sandbox_batch_ponavljanje.py` | **s170, READ-ONLY** — mjeri daje li ponavljanje iste recenice UNUTAR jednog batcha klonove ili razlicite prevode. Cetiri rukavca (1 poziv prepleteno / 1 poziv blokovi / N poziva batch5 / N poziva batch20). Nalaz: **100% klonova u jednom pozivu**, 60/60 parova |
 | `sandbox_kaskada_logs.py` | **s169, READ-ONLY** — parser kaskada4/5/6/7/8 logova: okolina (aktivni `bb_03`, load, RAM), parametri, gate po rundi, `real` po bloku (root/prevod/sudija/pobjednik), brojači ZAVRŠENO/Traceback/timeout. Izlaz: `/tmp/kask_files.tsv` + `/tmp/kask_rounds.tsv`. Prima listu putanja logova |
 | `sandbox_kaskada_cijena.py` | **s169, READ-ONLY** — spaja `/tmp/kask_*.tsv` s bazom: minute i pozivi **po osvojenom pobjedniku**, po jeziku i rundi. Opsezi se čitaju iz logova (samo kompletni, `zavr==4`), pa se poklapanje log↔baza ne prepisuje ručno |
 | `sandbox_jezik_probe.py` | **s167, READ-ONLY, NECOMMITOVANO** — mjeri je li prag prenosiv na jezik koji NIJE registrovan. Prevodi opseg NLLB-om ili LLM-om (`--llm`), računa score ISTIM putem kao `bb_03` (funkcije importovane), poredi s postojećim NLLB prevodima istih rečenica iz baze. `--nllb-kod --oznaka --prag --llm --temp --jezik-naziv` |
@@ -481,6 +483,44 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s170 snapshot (11. avgust 2026):** KASKADA9 + ZBIR KAO DRUGA MJERA.
+> **(1) `gemma4` oporavak DATIRAN:** iz 11 kaskada8 logova, prelom **17:05–17:14 UTC
+> (19:05–19:14 CEST)**, **sinhron preko tri nezavisna procesa** — medijana s/poziv
+> 10.5 → 1.4 (~8×), dok `mistral` drži 4–10 s/rečenici bez prekida kroz isti prozor.
+> Drugi put, drugim materijalom: kapacitet je po MODELU, ne po regionu.
+> **(2) Seed drži 16–44% finalnog teksta**, preuzima 43–74% onoga što je etapa 1
+> proglasila neprobojnim (medijana 59%), skok 0.021–0.046. ⚠️ **bs i nl su po gateu
+> izgledali kao promašaj (0 i +1 prelazak) a dali su seedu 16 i 19 pobjednika** —
+> seed diže rep ali ga često ne prebaci preko 0.95. Mjereno gateom, ideja bi bila
+> odbačena na dva jezika na kojima radi. Klon-stopa: base 13–42% (nl 40% na 15 rundi),
+> seed 3–17%.
+> **(3) SONDA — ponavljanje u batchu:** 5 rečenica ×4 u jednom pozivu daje **4 klona,
+> 60/60 parova**, oba jezika, oba rasporeda. Kopiranje iz vlastitog konteksta tuče
+> `repeat_penalty`. Odvojeni pozivi daju 2.2–3.0 različitih. **Batch je JEDNA odluka,
+> ne 20 nezavisnih**; **sastav batcha mijenja prevod** (neregistrovan parametar, klasa
+> prompta iz s139). Ne pomaže ni vremenu ni raznolikosti — poluga ostaje `runda`.
+> **(4) `v_prevodi_full` NE propagira NULL** (`CASE ... ELSE kompozitni`, isto pravilo
+> koje `bb_04` koristi od početka) — **nesklad iz s164 ZATVOREN**, 8.660 redova / 1.704
+> pobjednika izašlo iz NULL-a, **nijedan red podataka nije dirnut**. 0.0 odbačena kao
+> zamjenska vrijednost: **zauzeta je** (11.095 stvarnih nula, 7.402 uz komp > 0.90).
+> Posljedica: grana `PREKID/exit(3)` u `bb_03` postala mrtav kod; stari brojevi nose
+> zvjezdicu jer 8.660 redova sada ulazi u `SUM`/`AVG`.
+> **(5) OBJE MJERE U SVIM PETLJAMA:** `bb_04` ispisuje `BILANS jezika` (apsolutno
+> stanje, nula dodatnih upita), kaskade 7/8/9 ispisuju `ZBIR` (promjena, tri
+> normalizacije). Gate mjeri PRIJE runde, zbir POSLIJE — zbir nema kašnjenje od jedne
+> runde koje gate ima. Pri oporavku/ponavljanju `GATE` potcjenjuje (`already_done`
+> skine odrađeno), zbir ne.
+> **(6) KASKADA9** (`run_kaskada9.sh`, novo): etapa 3 = **faza 24 `refine-strict`**,
+> zaustavljanje po **prirastu zbira** `--prirast` (default **0.10 % od `n`**).
+> Izvod x nad 133 runde: završne runde iscrpljenog mehanizma 0.000–0.143 % n, prve
+> runde novog 0.195–3.238 % n — **između nema nijedne**. x=0.10 štedi 39% rundi uz
+> 7.3% prirasta i najmanje vaskrsenja (5). Nula izmjena baze (faza 24 iz s163).
+> Smoke test faze 24 (prvo izvršavanje ikad, k22/ja 1010–1029): **3 od 4 preko praga**,
+> zbir 19.1324 → 19.2619. ⚠️ Δ +0.65% n NE potvrđuje x — taj opseg nije prošao fazu 16,
+> pa je strict bio PRVI mehanizam sa seedom. **Pravi x traži pun prolaz kaskade9.**
+> Korpus: **50.624 / 2.034.595 / 400.172** (prešao 400k pobjednika).
+> Web nedirnut (BB_VERSION ostaje s168). Detalji: `docs/sessions/session_170.md`.
 
 > **s169 snapshot (10. avgust 2026):** SEED SE VRATIO + KASKADA BEZ FIKSNOG BROJA RUNDI.
 > **(1) RIJEŠENO neslaganje s167/s168 oko japanskog.** Uzrok nije bio ni opseg ni
@@ -2206,4 +2246,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 10. avgust 2026. (sesija 169)*
+*Flavio & Claude · Buchenberg · V3 · 11. avgust 2026. (sesija 170)*

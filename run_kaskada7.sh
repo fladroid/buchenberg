@@ -57,10 +57,18 @@ echo ">>> KORAK 1: sudija"
 time venv/bin/python src/bb_08_sudija.py --knjiga "$KNJIGA" --od "$OD" --do "$DO" --jezici $JEZICI
 
 echo ">>> KORAK 1: pobjednik"
-time venv/bin/python src/bb_04_pobjednik.py --knjiga "$KNJIGA" --od "$OD" --do "$DO" --jezici $JEZICI
-
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
+
+time venv/bin/python src/bb_04_pobjednik.py --knjiga "$KNJIGA" --od "$OD" --do "$DO" --jezici $JEZICI --prag "$PRAG" 2>&1 | tee "$TMP"
+
+# s170: zbir ocjena kao druga mjera. Cita se iz BILANS linije koju ispisuje bb_04.
+citaj_zbir() { awk '/BILANS jezika:/{for(i=1;i<=NF;i++)if($i~/^zbir=/){split($i,a,"=");s+=a[2]}}END{printf "%.4f", s+0}' "$1"; }
+citaj_n()    { awk '/BILANS jezika:/{for(i=1;i<=NF;i++)if($i~/^n=/){split($i,a,"=");s+=a[2]}}END{print s+0}' "$1"; }
+
+ZBIR_PRETHODNI=$(citaj_zbir "$TMP")
+NTOT=$(citaj_n "$TMP")
+echo ">>> ZBIR root: $ZBIR_PRETHODNI/$NTOT (polazno stanje)"
 PRETHODNI=-1
 RUNDA=1
 
@@ -70,6 +78,14 @@ while [ "$RUNDA" -le "$MAX_RUNDI" ]; do
         --od "$OD" --do "$DO" --runda "$RUNDA" --prag "$PRAG" 2>&1 | tee "$TMP"
 
     GATE=$(grep -oE "ispod praga [0-9.]+: [0-9]+" "$TMP" | awk '{s+=$4} END{print s+0}')
+
+    ZBIR=$(citaj_zbir "$TMP")
+    NTOT=$(citaj_n "$TMP")
+    awk -v z="$ZBIR" -v p="$ZBIR_PRETHODNI" -v n="$NTOT" -v r="$RUNDA" 'BEGIN{
+        d=z-p; rez=n-p;
+        printf ">>> ZBIR runde %s: %.4f/%s (POSLIJE runde) — ova runda dodala %+.4f | %+.3f%% n | %+.2f%% rezerve\n",
+               r, z, n, d, (n>0?100*d/n:0), (rez>0?100*d/rez:0) }'
+    ZBIR_PRETHODNI=$ZBIR
 
     if [ "$PRETHODNI" -lt 0 ]; then
         echo ">>> BILANS runde $RUNDA: ispod praga $GATE (prva runda, nema poredjenja)"
