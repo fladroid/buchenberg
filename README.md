@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 11. avgust 2026. (sesija 171)  
+**Poslednje ažuriranje:** 12. avgust 2026. (sesija 172)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -91,7 +91,10 @@ The project is built in ongoing collaboration with **[Claude](https://claude.ai)
 | `mistral-large-3:675b` | Ollama Cloud | 0.1 / 0.8 | 1 (+0.8 faza 2) | Novi par od s114; nativno ne-misleći |
 | `glm-5.2` | Ollama Cloud | 0.1 / 0.8 | 1 (+0.8 faza 2) | Novi par od s114; poštuje think:false |
 | `nllb-600M` | Lokalno (CPU) | 0.0 | 1 | Deterministički; dobar za kratke rečenice |
+| `qwen3.5:397b` | Ollama Cloud | 0.1 / 0.8 | 1, 27, 28 | **s172, id 28.** Registrovan i testiran; ⚠️ vidi upozorenje o potrošnji ispod |
 | `gemma4:31b` | Ollama Cloud | 0.0 | — | Samo sudija — ne prevodi |
+
+> ⚠️ **POTROŠNJA NIJE PROPORCIONALNA DEKLARISANOJ KLASI (s172).** Ollama naplaćuje GPU vrijeme i objavljuje *usage level* 1–4 na `library/<model>/tags`. `mistral-large-3` i `qwen3.5:397b` su **oba klasa 2 (Medium)**, ali je produkcijski test kaskade11 (k12, 9 jezika × 100 rečenica) pokazao da qwen po zahtjevu troši **~35× više od mistrala** i **>300× više od gemme4**. Vrijeme to NE objašnjava (qwen je 2.5× sporiji, ne 35×) — naplaćuje se GPU-zauzeće, a 397B model je raširen preko više GPU-a. **`sandbox_model_probe.py` mjeri sekunde, sonda kvaliteta mjeri ocjene — NI JEDNA ne vidi potrošnju.** Jedini način da se izmjeri je produkcijski run uz Ollama dashboard (baseline → delta po modelu). Klase ostalih: `glm-5.2` = **3 (High)**; `nemotron-3-super`, `deepseek-v4-flash`, `minimax-m2.7` = 2; `kimi-k2.6`, `minimax-m3` = 3; `kimi-k3`, `deepseek-v4-pro` = 4; `gpt-oss:20b` = 1.
 
 **Aktivni izbor po fazi živi u bazi** — od s142 NE u `bb_modeli` nego u tri veze `bb_faze_a1` (model) / `bb_faze_a2` (temperatura) / `bb_faze_a3` (prompt); `bb_modeli.aktivan` je samo katalog-nivo zastavica. Orkestratori čitaju kroz `src/bb_aktivni_modeli.py --faza N`. Kolone "Temperatura" i "Faza" u tabeli iznad su ILUSTRACIJA tekuće upotrebe, ne shema — model i temperatura su nezavisne ose (vidi §5, §7). Stari par `gemma3:12b`/`ministral-3:14b` (Ollama retire 15. jul 2026) zamrznut kao istorijska referenca: `aktivan=false`, svi prevodi netaknuti.
 
@@ -358,6 +361,9 @@ ORDER BY jezik, pobjede DESC;
 | `run_kaskada8.sh` | **s169 — dvoetapna, bez ijednog parametra za pogoditi.** Etapa 1 = faza 12 (base) dok ne dođe nula → **`>>> PRELAZAK`** → etapa 2 = faza 16 (seed) dok ne dođe nova nula. Obrazloženje: nula u etapi 1 ne znači da je rečenica gotova nego da je nezavisno izvlačenje iscrpljeno (klon-stopa base grane 8–22%, seed grane 0–3%). Pri prelasku se `PRETHODNI` resetuje na −1, inače bi prva seed runda odmah bila proglašena neproduktivnom. `--knjiga --jezici --od --do [--prag X] [--max N]`. **s170: + `>>> ZBIR` red uz postojeci `BILANS`** |
 | `run_kaskada9.sh` | **s170 — troetapna.** kaskada8 + **etapa 3: faza 24 (`refine-strict`, sa seedom)**, koja NE staje po gate-nuli nego kad **prirast zbira ocjena** padne ispod `--prirast` (default 0.10 % od `n`). Motiv: gate je slijep za poboljsanja koja ne prebace prag (s170: 7/11 jezika stalo dok je zbir jos rastao). Faza 24 registrovana jos u s163 -> nula izmjena baze. `--knjiga --jezici --od --do [--prag] [--prirast] [--max]` |
 | `run_kaskada10.sh` | **s171 — JEDNOPETLJANA.** root -> ponavljaj KRUG { faza 12 (base) -> faza 16 (seed) -> faza 24 (strict) }, sve tri faze s **istom vrijednoscu `--runda`** (faza kaze STA, runda KOJI PUT; u bazi ih razlikuje `faza_id`, runda sluzi samo da drugi krug smije ponoviti vec potrosenu fazu). Stajanje: **krug u kojem nijedna faza nije prebacila nijednu preko praga** — najstariji kriterij, zbir i klon-stopa ostaju informacija. Provjera nule ide poslije PRVE faze narednog kruga (gate kasni jednu rundu, pa gate faze 12 izvjestava o cijelom prethodnom krugu) -> potvrda nule kosta jednu fazu, ne tri. `--max 30` broji KRUGOVE. Povod: faze 16/24 rade nad SIDROM, pa nad promijenjenim sidrom nisu isti posao — kaskada 8/9 im daje tacno jedan pokusaj. `--knjiga --jezici --od --do [--prag] [--max]` |
+| `run_kaskada11.sh` | **s172 — plafon + seed blok izvan petlje.** root **qwen@0.1** -> ponavljaj KRUG { faza 12 (mistral@0.8 base) -> faza 27 (qwen@0.8 base) }, **max 3 kruga**, stop **odmah** cim OBJE faze kruga vrate nulu (bez potvrdnog kruga, za razliku od kaskade10) -> izlaz -> **seed blok izvan petlje**: faza 24 (mistral strict) -> faza 28 (qwen strict), tacno jednom svaka, **bez obzira zasto se iz petlje izaslo**. Fiksno 8 faza po prolazu. `--knjiga --jezici --od --do [--prag] [--max]` |
+| `run_kaskada12.sh` | **s172 — ogledalo jedanaestice.** root **mistral@0.1**, krug = faza 27 -> faza 12, seed blok = faza 28 -> faza 24. `diff` naspram k11 = **samo 4 konfiguracijske linije**. Svrha: qwen dobija PRVU poziciju u krugu, jer faza koja ide druga nasljedjuje prorijedjen teren i njeni brojevi nisu uporedivi s prvom. ⚠️ **NIJE POKRENUTA u s172** (Flavio presao direktno na 13). |
+| `run_kaskada13.sh` | **s172 — DVOBLOKOVSKA, uslovni skupi blok.** root mistral@0.1 -> **BLOK A** (max 4 kruga): faza 12 -> faza 24, najmanje 1x, izlaz kad krug nema prirasta -> **USLOV: ako je % pobjednika IZNAD praga < X** (`--x`, default **60**) -> **BLOK B** (max 2 kruga): faza 14 (glm@0.8 base) -> faza 26 (glm@0.8 strict). Motiv: glm pobjedjuje mistrala na **svih 14 jezika (58-64%)** ali je klasa 3 naspram mistralove 2 — zato ulazi TEK kad jeftini iscrpi svoje i SAMO ako je stanje lose. **X mjeri STANJE, stop unutar bloka mjeri PRIRAST** (X bira DA LI platiti glm, prirast bira KOLIKO dugo). Cijena: najbolji **3 faze**, A do plafona bez B **9**, najgori **13**. Nula novih faza. `--knjiga --jezici --od --do [--prag] [--x 60] [--amax 4] [--bmax 2]` |
 | `sandbox_batch_ponavljanje.py` | **s170, READ-ONLY** — mjeri daje li ponavljanje iste recenice UNUTAR jednog batcha klonove ili razlicite prevode. Cetiri rukavca (1 poziv prepleteno / 1 poziv blokovi / N poziva batch5 / N poziva batch20). Nalaz: **100% klonova u jednom pozivu**, 60/60 parova |
 | `sandbox_kaskada_logs.py` | **s169, READ-ONLY** — parser kaskada4/5/6/7/8 logova: okolina (aktivni `bb_03`, load, RAM), parametri, gate po rundi, `real` po bloku (root/prevod/sudija/pobjednik), brojači ZAVRŠENO/Traceback/timeout. Izlaz: `/tmp/kask_files.tsv` + `/tmp/kask_rounds.tsv`. Prima listu putanja logova |
 | `sandbox_kaskada_cijena.py` | **s169, READ-ONLY** — spaja `/tmp/kask_*.tsv` s bazom: minute i pozivi **po osvojenom pobjedniku**, po jeziku i rundi. Opsezi se čitaju iz logova (samo kompletni, `zavr==4`), pa se poklapanje log↔baza ne prepisuje ručno |
@@ -484,6 +490,55 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s172 snapshot (12. avgust 2026):** CETIRI SONDE + TRECI WORKER + KASKADE 11/12/13.
+> Korpus: **50.624** recenice, **2.057.322** prevoda, **402.772** pobjednika, **343** rupe.
+>
+> **(1) KOREKCIJA s171 — FAZA 24 (strict) NIJE MRTVA.** Razlaganje 16 kaskada10 logova po osi:
+> f12 base **173** prelaska (1.41 po izvrsavanju), f16 seed **234** (1.97), **f24 strict 127 (1.09)** —
+> 24% svih prelazaka, isti red velicine kao base. s171 ga je mjerio JEDNOM, poslije iscrpljenog
+> base+seed niza, i proglasio "zavrsnom rundom iscrpljenog mehanizma". Flaviov argument
+> ("faza nad promijenjenim sidrom nije ista faza") je time IZMJEREN, ne vise izveden.
+>
+> **(2) PRAZAN REP JE STRUKTURNO NEIZBJEZAN.** Stajanje trazi 3 prazne faze + 1 potvrdnu =
+> **minimum 4 po prolazu, po konstrukciji.** Izmjereno: raspon 4-6, **medijana 5**;
+> **79 od 358 faza (22%)** bez ijednog doprinosa. Flavio je to procijenio prije mjerenja — tacno.
+>
+> **(3) SONDA: RANDOM SIDRO** (`sandbox_random_seed.py`, READ-ONLY, 3 rukavca A1/B/A2,
+> svi kandidati u ISTOM pozivu sudiji). Random ne-pobjednik kao seed **ne izlazi iz suma
+> ponavljanja** (|t|<2 na sva tri terena), a prelaske praga gubi **2:1 do 5:1**. Jedini pozitivan
+> nalaz: na ISCRPLJENOM terenu (k24/sl) daje **0% klonova** naspram 10-12.5% za pobjednik-seed.
+> Zakljucak: mjesto joj je kao **uslovni okidac za klon-zaglavljenost**, ne kao opsta strategija.
+>
+> **(4) SONDA: ZAMJENA ULOGA** (`sandbox_zamjena_uloga.py`) — gemma prevodi, mistral sudi.
+> **Izbor sudije je NAJKRUPNIJI neregistrovani parametar dosad izmjeren:** slaganje argmaxa
+> gemma↔mistral samo **46-58%** naspram **95-97%** gemme sa sobom; MAE **40-75× iznad suma**.
+> Za poredjenje, naziv jezika u promptu (s167) mijenja argmax u 10-13%. **Posljedica: korpus od
+> 402.772 pobjednika je artefakt izbora gemme kao sudije.** Self-preference mistrala NIJE
+> potvrdjena (+0.0229 de, −0.0158 hr — suprotan znak). Gemma kao prevodilac: treca od cetiri.
+> **Gemma ostaje sudija iz POZICIONOG razloga: jedina komponenta koja ne prevodi.**
+>
+> **(5) TRECI WORKER — qwen3.5:397b registrovan (id 28), faze 27/28.** Sonda kvaliteta
+> (`sandbox_novi_worker.py`, k23, 4 jezika × 40 rec, 5 kandidata u jednom pozivu sudiji):
+> dobitak **2-7× iznad suma**, prazni lijevak za **22-56% vec u root fazi**, na sl je qwen@0.1
+> najbolji pojedinacni model. **ALI — vidi §3: potrosnja ~35× mistralova za isti ili gori posao.**
+>
+> **(6) KOREKCIJA — GLM JE NAJBOLJI WORKER, NE MISTRAL.** Sonda na 160 recenica sugerisala
+> jezicku specijalizaciju (mistral de/hr, glm sl/mk); upit nad **zajednickim terenom** to obara:
+> **glm pobjedjuje na SVIH 14 jezika, 58-64%, bez izuzetka.** Kumulativni upit po modelu je
+> zavaravajuci — gemma3:12b (34.1%) i ministral-3:14b (25.0%) drze 59% pobjednika jer su radili
+> SAMI prije nego sto su mistral i glm usli. Prosjek `finalni_score` po pobjedniku mjeri lakocu
+> osvojenih recenica, ne kvalitet modela.
+>
+> **(7) KASKADA11 — ISTI ISHOD KAO DESETKA S TRECINOM FAZA.** Produkcijski test k12, 9 jezika
+> × 100 recenica (mk i ja prekinuti, §13): prosjek ispod praga na kraju **29.5** naspram
+> desetkinih **30.0**, ali **8 faza fiksno** naspram **medijanih 21**. Plafon od 3 kruga opalio
+> na svih 9 — nijedan nije stao gate-nulom. **Arhitektura je bolja; problem je model u njoj.**
+> Doprinos: mistral **218** prelazaka, qwen **76** (2.9:1) — uz ogradu da faza 27 uvijek ide DRUGA.
+>
+> **(8) NOVO PRAVILO ZA KANDIDATE.** Prije usvajanja modela treba **tri** mjerenja, ne dva:
+> ponasanje (`sandbox_model_probe.py`), kvalitet (pravi `bb_03`+`bb_08`), i **potrosnja**
+> (produkcijski run uz dashboard). Sonde 1 i 2 su prosle, treca je nedostajala — i bila odlucujuca.
 
 > **s171 snapshot (11. avgust 2026):** PRVI PUNI KASKADA9 PROLAZI + KASKADA10.
 > **(1) `refine-strict` NIJE novi mehanizam na procesljanom terenu.** Tri puna prolaza
@@ -1930,6 +1985,22 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Otvoreno iz s172 (OTVORENO — prioritetno)
+
+**1. Odluka o qwenu.** Model (id 28) i faze 27/28 ostaju registrovani, ali po izmjerenom **ne opravdava cijenu**: nije brži (2.5× sporiji po rečenici), nije bolji (slabiji od mistrala na de/hr; dobitak 0.006–0.013 gdje pobjeđuje), a troši ~35× više po zahtjevu. Kaskada12 (ogledalo, qwen prvi u krugu) je napisana ali **nije pokrenuta** — ona bi razdvojila koliko je od slabog doprinosa bila stvarna slabost a koliko red u koloni. Vrijedi je pustiti prije konačne odluke, ili odluku donijeti bez nje.
+
+**2. Watchdog na Ollama poziv (BUG, nezatvoren).** `bb_03_prevod.py:165` ima `timeout=120`, što u `requests` pokriva **i connect i read** — ali read timeout mjeri **razmak između primljenih bajtova**, ne ukupno trajanje odgovora. Server koji odgovara u kapima drži konekciju živom neograničeno. U s172 su dva procesa (oba qwen faza 27) visila **16 i 19 minuta bez ijednog reda u logu**, uz **9 s CPU vremena za 2h+ rada** — sjedili su na socketu. Prethodilo: `500 Server Error` ×3 na batchu → fallback na single → `Read timed out` → tišina. Popravka nije jedna linija: traži ukupni watchdog (`stream=True` uz mjerenje proteklog vremena, ili signal/thread timer). **Dok se ne popravi, dugotrajni runovi traže povremenu provjeru da log raste.**
+
+**3. Rezultati kaskade13.** Flavio vozi od 18:17 (12. avgust). Baseline: gemma 47.134, mistral 10.288, qwen 626, **glm 8**. Pošto je glm ove sedmice praktično netaknut, delta daje **izolovanu cijenu bloka B** — prvi put da se zna koliko tačno košta odluka da se pozove skupi model. Provjeriti i je li X=60 opalio na očekivanim jezicima (predviđeno: mk, pt, sl da; es, ja ne).
+
+**4. `deepseek-v4-flash` kao alternativa qwenu.** Jedini kandidat **brži od mistrala** u sondi ponašanja (0.9 s naspram 1.1), klasa 2, poštuje `think:false`, čist izlaz, batch 5/5. Kvalitet i **potrošnja** neizmjereni. ⚠️ 1M konteksta — ako je i on velik model raširen preko više GPU-a, može ispasti isto kao qwen. Jedini način da se sazna je run uz dashboard.
+
+**5. Rezervni sudija** — samo ako Ollama nešto povuče (presedan: s109, s112). Kandidati `deepseek-v4-flash` i `nemotron-3-super` (oba klasa 2, oba van prevodilačke rotacije). Sudijin poziv ide jednom po rečenici, pa nemotronovih 36 s po pozivu boli manje nego kod prevodioca. Prvo mjerenje pri uvođenju: slaganje argmaxa s gemmom — sonda postoji (`sandbox_zamjena_uloga.py`).
+
+**6. Sidro iz modela van rotacije.** Flaviova ideja o gemminom prevodu kao seedu je **odbijena uz obrazloženje**: gemma bi počela oblikovati ono što potom ocjenjuje, čime bi se potrošila njena neutralnost — jedina komponenta bez konflikta interesa (deliberatna osobina od s124). Alternativa koja stoji: sidro iz modela koji nije ni radnik ni sudija. Sonda bi bila rukavac **C** uz postojeće A1/B/A2 u `sandbox_random_seed.py`.
+
+**7. Random sidro kao uslovni okidač.** Ne kao opšta strategija (mjereno: gubi prelaske 2:1 do 5:1), nego samo pri klon-zaglavljenosti — jer tamo daje **0% klonova** naspram 10–12.5%. Pravilo bez ijednog slobodnog broja: "ako je prethodna runda vratila klon, promijeni sidro."
+
 ### Parametri kao konfiguracija, ne kao hardkod (s167, OTVORENO — okvir za dalje)
 Flaviov kriterij, zapisan da se ne izgubi: pitanje nije **da li je neki broj
 tacan**, nego **da li je potreban, da li je fiksan za sve, i kako se do njega
@@ -2269,9 +2340,18 @@ Neki modeli (capability `thinking`: gpt-oss, nemotron, deepseek, glm, qwen3.5…
 - `"think": false` u telu zahtjeva GASI reasoning — ali **poštuje se po modelu**: nemotron sluša (907→10 tok), gpt-oss ignoriše (ostaje zaglavljen). Provjeri sondom, ne pretpostavljaj.
 - Gašenje thinkinga može sniziti kvalitet (nemotron bez thinkinga → slabiji prevod). Trade-off mjeri sudija.
 
-### Prije usvajanja novog modela — pusti sondu
-`venv/bin/python src/sandbox_model_probe.py --models "MODEL" --jezik hr`
-Mjeri ponašanje (čistoća/thinking/trošak/batch/round-trip) naspram etalona. Kvalitet ide zasebno kroz pravi `bb_03`+`bb_08` na malom opsegu. Registracija u `bb_modeli` (a1 katalog) + `bb_faze_a1`/`bb_faze_a2` izbor za ciljanu fazu (s142) je preduslov za pravi run.
+### Prije usvajanja novog modela — TRI mjerenja, ne dva (s172)
+
+**1. Ponašanje** — `venv/bin/python src/sandbox_model_probe.py --models "MODEL" --jezik hr`
+Čistoća, thinking, tokeni, batch, round-trip naspram etalona. ⚠️ `temp_react` je **n=1** (jedan par poziva na jednoj rečenici) — nije dokaz da je model temp-mrtav; za to treba 5 poziva × 2 rečenice × 2 temperature.
+
+**2. Kvalitet** — `venv/bin/python src/sandbox_novi_worker.py --jezik X --n 40` (s172)
+Pet kandidata po rečenici (mistral / glm / nllb / novi@0.1 / novi@0.8) ocijenjeno **jednim** pozivom sudiji; drugi identičan poziv daje šum. Kompozitni za postojeće iz baze, sudijina ocjena za sve iz istog poziva — inače se novi kandidat poredi protiv ocjene iz druge sudijske ere (s167).
+
+**3. POTROŠNJA** — produkcijski run uz Ollama dashboard, baseline → delta po modelu.
+**Ovo je mjerenje koje je u s172 nedostajalo i ispalo odlučujuće.** Sonde 1 i 2 mjere sekunde i ocjene; **ni jedna ne vidi GPU-zauzeće.** qwen3.5:397b je prošao obje, pa u produkciji potrošio ~35× više od mistrala po zahtjevu — pri istoj deklarisanoj klasi. Metod: snapshot dashboarda prije, tokom i poslije, delta po modelu (broj zahtjeva je precizniji od procenta; procenat ima jednu decimalu).
+
+Registracija u `bb_modeli` (a1 katalog) + `bb_faze_a1`/`bb_faze_a2` izbor za ciljanu fazu (s142) je preduslov za pravi run.
 
 ### Radni ritam — očekivano opterećenje po dobu dana
 
@@ -2282,4 +2362,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 11. avgust 2026. (sesija 171)*
+*Flavio & Claude · Buchenberg · V3 · 12. avgust 2026. (sesija 172)*
