@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 12. avgust 2026. (sesija 172)  
+**Poslednje ažuriranje:** 13. avgust 2026. (sesija 173)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -369,6 +369,7 @@ ORDER BY jezik, pobjede DESC;
 | `sandbox_kaskada_cijena.py` | **s169, READ-ONLY** — spaja `/tmp/kask_*.tsv` s bazom: minute i pozivi **po osvojenom pobjedniku**, po jeziku i rundi. Opsezi se čitaju iz logova (samo kompletni, `zavr==4`), pa se poklapanje log↔baza ne prepisuje ručno |
 | `sandbox_jezik_probe.py` | **s167, READ-ONLY, NECOMMITOVANO** — mjeri je li prag prenosiv na jezik koji NIJE registrovan. Prevodi opseg NLLB-om ili LLM-om (`--llm`), računa score ISTIM putem kao `bb_03` (funkcije importovane), poredi s postojećim NLLB prevodima istih rečenica iz baze. `--nllb-kod --oznaka --prag --llm --temp --jezik-naziv` |
 | `sandbox_sudija_naziv_probe.py` | **s167, READ-ONLY** — mjeri utiče li naziv jezika u promptu na sudijinu ocjenu. Tri prolaza (A1/B/A2) nad istim kandidatima; treći daje šum tog seta. Mjeri MAE, bias i **promjenu argmaxa**. `PROMPT_TEMPLATE`/`call_sudija`/`parse_ocjene` importovani iz `bb_08` |
+| `sandbox_sampler.py` | **s173, READ-ONLY** — mjeri da li `top_p`/`top_k` defaultovi sijeku ono sto temperatura otvara. Sest rukavaca (0.8 / 0.8+otvoren rep / 1.0+rep / 1.3+rep / 1.0 sam / sum), svaki 4 odvojena poziva nad istim batchom; raznolikost = razlicitih tekstova po recenici, kvalitet = svi rukavci u JEDNOM pozivu sudiji. **Nalaz: ni temperatura sama ni otvoren rep sam ne rade — samo zajedno (interakcija).** `--jezik --knjiga --n --ponavljanja --od --izlaz` |
 | `bb_09_ner.py` | NER classic sloj: spaCy ekstrakcija + **glm-5.2** normalizacija (s130: NE sudija — gemma4 ostaje slijep i fiksan) + upis u bb_ner_entiteti/bb_ner_recenica + **vlastite co-occ veze**. `--knjiga N\|all`, `--force`; spaCy učitan jednom van petlje. DELETE samo svog sloja (`method='classic'`) — izvedeno pada kroz CASCADE. |
 | `bb_geometry_export.py` | Generira `data/geometry.json` — UMAP 2D projekcija EN+HR+SR+IT+DE embeddinga za geometry.html; pokreće se ručno (~380s) |
 | `bb_web_export.py` | Generira JSON fajlove za Apache2 web prikaz (books, orig, tr, ner, version). **s168: +`data/langs.js`** — `window.BB_LANGS` (native + en ime po jeziku) iz `bb_jezik`; web stranice ga ucitavaju sinhrono (`<script src="data/langs.js">` prije `nav.js`) umjesto vlastitih rjecnika. `books.json` nosi `name` (native) i `name_en`. NER: get_ner/get_ner_veze primaju `method` param; get_ner_veze ČITA materijalizovanu bb_ner_veze (s129, read-only); nova get_ner_relacije (DocRE) → relacije u llm grani; ner_<id>.json = `{classic, llm:{entiteti,veze,relacije}}` — s127/s129 |
@@ -377,7 +378,7 @@ ORDER BY jezik, pobjede DESC;
 | `bb_10c_docre.py` | DocRE: par-vođena ekstrakcija usmjerenih relacija (prvi prolaz glm-5.2, nedirano od s129) + **drugi prolaz s131 (Massey)**: glm-5.2 (think:false, temp 0.0) klasifikuje iz zatvorene liste 29 fine kategorija (iz baze) + afinitet; "ostalo"→fine=NULL (živ ventil). Deterministički filter: klasifikacija SAMO za PERSON-PERSON parove. `audit_kosinus` = e5-large audit metrika. `--reklasifikuj` = samo drugi prolaz nad postojećim relacijama (UPDATE). `--knjiga N\|all`, `--force`, `--dry-run`. |
 | `run_ner.sh` | **NER orkestrator (s130)** — proizvodni ulaz: bb_09 → bb_10 → bb_10c, `set -euo pipefail`. `--knjiga N\|all`, `--force`. **`--force` je svojstvo PROLAZA, ne faze** — prosljeđuje se svim trima. Pojedinačne skripte ostaju samostalno pokretljive (istraživački alat). |
 | `bb_xray_export.py` | Generira X-Ray JSON fajlove (`data/xray_<id>_<lang>.json`) — svih 5 kandidata po rečenici s kompletnim scoreovima; pokrenuti nakon `bb_web_export.py` |
-| `health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu |
+| `src/health_check.py` | Infrastrukturna provjera svih komponenti; čita bb bazu. Poziv: `venv/bin/python src/health_check.py` (putanja je i u §12; s173 promašena jer README nije pročitan do kraja) |
 | `sandbox_cluster_probe.py` | READ-ONLY dijagnostička sonda (s131): k-means + silhouette nad e5-large embeddinzima DocRE opisa — mjeri vidi li embedding prostor strukturu. Presudila arhitekturu drugog prolaza (klasifikator NE, audit DA). |
 | `sandbox_model_probe.py` | READ-ONLY sonda ponašanja Ollama modela (s109). Prima `--models` listu, `--jezik`, `--no-think`. Mjeri: čistoća izlaza, thinking+eval_count+sec (trošak), temp reakcija, batch N/N, round-trip. Baseline (gemma3/ministral)=etalon. Ne dira bazu/pipeline. Vidi §15. |
 
@@ -490,6 +491,69 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s173 snapshot (13. avgust 2026):** KASKADA13 IZMJERENA + SONDA O SAMPLERU.
+> Korpus: **50.624** recenice, **2.068.647** prevoda, **405.012** pobjednika, **357** rupa
+> (+14 od s172 — svi `qwen3.5:397b@0.1` u fazi 1, mehanicki potpis qwen roota iz kaskade11).
+>
+> **(1) GLM OTVARA DISTRIBUCIJU DO KOJE MISTRAL NE DOPIRE — obara s165.** 13 prolaza
+> kaskade13 (k12, 11 jezika x 100 + mk/ja na 5101-5200). **bg je cist dokaz:** blok A stao
+> **strogom gate-nulom** (mistral potrosen, ne prekinut plafonom), pa glm uzeo **+7/+3/+0/+1
+> = 11 recenica** koje mistral nije mogao ni u jednom od osam pokusaja. s165 je tvrdio da
+> "glm nije kvalitativno drugaciji od jos jedne mistral runde" — ovdje ta runda **postoji i
+> iznosi nula**. Prelazaka po izvrsavanju: f12 mistral **3.51**, f24 mistral **2.91**,
+> **f14 glm 4.00, f26 glm 4.25** — glm faze su produktivnije uprkos najtvrdjem ostatku.
+> Treci nezavisan slucaj: mk 5101-5200, mistral 0.63 po fazi naspram glm **1.75**.
+>
+> **(2) X=60 NIJE ISKUSAN — pao u prazan prostor.** Vrijednosti: 49, 50, **| rupa 10 poena |**,
+> 60, 62, 65, 65, 67, 67, 72, 75, 77. Bilo koje X u (50, 60] daje isti ishod — izmjeren je
+> **domet, ne prag** (isto kao `x=0.10` u s171). Predvidjanje po jeziku iz s172 promasilo
+> (pt prognoziran 43-55, ispao 72), ali je **rang pogodjen** — sl i bg jesu bili najgori.
+> mk stao tacno na 60 i preskocio; na susjednom opsegu pao na 50 i prosao — **nije jezik na
+> granici nego opseg.**
+>
+> **(3) PLAFON A=4 REZE PRODUKTIVAN POSAO na 10 od 11 jezika** (samo bg stao sam; cetvrti
+> krug jos davao pt +5, es +5, nl +4). Posljedica: X se mjeri u trenutku koji smo mi
+> proizvoljno odredili. Svjesna zrtva za brzinu (Flaviova ocjena), ali sada izmjerena.
+> Prazan hod **16%** (15 nula-faza od 94) naspram 22% u desetci.
+>
+> **(4) CIJENA: 2.6 poena za 11 jezika naspram kaskade11 15.1 za 9 — sedam puta jeftinije**
+> po jeziku (0.24 naspram 1.68). Qwen +0 potvrdjuje da ga trinaestica ne dira. Drugi run
+> (2 jezika, oba s blokom B) platio 0.85 po jeziku: mistral i gemma radili 4.5x manje
+> (`already_done`), **glm vise** (99 naspram 90 zahtjeva). Iz dvije jednacine: **glm nosi
+> red velicine 50-60x vise po zahtjevu od gemme** (ograda: 2 jednacine, 3 nepoznate).
+> ⚠️ **Paralelizam NE stedi Ollamu** — N skripti x X zahtjeva je NX bez obzira na nacin
+> pokretanja; naplacuje se GPU-zauzece po pozivu. Stedi vrijeme, ne budzet.
+>
+> **(5) SONDA: SAMPLER PARAMETRI** (`sandbox_sampler.py`, novo, READ-ONLY, 3 runa hr/hr/sl).
+> Povod: Flaviovo pitanje zasto temperatura vise nije mjera kreativnosti. `bb_03:161` salje
+> **samo** `{"temperature": ...}`; cloud `/api/show` vraca HTTP 200 ali **bez** `parameters`
+> polja — defaultovi se ne mogu procitati, ali se mogu **prepisati**. Sest rukavaca:
+>
+> | rukavac | raznolikost (razlicitih od 4) | sudija (sl) |
+> |---|---|---|
+> | A 0.8 (danas) | 2.73-3.14 | 0.8844 |
+> | B 0.8 + otvoren rep | 2.53-3.20 = **nista** | 0.8911 |
+> | **C 1.0 + otvoren rep** | **3.33-3.47 = +0.34…+0.58** | **0.9244** |
+> | D 1.3 + otvoren rep | 3.27-3.40 | 0.8600 |
+> | **E 1.0 sam** | **2.93-3.20 = nista** | **0.8378** |
+>
+> **Ni temperatura sama ni otvoren rep sam ne daju nista — samo zajedno. Interakcija, ne
+> zbir.** Na 0.8 nema sta da se otvara; na 1.0 se distribucija razvuce pa je `top_p=0.9`
+> odsijece upravo tamo gdje je postala zanimljiva. **Temperatura 1.0 BEZ otvorenog repa
+> POGORSAVA kvalitet** (najlosiji rukavac). Posljedica: **plan "kaskada14 s temp 1.0" je
+> tacno rukavac E i pogorsao bi stvari.** Radi rukavac C, ali `top_p`/`top_k` **nisu osa u
+> semi** — prije kaskade14 stoji odluka o semi, ne o skripti. Flaviov zakljucak: temperatura
+> nam za sada ne pomaze.
+>
+> **(6) KONCEPTUALNO — sta sudija mjeri.** Claude tvrdio da sudija mjeri "normu" a ne
+> umjetnicki dojam. **Flaviov argument, prihvacen:** ako postoji institut sudije, postoje i
+> kriterijumi po kojima se sudi — skijaski skokovi, skokovi u vodu, umjetnicko klizanje,
+> svuda se i sudi i mjeri, i to sudjenje ima pravila. **Pitanje je KOLIKO kriterijuma
+> (imamo 3 + 2), ne mjerimo li pravu stvar.**
+>
+> Web nedirnut (BB_VERSION ostaje s168, zaostaje 5 sesija). Baza nedirnuta.
+> Detalji: `docs/sessions/session_173.md`.
 
 > **s172 snapshot (12. avgust 2026):** CETIRI SONDE + TRECI WORKER + KASKADE 11/12/13.
 > Korpus: **50.624** recenice, **2.057.322** prevoda, **402.772** pobjednika, **343** rupe.
@@ -1939,9 +2003,15 @@ Tekst NIJE u HTML hardkodu — hardkod je samo **no-JS fallback**. Izvor istine 
 cat docs/KONCEPT.md docs/ANALIZA.md docs/KAKO-JeziciUI.md docs/KAKO-KeyConcepts.md docs/KAKO-BrisanjePrevoda.md docs/KAKO-NovaFaza.md docs/STRANICE.md
 ls docs/ | grep -i "^WEB-FAZA"   # provjeriti ima li novijeg nacrta (npr. WEB-FAZA3.md)
 
-# 1. README — CIJELI, u dva poziva (jedan `cat` premašuje limit tool izlaza, s161)
-sed -n '1,900p'   /home/balsam/buchenberg/README.md
-sed -n '901,$p'   /home/balsam/buchenberg/README.md
+# 1. README — CIJELI. Jedan `cat` premašuje limit tool izlaza (s161), pa u VIŠE poziva.
+#    ⚠️ s173: fajl raste sa svakom sesijom — PRVO provjeri koliko linija ima,
+#    pa podijeli na blokove od ~800. NE prepisivati brojeve iz sjećanja:
+#    u s173 su korišteni zastarjeli (`901,1706p`) i propušteno je 646 linija,
+#    uključujući ovaj protokol i korak 0 iznad.
+wc -l /home/balsam/buchenberg/README.md
+sed -n '1,800p'    /home/balsam/buchenberg/README.md
+sed -n '801,1600p' /home/balsam/buchenberg/README.md
+sed -n '1601,$p'   /home/balsam/buchenberg/README.md
 
 # 2. Posljednja 3 session dokumenta
 ls docs/sessions/  # naći posljednja 3
@@ -2362,4 +2432,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 12. avgust 2026. (sesija 172)*
+*Flavio & Claude · Buchenberg · V3 · 13. avgust 2026. (sesija 173)*
