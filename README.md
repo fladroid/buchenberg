@@ -1,7 +1,7 @@
 # Buchenberg — Project Documentation V3
 
 **Datum kreiranja:** 14. maj 2026.  
-**Poslednje ažuriranje:** 13. avgust 2026. (sesija 173)  
+**Poslednje ažuriranje:** 13. avgust 2026. (sesija 174)  
 **Autor:** fladroid  
 **Status:** Aktivan razvoj — bb pipeline operativan, multi-knjiga, web portal
 
@@ -491,6 +491,33 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s174 snapshot (13. avgust 2026):** KONCEPTUALNA SESIJA — **BPT (Buchenberg Parallel
+> Translate)**. Nijedan prevod, nijedna izmjena baze ni skripti. Korpus: **50.624**
+> recenice, **2.073.330** prevoda, **405.812** pobjednika, **357** rupa (+4.683 prevoda i
+> +800 pobjednika od s173 iz Flaviovih runova; rupe nepromijenjene — rast dolazi iz
+> konfiguracija vec kompletnih po modelu).
+>
+> **Nastalo: `docs/KONCEPT-BPT.md` (182 linije).** Koordinator prima knjigu, jezik i
+> interval, dijeli ga na `N_radnika x M` dijelova i drzi zadani broj procesa zauzetim.
+> **Radnik nije entitet nego uloga** — linux proces koji ne postoji ukoliko ne radi; ne
+> trazi se slobodan radnik nego se broji zauzeto mjesto, pa nema nijedne linije
+> komunikacije radnik→koordinator. **Dio je cijela kaskada, ne jedna faza** → nema barijere
+> medju fazama i broj krugova odredjuje najtvrdja recenica *u dijelu*, ne u citavom
+> intervalu. Odluka: `broj_recenica >= N_radnika x M x min_komad`. Mjera: `efikasnost =
+> (serijsko/N) / stvarno`, **referenca 62% iz s132**.
+>
+> **BPT ne dira `bb_03`, kaskade, semu, prag, sidro ni rundu** — orkestracija, ne logika
+> (ista klasa kao `run_faza.sh`), pa ne moze pokvariti kvalitet. **v0 svjesno bez
+> identifikacije greske i oporavka.** Kljucni nalaz: sitnjenje istovremeno **stedi** prazan
+> hod (teska recenica ne tjera lake u prazne krugove) i **trosi** ga (svaki dio placa
+> vlastitu potvrdu nule, min 4 faze) — koji nadjaca je mjerenje, ne rasudjivanje, i cita se
+> iz logova prvog prolaza. Detalji: `docs/sessions/session_174.md`.
+>
+> ⚠️ **Onboarding greska ponovljena iz s173:** README citan u opsezima iz memorije
+> (`1,900` + `901,1706`) umjesto `wc -l` pa tri bloka. Fajl ima 2.435 linija; ~730
+> nedostajalo. Uhvaceno tek na `session_173.md`. **Ledger radi, ali sa zakasnjenjem — `wc
+> -l` mora ici PRIJE prvog `sed`-a, mehanicki.**
 
 > **s173 snapshot (13. avgust 2026):** KASKADA13 IZMJERENA + SONDA O SAMPLERU.
 > Korpus: **50.624** recenice, **2.068.647** prevoda, **405.012** pobjednika, **357** rupa
@@ -2000,7 +2027,7 @@ Tekst NIJE u HTML hardkodu — hardkod je samo **no-JS fallback**. Izvor istine 
 
 ```bash
 # 0. Project knowledge / docs reference (prije README; s121 dodatak)
-cat docs/KONCEPT.md docs/ANALIZA.md docs/KAKO-JeziciUI.md docs/KAKO-KeyConcepts.md docs/KAKO-BrisanjePrevoda.md docs/KAKO-NovaFaza.md docs/STRANICE.md
+cat docs/KONCEPT.md docs/KONCEPT-BPT.md docs/ANALIZA.md docs/KAKO-JeziciUI.md docs/KAKO-KeyConcepts.md docs/KAKO-BrisanjePrevoda.md docs/KAKO-NovaFaza.md docs/STRANICE.md
 ls docs/ | grep -i "^WEB-FAZA"   # provjeriti ima li novijeg nacrta (npr. WEB-FAZA3.md)
 
 # 1. README — CIJELI. Jedan `cat` premašuje limit tool izlaza (s161), pa u VIŠE poziva.
@@ -2054,6 +2081,28 @@ Svaka sesija završava:
 ---
 
 ## 14. Sljedeći koraci
+
+### BPT — paralelno prevođenje (s174, KONCEPT ZAVRŠEN, implementacija otvorena)
+
+Koncept u `docs/KONCEPT-BPT.md`. Redoslijed:
+
+1. **Čitanje postojećih logova** — `min_komad` i `M` su procjena od oka, a logovi ranijih
+   paralelnih runova već nose stvarna trajanja po opsegu. **Ne mjerenje, samo čitanje onoga
+   što postoji** — najjeftiniji korak, nula Ollama poziva.
+2. **v0** — tanka petlja iznad postojećih kaskadnih skripti; radnik je poziv
+   `run_kaskadaN.sh` s uskim `--od/--do`. Bez identifikacije greške i oporavka (Flaviova
+   odluka: v0 živi u idealnom svijetu).
+3. **Prvi prolaz s mjerenjem efikasnosti** naspram reference **62%** (s132, statička
+   podjela + ručno pokretanje). Osjetno više → dinamička podjela je platila; isto → dobili
+   smo samo održavanje broja aktivnih bez čovjeka.
+4. **Šuma problema, odloženo svjesno:** tri ishoda umjesto jednog (završio / pao — izlazni
+   kod dolazi od `tee` ne od Pythona, s160 / visi — proces postoji, log ne raste, s172),
+   politika ponovnog pokušaja, prag za "predugo bez znaka života". **Visjenje je jedini
+   slučaj gdje je automat lošiji od čovjeka** — zaglavljen proces drži mjesto zauvijek.
+
+⚠️ Nezavisne ose: `N_radnika` ograničen **prevojem** (lokalni RAM na foxunu, ne Ollama —
+s164/s165), `N_dijelova` balansira ali **množi prazan hod**. Mjeri se fiksiranjem jedne i
+mijenjanjem druge. Paralelizam **ne štedi Ollamu** (N×X = NX, s173) — štedi Flaviovo vrijeme.
 
 ### Otvoreno iz s172 (OTVORENO — prioritetno)
 
@@ -2432,4 +2481,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 13. avgust 2026. (sesija 173)*
+*Flavio & Claude · Buchenberg · V3 · 13. avgust 2026. (sesija 174)*
