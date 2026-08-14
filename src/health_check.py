@@ -13,6 +13,9 @@ import psycopg2
 from pathlib import Path
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bb_ollama_usage import fetch_usage, pct
+
 BUCH_HOME = Path(__file__).resolve().parent.parent
 ENV_FILE  = BUCH_HOME / ".env"
 BUCH_ENV  = BUCH_HOME / "buch_env.sh"
@@ -235,6 +238,29 @@ def check_ollama():
 
     return all_ok
 
+# -- 3b. Ollama Cloud -- potrosnja ------------------------------------
+def check_ollama_usage():
+    hdr("3b. Ollama Cloud -- potrosnja (session + sedmicno)")
+    data, greska = fetch_usage()
+    if greska:
+        row(WARN, "Usage endpoint", f"nedostupan (nezvanican API): {greska}")
+        return
+    limits = data.get("limits", {})
+    session_usage = limits.get("session", {}).get("usage")
+    weekly_usage = limits.get("weekly", {}).get("usage")
+    row(OK, "Session (resetuje se ~5h)", pct(session_usage))
+    row(OK, "Sedmicno (resetuje se ned.)", pct(weekly_usage))
+    weekly_models = limits.get("weekly", {}).get("models", [])
+    if weekly_models:
+        sep = "-" * 48
+        print()
+        print("  " + sep)
+        print("  Sedmicna potrosnja po modelu:")
+        for m in sorted(weekly_models, key=lambda x: -x["request_count"]):
+            naziv = m["name"]
+            broj = m["request_count"]
+            print(f"    {naziv:<28} {broj:>7}")
+
 # ── 4. NLLB (lokalni model) ──────────────────────────────────────────
 def check_nllb():
     hdr("4. NLLB (lokalni model)")
@@ -370,6 +396,7 @@ if __name__ == "__main__":
         check_postgres()
         check_kompletnost()
         check_ollama()
+        check_ollama_usage()
     check_nllb()
     check_venv()
     check_git()

@@ -12,6 +12,9 @@ __pycache__/
 # Logs
 logs/
 
+# Scheduled task logovi i stanje (rupa_stanje.txt, ollama_stanje.json)
+schedulogs/
+
 # Data
 books/
 data/
