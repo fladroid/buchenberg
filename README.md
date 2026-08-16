@@ -365,6 +365,7 @@ ORDER BY jezik, pobjede DESC;
 | `run_kaskada12.sh` | **s172 — ogledalo jedanaestice.** root **mistral@0.1**, krug = faza 27 -> faza 12, seed blok = faza 28 -> faza 24. `diff` naspram k11 = **samo 4 konfiguracijske linije**. Svrha: qwen dobija PRVU poziciju u krugu, jer faza koja ide druga nasljedjuje prorijedjen teren i njeni brojevi nisu uporedivi s prvom. ⚠️ **NIJE POKRENUTA u s172** (Flavio presao direktno na 13). |
 | `run_kaskada13.sh` | **s172 — DVOBLOKOVSKA, uslovni skupi blok.** root mistral@0.1 -> **BLOK A** (max 4 kruga): faza 12 -> faza 24, najmanje 1x, izlaz kad krug nema prirasta -> **USLOV: ako je % pobjednika IZNAD praga < X** (`--x`, default **60**) -> **BLOK B** (max 2 kruga): faza 14 (glm@0.8 base) -> faza 26 (glm@0.8 strict). Motiv: glm pobjedjuje mistrala na **svih 14 jezika (58-64%)** ali je klasa 3 naspram mistralove 2 — zato ulazi TEK kad jeftini iscrpi svoje i SAMO ako je stanje lose. **X mjeri STANJE, stop unutar bloka mjeri PRIRAST** (X bira DA LI platiti glm, prirast bira KOLIKO dugo). Cijena: najbolji **3 faze**, A do plafona bez B **9**, najgori **13**. Nula novih faza. `--knjiga --jezici --od --do [--prag] [--x 60] [--amax 4] [--bmax 2]` |
 | `sandbox_batch_ponavljanje.py` | **s170, READ-ONLY** — mjeri daje li ponavljanje iste recenice UNUTAR jednog batcha klonove ili razlicite prevode. Cetiri rukavca (1 poziv prepleteno / 1 poziv blokovi / N poziva batch5 / N poziva batch20). Nalaz: **100% klonova u jednom pozivu**, 60/60 parova |
+| `sandbox_redosled_paketa.py` | **s176, READ-ONLY** — nastavak s170: mijenja li REDOSLIJED (ne ponavljanje) unutar batcha prevod/ocjenu vise nego sam sum. 4 runde na istih 20 recenica (original/promijesano/original/promijesano), kosinus + sudija zajedno za sve 4 verzije. Nalaz: sastav batcha mijenja RIJECI pouzdano (p=0.00003), ne mijenja OCJENU pouzdano (p=0.19, n=20/jezik) |
 | `sandbox_kaskada_logs.py` | **s169, READ-ONLY** — parser kaskada4/5/6/7/8 logova: okolina (aktivni `bb_03`, load, RAM), parametri, gate po rundi, `real` po bloku (root/prevod/sudija/pobjednik), brojači ZAVRŠENO/Traceback/timeout. Izlaz: `/tmp/kask_files.tsv` + `/tmp/kask_rounds.tsv`. Prima listu putanja logova |
 | `sandbox_kaskada_cijena.py` | **s169, READ-ONLY** — spaja `/tmp/kask_*.tsv` s bazom: minute i pozivi **po osvojenom pobjedniku**, po jeziku i rundi. Opsezi se čitaju iz logova (samo kompletni, `zavr==4`), pa se poklapanje log↔baza ne prepisuje ručno |
 | `sandbox_jezik_probe.py` | **s167, READ-ONLY, NECOMMITOVANO** — mjeri je li prag prenosiv na jezik koji NIJE registrovan. Prevodi opseg NLLB-om ili LLM-om (`--llm`), računa score ISTIM putem kao `bb_03` (funkcije importovane), poredi s postojećim NLLB prevodima istih rečenica iz baze. `--nllb-kod --oznaka --prag --llm --temp --jezik-naziv` |
@@ -495,6 +496,28 @@ bash ./run_faza.sh --faza 3 --knjiga 22 --jezici "de hr it sr" --od 1 --do 40
 ---
 
 ## 9. Stanje prevoda
+
+> **s176 snapshot (16. avgust 2026):** LOG ANALIZA (3 kruga: komadi 50/60, 4→2 radnika,
+> lista es/fr/nl/bg/mk/sl potvrdjena) + DB-driven analiza tezine k12 + sonda redoslijeda u
+> batchu. Korpus: **50.624** recenice, **2.134.313** prevoda, **415.832** pobjednika. Ollama
+> sedmicno **91.6%**.
+>
+> **KRITICAN NALAZ za knjigu 12 (Moby Dick): pozicije 1-488 NISU proza** — naslovna
+> strana + sadrzaj (135 poglavlja) + Etymology/Extracts. Prava prica ("Call me Ishmael.")
+> pocinje na **poziciji 489**. Svaka buduca pozicijska analiza k12 mora iskljuciti poz. <489,
+> ili mjeri strukturu knjige umjesto tezine prevoda. Na 9.275 recenica prave proze: duzina
+> ↔ ocjena r=-0.211 (slabo-umjereno), raspon tezine kroz knjigu uzak (0.937-0.952,
+> najtezje oko poz. 4200-4663). Paradoks (povremeni pad = problem, dosljedan pad = osobina)
+> potvrdjen po jeziku: **ro pravi izuzetak** (95 upadanja >0.15 ispod konsenzusa, dvostruko
+> vise od sljedeceg), **es/fr/bs/bg/mk najdosljedniji**. Root faza: vrijeme NE korelira sa
+> duzinom recenice (~0); sr/de/hr/it 2.5-3× sporiji po recenici od ostalih —
+> vjerovatno artefakt perioda rada, ne tezine.
+>
+> **Sonda redoslijeda u batchu** (`sandbox_redosled_paketa.py`, nastavak s170): mesanje
+> redoslijeda unutar batcha od 20 mijenja RIJECI pouzdano (p=0.00003) ali NE mijenja
+> sudijinu OCJENU pouzdano (p=0.19, n=20/jezik) — smjer blago u korist mesanog u oba
+> jezika nezavisno, ali unutar suma. Za planiranu kaskadu "sa mesanjem": raznolikost
+> potkrijepljena, bolji kvalitet nije (treba veci uzorak). Detalji: `docs/sessions/session_176.md`.
 
 > **s174 snapshot (13. avgust 2026):** KONCEPTUALNA SESIJA — **BPT (Buchenberg Parallel
 > Translate)**. Nijedan prevod, nijedna izmjena baze ni skripti. Korpus: **50.624**
@@ -2086,6 +2109,20 @@ Svaka sesija završava:
 
 ## 14. Sljedeći koraci
 
+### Otvoreno iz s176 (OTVORENO — prioritetno)
+
+1. **Implementacija kaskada skripte "sa mesanjem"** — na osnovu s176 sonde (mesanje
+   redoslijeda = raznolikost, NE dokazano poboljsanje kvaliteta na n=20). Dizajn nije pocet.
+2. **Ponoviti s176 sondu na mnogo vecem uzorku** (stotine recenica, ne 20) sljedeci sedmicni
+   Ollama ciklus — trenutni nalaz o kvalitetu (p=0.19) je neuvjerljiv zbog velicine
+   uzorka, ne zbog odsustva efekta.
+3. **Komadi od 80** — najavljeno da slijede u Flaviovom paralelnom eksperimentu, jos
+   nije radjeno/analizirano (komadi 50 i 60 vec analizirani, s176 §2-3).
+4. **About vizuelni identitet** — kad Flavio dobije skuplju regeneraciju "Geometry of
+   Meaning" u svijetlom modu, uporediti sa jeftinijom (obje sa istim zakljucanim promptom);
+   birati konacan referentni stil (kandidat: frame 240, podebljana tipografija + krem/koralna)
+   prije bilo kakve prave implementacije. Nista jos ne dirati na sajtu.
+
 ### BPT — paralelno prevođenje (s174, KONCEPT ZAVRŠEN, implementacija otvorena)
 
 Koncept u `docs/KONCEPT-BPT.md`. Redoslijed:
@@ -2485,4 +2522,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 13. avgust 2026. (sesija 174)*
+*Flavio & Claude · Buchenberg · V3 · 16. avgust 2026. (sesija 176)*
