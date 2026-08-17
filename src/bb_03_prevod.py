@@ -24,6 +24,7 @@ Primjer (NLLB):
 import os
 import sys
 import argparse
+import random
 import requests
 import psycopg2
 import numpy as np
@@ -339,6 +340,10 @@ def main():
                         help="Runda ponavljanja iste konfiguracije (faza/model/temp/prompt) - default 1")
     parser.add_argument("--uradi-ako-nema", action="store_true", default=False,
                         help="Label u logu: namjeran nastavak/dovrsavanje raspona (already_done()+prag logika se ne mijenja)")
+    parser.add_argument("--redoslijed", type=str, default="original", choices=["original", "mesano"],
+                        help="original=kanonski red recenica u batchu (default); mesano=promijesan red unutar chunka, fiksan seed po chunku (s177 sonda o efektu redoslijeda)")
+    parser.add_argument("--shuffle-seed", type=int, default=42,
+                        help="Bazni seed za mesanje (kombinuje se s indeksom chunka) - default 42, isti kao sandbox_redosled_paketa.py")
     args = parser.parse_args()
 
     is_nllb = (args.model == "nllb-600M")
@@ -453,19 +458,35 @@ def main():
                 chunk = todo[i:i + step]
                 tekstovi = [t for _, _, t in chunk]
 
-                print(f"  Batch {i//step + 1}: pozicije {chunk[0][1]}–{chunk[-1][1]}")
+                print(f"  Batch {i//step + 1}: pozicije {chunk[0][1]}–{chunk[-1][1]} | redoslijed={args.redoslijed}")
+
+                # s177: opcioni redoslijed unutar batcha. Ne mijenja KOJE recenice su
+                # zajedno u pozivu, samo njihov POREDAK. Fiksan seed po chunku (baza +
+                # indeks chunka) -> isti raspored se reprodukuje u svakom ponovnom pozivu
+                # iste konfiguracije (runda=2 i runda=4 dobijaju identican mix, kao S2/S4
+                # u sandbox_redosled_paketa.py).
+                order = None
+                if args.redoslijed == "mesano" and not is_nllb:
+                    rng = random.Random(args.shuffle_seed + (i // step))
+                    order = list(range(len(chunk)))
+                    rng.shuffle(order)
+                    chunk_api = [chunk[k] for k in order]
+                    tekstovi_api = [t for _, _, t in chunk_api]
+                else:
+                    chunk_api = chunk
+                    tekstovi_api = tekstovi
 
                 if is_nllb:
                     nllb_tgt = NLLB_LANG_MAP[kod]
-                    prevodi = nllb_batch(tekstovi, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
+                    prevodi = nllb_batch(tekstovi_api, nllb_tok, nllb_mod, "eng_Latn", nllb_tgt)
                     backs   = nllb_batch(prevodi,  nllb_tok, nllb_mod, nllb_tgt, "eng_Latn")
                 elif is_refine and PROMPT_NAZIV != 'base':
-                    parovi = [(t, seed_map[rid][0]) for rid, poz, t in chunk]
+                    parovi = [(t, seed_map[rid][0]) for rid, poz, t in chunk_api]
                     prevodi = prevedi_refine_batch(parovi, jezik_naziv, ollama_naziv, temp, TPL_PREVOD_BATCH)
                     if prevodi is None:
                         print("    Fallback na single refine...")
                         prevodi = [prevedi_refine_single(t, jezik_naziv, ollama_naziv, temp, seed_map[rid][0], TPL_PREVOD_SINGLE)
-                                   for rid, poz, t in chunk]
+                                   for rid, poz, t in chunk_api]
 
                     backs = back_prevedi_batch(prevodi, jezik_naziv, ollama_naziv, temp, TPL_BACK_BATCH)
                     if backs is None:
@@ -473,17 +494,25 @@ def main():
                         backs = [back_prevedi_single(p, jezik_naziv, ollama_naziv, temp, TPL_BACK_SINGLE)
                                  for p in prevodi]
                 else:
-                    prevodi = prevedi_batch(tekstovi, jezik_naziv, args.model, temp, TPL_PREVOD_BATCH)
+                    prevodi = prevedi_batch(tekstovi_api, jezik_naziv, args.model, temp, TPL_PREVOD_BATCH)
                     if prevodi is None:
                         print("    Fallback na single prevod...")
                         prevodi = [prevedi_single(t, jezik_naziv, args.model, temp, TPL_PREVOD_SINGLE)
-                                   for t in tekstovi]
+                                   for t in tekstovi_api]
 
                     backs = back_prevedi_batch(prevodi, jezik_naziv, args.model, temp, TPL_BACK_BATCH)
                     if backs is None:
                         print("    Fallback na single back-translation...")
                         backs = [back_prevedi_single(p, jezik_naziv, args.model, temp, TPL_BACK_SINGLE)
                                  for p in prevodi]
+
+                if order is not None:
+                    unshuffled_prevodi = [None] * len(order)
+                    unshuffled_backs   = [None] * len(order)
+                    for pos, orig in enumerate(order):
+                        unshuffled_prevodi[orig] = prevodi[pos]
+                        unshuffled_backs[orig]   = backs[pos]
+                    prevodi, backs = unshuffled_prevodi, unshuffled_backs
 
                 en_vektori     = embedder.encode(tekstovi)
                 back_vektori   = embedder.encode(backs)

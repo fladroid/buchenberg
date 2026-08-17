@@ -9,7 +9,7 @@
 # Primjer: bash run_faza.sh --faza 2 --knjiga 22 --jezici "de hr" --od 1 --do 20
 set -e
 set -o pipefail   # bez ovoga | tee guta izlazni kod Pythona i set -e ne vidi pad
-FAZA=""; KNJIGA=""; JEZICI=""; OD=""; DO=""; FORCE=""; RUNDA="1"; URADI_AKO_NEMA=""; PRAG=""
+FAZA=""; KNJIGA=""; JEZICI=""; OD=""; DO=""; FORCE=""; RUNDA="1"; URADI_AKO_NEMA=""; PRAG=""; REDOSLIJED=""; SHUFFLE_SEED=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --faza)   FAZA="$2"; shift 2 ;;
@@ -21,6 +21,8 @@ while [[ $# -gt 0 ]]; do
         --runda)  RUNDA="$2"; shift 2 ;;
         --uradi-ako-nema) URADI_AKO_NEMA="--uradi-ako-nema"; shift ;;
         --prag)   PRAG="$2"; shift 2 ;;
+        --redoslijed) REDOSLIJED="$2"; shift 2 ;;
+        --shuffle-seed) SHUFFLE_SEED="$2"; shift 2 ;;
         *) echo "Nepoznat argument: $1"; exit 1 ;;
     esac
 done
@@ -53,6 +55,7 @@ while IFS='|' read -r MODEL TEMP; do
         --knjiga "$KNJIGA" --od "$OD" --do "$DO" \
         --model "$MODEL" --temp "$TEMP" --faza "$FAZA" --runda "$RUNDA" \
         --embedder "$EMBEDDER" $URADI_AKO_NEMA ${PRAG:+--prag $PRAG} \
+        ${REDOSLIJED:+--redoslijed $REDOSLIJED} ${SHUFFLE_SEED:+--shuffle-seed $SHUFFLE_SEED} \
         --jezici $JEZICI 2>&1 | tee -a "$LOG"
 done <<< "$MODELI"
 

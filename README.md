@@ -342,14 +342,14 @@ ORDER BY jezik, pobjede DESC;
 |---------|------|
 | `bb_01_init_lookup.py` | Puni bb_jezik, bb_modeli, bb_embeddings |
 | `bb_02_insert_knjiga.py` | Ubacuje knjigu i parsira rečenice (spaCy); lista knjiga je hardcodovana u `KNJIGE` |
-| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena. **Ispis po rečenici (s166): `ts=` translation_score, `bts=` back-translation score, `komp=` kompozitni** — kompozitni se računa samo za ispis (u bazi ga daje `v_prevodi_full`). **s167: `JEZIK_NAZIVI`/`NLLB_LANG_MAP` više NISU hardkod** — prazni dictovi koje puni `ucitaj_jezike(cur)` iz `bb_jezik`, pozvana jednom iz `main()`. Namjerno NE na nivou modula: `import bb_03_prevod` ne smije tražiti konekciju (sandbox sonde ga importuju zbog `nllb_batch`/`cosine`) |
+| `bb_03_prevod.py` | Prevod + back-translation + cosine score (batch+fallback); Ollama Cloud i NLLB; `--temp` prima listu; `--faza N` default 1, 2+=refine (s114); `--uradi-ako-nema` (s160) = label u logu za namjeran nastavak nakon pada, logika `already_done()`+prag nepromijenjena. **Ispis po rečenici (s166): `ts=` translation_score, `bts=` back-translation score, `komp=` kompozitni** — kompozitni se računa samo za ispis (u bazi ga daje `v_prevodi_full`). **s167: `JEZIK_NAZIVI`/`NLLB_LANG_MAP` više NISU hardkod** — prazni dictovi koje puni `ucitaj_jezike(cur)` iz `bb_jezik`, pozvana jednom iz `main()`. Namjerno NE na nivou modula: `import bb_03_prevod` ne smije tražiti konekciju (sandbox sonde ga importuju zbog `nllb_batch`/`cosine`). **s177: `--redoslijed original\|mesano` + `--shuffle-seed`** — opciono mešanje redoslijeda rečenica unutar batcha prije API poziva, fiksan seed po chunku (isti raspored se reprodukuje za ponovljene pozive iste konfiguracije), vraćeno u kanonski poredak prije upisa. Default `original` = nepromijenjeno ponašanje. Testirano kaskadom14/15, **NE koristi se u produkciji** (vidi §14) |
 | `bb_04_pobjednik.py` | Bira pobjednika po finalnom scoreu; DELETE filtrira po opsegu. **s170: `--prag X` (default 0.95) — SAMO za ispis, ne dira izbor** + red `BILANS jezika: n= zbir= prosjek= ispod X:` iz vec ucitane liste (nula dodatnih upita). Time obje mjere dobijaju SVE putanje: kaskade, `run_faza.sh`, `run_root_gated.sh`, rucni pozivi |
 | `bb_05_export.py` | Export finalnog prevoda u `output/naziv_knjige_lang.txt` |
 | `bb_06_enkodiranje.py` | Enkodira prevode → upisuje `prevod_vektor` |
 | `bb_08_sudija.py` | Gemma4:31b kao blind sudija → sudija_grammar/naturalness/fidelity/avg; ocjenjuje kandidate aktivnih modela (s114). **s167: prompt dobija ENGLESKI naziv jezika** (`naziv_en`; `COALESCE` uklonjen u s168 kad je kolona postala NOT NULL) — do s167 je slao srpski (`grammatical correctness in holandski`). Izmjereno prije izmjene: mijenja pobjednika u 10–13% rečenica, uz 0% od samog ponavljanja poziva. **Korpus od s167 ima dvije ocjenjivačke ere** (granica je vrijeme, ne kolona) |
 | `bb_aktivni_modeli.py` | Ispisuje aktivne modele zadane faze (`naziv\|temp` linije) — DB izvor za run_pipeline.sh i run_faza.sh |
 | `bb_faza_info.py` | Faza -> metod (`metod_id\|naziv\|root`) iz `bb_faze` JOIN `bb_metode`; exit 1 ako faza ne postoji (s134) |
-| `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force] [--runda N] [--uradi-ako-nema] [--prag X]`. **s167: `--prag` se PROSLJEĐUJE `bb_03` (`${PRAG:+--prag $PRAG}`); bez njega ekspanzija je prazna i vrijedi `bb_03` default 0.95 — kaskade 1–4 nepromijenjene.** Prag se ispisuje u zaglavlju loga. Metod cita iz baze, a1/a2/a3 izbor iz `bb_faze_a*`. Zamijenio `run_refine.sh` (s134) |
+| `run_faza.sh` | **Kanonski orkestrator faze** — `--faza N` (obavezan) `--knjiga --jezici --od --do [--force] [--runda N] [--uradi-ako-nema] [--prag X]`. **s167: `--prag` se PROSLJEĐUJE `bb_03` (`${PRAG:+--prag $PRAG}`); bez njega ekspanzija je prazna i vrijedi `bb_03` default 0.95 — kaskade 1–4 nepromijenjene.** Prag se ispisuje u zaglavlju loga. Metod cita iz baze, a1/a2/a3 izbor iz `bb_faze_a*`. Zamijenio `run_refine.sh` (s134). **s177: + `--redoslijed`/`--shuffle-seed` passthrough** (isti obrazac kao `--prag`) ka `bb_03_prevod.py` |
 | `bb_toggle_model.py` | Uključuje/isključuje JEDAN model (a1) za zadanu fazu preko `bb_faze_a1.aktivan` (s156). **Ad-hoc/debug alat, VAN standardnog toka** (s158) — standardni put je `bb_deklarisi_svet.py` |
 | `bb_deklarisi_svet.py` | **Deklaracija "svijeta"** (s158) — postavlja CIJELO stanje a1/a2 za fazu: `aktivan=true` samo za navedeno u `--modeli`/`--temperature`, `false` za sve ostalo u katalogu. Potpuna izjava namjere, nezavisna od prethodnog stanja (NE relativni toggle). `--faza --modeli --temperature` |
 | `bb_svet_1.sh` / `bb_svet_2.sh` | Imenovani svjetovi (s158), tanki omotači nad `bb_deklarisi_svet.py`: **1** = puna 3-way root (mistral+nllb+glm), **2** = sužen root za gated obrazac (bez glm). Svaka nezavisna, ne referencira drugu; novi svijet = nova tanka skripta, nula izmjena logike |
@@ -364,8 +364,12 @@ ORDER BY jezik, pobjede DESC;
 | `run_kaskada11.sh` | **s172 — plafon + seed blok izvan petlje.** root **qwen@0.1** -> ponavljaj KRUG { faza 12 (mistral@0.8 base) -> faza 27 (qwen@0.8 base) }, **max 3 kruga**, stop **odmah** cim OBJE faze kruga vrate nulu (bez potvrdnog kruga, za razliku od kaskade10) -> izlaz -> **seed blok izvan petlje**: faza 24 (mistral strict) -> faza 28 (qwen strict), tacno jednom svaka, **bez obzira zasto se iz petlje izaslo**. Fiksno 8 faza po prolazu. `--knjiga --jezici --od --do [--prag] [--max]` |
 | `run_kaskada12.sh` | **s172 — ogledalo jedanaestice.** root **mistral@0.1**, krug = faza 27 -> faza 12, seed blok = faza 28 -> faza 24. `diff` naspram k11 = **samo 4 konfiguracijske linije**. Svrha: qwen dobija PRVU poziciju u krugu, jer faza koja ide druga nasljedjuje prorijedjen teren i njeni brojevi nisu uporedivi s prvom. ⚠️ **NIJE POKRENUTA u s172** (Flavio presao direktno na 13). |
 | `run_kaskada13.sh` | **s172 — DVOBLOKOVSKA, uslovni skupi blok.** root mistral@0.1 -> **BLOK A** (max 4 kruga): faza 12 -> faza 24, najmanje 1x, izlaz kad krug nema prirasta -> **USLOV: ako je % pobjednika IZNAD praga < X** (`--x`, default **60**) -> **BLOK B** (max 2 kruga): faza 14 (glm@0.8 base) -> faza 26 (glm@0.8 strict). Motiv: glm pobjedjuje mistrala na **svih 14 jezika (58-64%)** ali je klasa 3 naspram mistralove 2 — zato ulazi TEK kad jeftini iscrpi svoje i SAMO ako je stanje lose. **X mjeri STANJE, stop unutar bloka mjeri PRIRAST** (X bira DA LI platiti glm, prirast bira KOLIKO dugo). Cijena: najbolji **3 faze**, A do plafona bez B **9**, najgori **13**. Nula novih faza. `--knjiga --jezici --od --do [--prag] [--x 60] [--amax 4] [--bmax 2]` |
+| `run_kaskada14.sh` | **s177 — kontrolisana sonda efekta redoslijeda, FIKSNO izvrsavanje** (bez adaptivnog gate-nula izlaska, namjeran izbor za cist eksperiment). root mistral@0.1 -> **BLOK A fiksno 2 kruga**: svaki krug faza12-original -> faza12-mesano -> faza24-original -> faza24-mesano (runda 1-2 krug 1, runda 3-4 krug 2 = bazni sum). **USLOV** isto kao k13 (X=60 default) -> **BLOK B fiksno 1 krug**: faza14-original -> faza14-mesano -> faza26-original -> faza26-mesano. Cijena fiksna: 9 ili 13 faza. `--knjiga --jezici --od --do [--prag] [--x 60] [--shuffle-seed 42]` |
+| `run_kaskada15.sh` | **s177 — identicno kaskadi14, OBRNUT redoslijed poziva** unutar svakog kruga (mesano PRVO, original DRUGO — kaskada14 obrnuto). Runda-brojevi (koja runda=original/mesano) ostaju identicni, mijenja se samo redoslijed POZIVA. Svrha: razdvojiti efekat POZICIJE u nizu od efekta same mesane. **Nalaz (poredjenjem s kaskadom14): efekat je pozicijski, ne redoslijedni — vidi §14.** `--knjiga --jezici --od --do [--prag] [--x 60] [--shuffle-seed 42]` |
 | `sandbox_batch_ponavljanje.py` | **s170, READ-ONLY** — mjeri daje li ponavljanje iste recenice UNUTAR jednog batcha klonove ili razlicite prevode. Cetiri rukavca (1 poziv prepleteno / 1 poziv blokovi / N poziva batch5 / N poziva batch20). Nalaz: **100% klonova u jednom pozivu**, 60/60 parova |
 | `sandbox_redosled_paketa.py` | **s176, READ-ONLY** — nastavak s170: mijenja li REDOSLIJED (ne ponavljanje) unutar batcha prevod/ocjenu vise nego sam sum. 4 runde na istih 20 recenica (original/promijesano/original/promijesano), kosinus + sudija zajedno za sve 4 verzije. Nalaz: sastav batcha mijenja RIJECI pouzdano (p=0.00003), ne mijenja OCJENU pouzdano (p=0.19, n=20/jezik) |
+| `sandbox_analiza_komadi80.py` | **s177, READ-ONLY** — poredi tri kruga velicine komada (50/4 radnika, 60/2 radnika, 80/2 radnika) na istih 6 produkcijskih jezika, parsira kaskada13 logove. Izlaz: elapsed/root vrijeme po jeziku, blok A prazan hod %, blok B stopa, finalni kvalitet. Nalaz: veci komad brzi po recenici na 5/6 jezika (fiksni overhead po pozivu se bolje amortizuje), mk izuzetak (usporava 60->80) |
+| `sandbox_analiza_kaskada14.py` / `sandbox_analiza_kaskada15.py` | **s177, READ-ONLY** — parser kaskada14/15 logova (drugaciji format od k13: `dodala`/`prebacila` po izvrsenoj fazi+rundi+redoslijedu). Agregira po 'slotu izvrsenja' (blok, faza, runda, redoslijed) da izmjeri original-vs-mesano. Zajedno (poredjenjem k14<->k15) otkrivaju pozicijski confound — vidi §14 |
 | `sandbox_kaskada_logs.py` | **s169, READ-ONLY** — parser kaskada4/5/6/7/8 logova: okolina (aktivni `bb_03`, load, RAM), parametri, gate po rundi, `real` po bloku (root/prevod/sudija/pobjednik), brojači ZAVRŠENO/Traceback/timeout. Izlaz: `/tmp/kask_files.tsv` + `/tmp/kask_rounds.tsv`. Prima listu putanja logova |
 | `sandbox_kaskada_cijena.py` | **s169, READ-ONLY** — spaja `/tmp/kask_*.tsv` s bazom: minute i pozivi **po osvojenom pobjedniku**, po jeziku i rundi. Opsezi se čitaju iz logova (samo kompletni, `zavr==4`), pa se poklapanje log↔baza ne prepisuje ručno |
 | `sandbox_jezik_probe.py` | **s167, READ-ONLY, NECOMMITOVANO** — mjeri je li prag prenosiv na jezik koji NIJE registrovan. Prevodi opseg NLLB-om ili LLM-om (`--llm`), računa score ISTIM putem kao `bb_03` (funkcije importovane), poredi s postojećim NLLB prevodima istih rečenica iz baze. `--nllb-kod --oznaka --prag --llm --temp --jezik-naziv` |
@@ -2111,17 +2115,44 @@ Svaka sesija završava:
 
 ### Otvoreno iz s176 (OTVORENO — prioritetno)
 
-1. **Implementacija kaskada skripte "sa mesanjem"** — na osnovu s176 sonde (mesanje
-   redoslijeda = raznolikost, NE dokazano poboljsanje kvaliteta na n=20). Dizajn nije pocet.
-2. **Ponoviti s176 sondu na mnogo vecem uzorku** (stotine recenica, ne 20) sljedeci sedmicni
-   Ollama ciklus — trenutni nalaz o kvalitetu (p=0.19) je neuvjerljiv zbog velicine
-   uzorka, ne zbog odsustva efekta.
-3. **Komadi od 80** — najavljeno da slijede u Flaviovom paralelnom eksperimentu, jos
-   nije radjeno/analizirano (komadi 50 i 60 vec analizirani, s176 §2-3).
-4. **About vizuelni identitet** — kad Flavio dobije skuplju regeneraciju "Geometry of
+1. **About vizuelni identitet** — kad Flavio dobije skuplju regeneraciju "Geometry of
    Meaning" u svijetlom modu, uporediti sa jeftinijom (obje sa istim zakljucanim promptom);
    birati konacan referentni stil (kandidat: frame 240, podebljana tipografija + krem/koralna)
    prije bilo kakve prave implementacije. Nista jos ne dirati na sajtu.
+
+### Redoslijed unutar batcha — ZATVORENO (s177, negativan nalaz na produkcijskoj skali)
+
+Nastavak s176 sonde (`sandbox_redosled_paketa.py`, n=20, p=0.19 neuvjerljivo). Dizajnirane
+i pokrenute `run_kaskada14.sh`/`run_kaskada15.sh` — kontrolisan, fiksni eksperiment
+(original/mesano x 2 kruga za bazni sum) na produkcijskoj skali (k12, es/sl/fr/mk,
+400 recenica po jeziku). Kljucna razlika k14<->k15: identican dizajn, OBRNUT redoslijed
+POZIVA (k14 original prvi, k15 mesano prvo).
+
+**Nalaz:** metrika "koliko recenica prebaci prag" prati POZICIJU U NIZU, ne
+original/mesano etiketu — ko god je pozvan PRVI u paru (original u k14, mesano u k15)
+dosljedno prelazi vise recenica preko praga (5.60 vs 5.70 za prvi u nizu, faza 12 krug 1;
+3.10 vs 1.90 za drugi), jer prvi radi na vecem preostalom bazenu "ispod praga" kandidata.
+Sirovi agregat original-vs-mesano se DOSLOVNO PREOKRENE kad se preokrene redoslijed poziva
+(k14: original 2.417 > mesano 1.708; k15: original 1.182 < mesano 3.091) — jasan potpis
+pozicijskog efekta, ne stvarne razlike u kvalitetu prevoda.
+
+**Odluka (Flavio, s177): mesanje se NE uvodi u produkciju.** `--redoslijed`/`--shuffle-seed`
+parametri ostaju u `bb_03_prevod.py`/`run_faza.sh` (default `original` = nepromijenjeno
+ponasanje), kaskada14/15 ostaju izvrsne kao trag eksperimenta, ali se dalje ne koriste.
+
+Napomena: ovo zatvara pitanje za metriku "prebacivanje praga"; izvorno s176 pitanje o
+KVALITETU (kosinus/sudija ocjena original naspram mesano, na vecem n) formalno ostaje
+neodgovoreno tom istom metodom — ali s obzirom na otkriveni pozicijski confound i
+Flaviovu odluku da se ne nastavlja, smatra se zatvorenim u praksi.
+
+### Komadi od 80 — ZATVORENO (s177, analiza uradjena)
+
+`sandbox_analiza_komadi80.py` poredi tri kruga (komad 50/4 radnika, komad 60/2 radnika,
+komad 80/2 radnika) na istih 6 produkcijskih jezika. Normalizovano po recenici, veci
+komad je brzi na 5/6 jezika (npr. es 0.393->0.314->0.269 min/rec) — isti mehanizam kao
+duzina recenice (s176): fiksni overhead po pozivu se bolje amortizuje. **mk je izuzetak**
+(0.865->0.722->0.768, usporava od 60 na 80) — jedini jezik koji gotovo uvijek okida blok B,
+zabiljezeno kao osobina jezika, bez dalje analize (Flaviova odluka).
 
 ### BPT — paralelno prevođenje (s174, KONCEPT ZAVRŠEN, implementacija otvorena)
 
@@ -2522,4 +2553,4 @@ Flaviovo subjektivno zapažanje (nepotvrđeno formalnom analizom, ali vrijedno z
 ---
 
 *Dokument će biti ažuriran sa svakom novom verzijom. Uvek čitaj samo poslednju verziju.*  
-*Flavio & Claude · Buchenberg · V3 · 16. avgust 2026. (sesija 176)*
+*Flavio & Claude · Buchenberg · V3 · 17. avgust 2026. (sesija 177)*
