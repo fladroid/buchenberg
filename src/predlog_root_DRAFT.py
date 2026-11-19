@@ -15,7 +15,7 @@ DB = {
     "host": os.getenv("DB_HOST", "balsam.dynu.net"),
     "port": int(os.getenv("DB_PORT", 5432)),
     "dbname": "bb",
-    "user": os.getenv("DB_USER", "pgu"),
+    "user": os.getenv("DB_USER"),
     "password": os.getenv("DB_PASSWORD"),
 }
 

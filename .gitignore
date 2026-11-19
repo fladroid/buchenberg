@@ -2,7 +2,7 @@
 venv/
 
 # Secrets
-.env
+.env*
 
 # Python
 __pycache__/

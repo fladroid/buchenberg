@@ -41,7 +41,7 @@ docker exec pgdb psql -U pgu -d buchenberg -c "..."
 import psycopg2
 conn = psycopg2.connect(
     host='balsam.dynu.net', port=5432,
-    dbname='buchenberg', user='pgu', password='Pgu1234.1234'
+    dbname='buchenberg', user='pgu', password='***'
 )
 cur = conn.cursor()
 cur.execute('SELECT COUNT(*) FROM test_results WHERE test_id = %s', ('test_012',))
