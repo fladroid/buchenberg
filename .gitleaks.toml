@@ -1,0 +1,22 @@
+title = "buchenberg"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "doslovna-lozinka"
+description = "Doslovna lozinka u kodu ili dokumentaciji"
+regex = '''(?i)\b(?:password|passwd|pwd)["']?\s*[=:]\s*["']([^"'\s]{6,})["']'''
+secretGroup = 1
+keywords = ["password", "passwd", "pwd"]
+[[rules.allowlists]]
+regexes = ['''^\*+$''', '''^<[^>]*>$''', '''^\$''']
+
+[[rules]]
+id = "env-lozinka"
+description = "Lozinka/token u env obliku (DB_PASSWORD=...)"
+regex = '''(?m)^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:PASSWORD|PASSWD|PASS|SECRET|TOKEN|API_KEY)[ \t]*=[ \t]*["']?([^\s"'#]{6,})'''
+secretGroup = 1
+keywords = ["pass", "secret", "token", "api_key"]
+[[rules.allowlists]]
+regexes = ['''^\*+$''', '''^<''', '''^\$''', '''getenv|environ''', '''^[A-Z_][A-Z0-9_]*$''']
